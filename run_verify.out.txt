@@ -1,0 +1,1416 @@
+2026/05/23 12:36:14 server.go:266: Starting monitor server on 127.0.0.1:9091
+2026/05/23 12:36:14 server.go:274: ✅ Monitor server started on http://127.0.0.1:9091
+2026/05/23 12:36:14 geoip.go:253: 🔄 GeoIP auto-update enabled (interval: 24h0m0s)
+2026/05/23 12:36:14 builder.go:51: ✅ GeoIP database loaded: ./GeoLite2-Country.mmdb
+2026/05/23 12:36:14 builder.go:112: 🌍 Resolving GeoIP for 100 nodes (concurrent)...
+2026/05/23 12:36:14 builder.go:171: 🌍 GeoIP resolution completed in 0.2s
+2026/05/23 12:36:14 builder.go:193: ✅ Successfully built 100/100 nodes
+2026/05/23 12:36:14 builder.go:197: 🌍 GeoIP Region Distribution:
+2026/05/23 12:36:14 builder.go:201:    🇯🇵 Japan: 9 nodes
+2026/05/23 12:36:14 builder.go:201:    🇰🇷 Korea: 2 nodes
+2026/05/23 12:36:14 builder.go:201:    🇺🇸 USA: 5 nodes
+2026/05/23 12:36:14 builder.go:201:    🇭🇰 Hong Kong: 15 nodes
+2026/05/23 12:36:14 builder.go:201:    🇹🇼 Taiwan: 2 nodes
+2026/05/23 12:36:14 builder.go:201:    🇸🇬 Singapore: 6 nodes
+2026/05/23 12:36:14 builder.go:201:    🌍 Other: 61 nodes
+2026/05/23 12:36:14 builder.go:1358: 
+2026/05/23 12:36:14 builder.go:1359: 📡 Proxy Links:
+2026/05/23 12:36:14 builder.go:1360: ═══════════════════════════════════════════════════════════════
+2026/05/23 12:36:14 builder.go:1388: 🔌 Multi-Port Entry Points (100 nodes):
+2026/05/23 12:36:14 builder.go:1389: 
+2026/05/23 12:36:14 builder.go:1403:    [24000] 宝可梦-香港4
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24000
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24000
+2026/05/23 12:36:14 builder.go:1403:    [24001] 宝可梦-香港1
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24001
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24001
+2026/05/23 12:36:14 builder.go:1403:    [24002] 宝可梦-香港2
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24002
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24002
+2026/05/23 12:36:14 builder.go:1403:    [24003] 宝可梦-香港3
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24003
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24003
+2026/05/23 12:36:14 builder.go:1403:    [24004] 宝可梦-美国8
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24004
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24004
+2026/05/23 12:36:14 builder.go:1403:    [24005] 宝可梦-美国6
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24005
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24005
+2026/05/23 12:36:14 builder.go:1403:    [24006] 宝可梦-美国5
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24006
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24006
+2026/05/23 12:36:14 builder.go:1403:    [24007] 宝可梦-美国7
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24007
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24007
+2026/05/23 12:36:14 builder.go:1403:    [24008] 宝可梦-新加坡2
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24008
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24008
+2026/05/23 12:36:14 builder.go:1403:    [24009] 宝可梦-新加坡4
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24009
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24009
+2026/05/23 12:36:14 builder.go:1403:    [24010] 宝可梦-日本1
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24010
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24010
+2026/05/23 12:36:14 builder.go:1403:    [24011] 宝可梦-日本2
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24011
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24011
+2026/05/23 12:36:14 builder.go:1403:    [24012] 宝可梦-美国3
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24012
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24012
+2026/05/23 12:36:14 builder.go:1403:    [24013] 宝可梦-美国4
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24013
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24013
+2026/05/23 12:36:14 builder.go:1403:    [24014] 宝可梦-🇺🇸【北美洲】美国06丨IPLC【10x】
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24014
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24014
+2026/05/23 12:36:14 builder.go:1403:    [24015] 宝可梦-日本12
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24015
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24015
+2026/05/23 12:36:14 builder.go:1403:    [24016] 宝可梦-日本13
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24016
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24016
+2026/05/23 12:36:14 builder.go:1403:    [24017] 宝可梦-香港9
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24017
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24017
+2026/05/23 12:36:14 builder.go:1403:    [24018] 宝可梦-香港8
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24018
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24018
+2026/05/23 12:36:14 builder.go:1403:    [24019] 宝可梦-香港7
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24019
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24019
+2026/05/23 12:36:14 builder.go:1403:    [24020] 宝可梦-香港6
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24020
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24020
+2026/05/23 12:36:14 builder.go:1403:    [24021] 宝可梦-香港5
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24021
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24021
+2026/05/23 12:36:14 builder.go:1403:    [24022] 宝可梦-新加坡20
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24022
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24022
+2026/05/23 12:36:14 builder.go:1403:    [24023] 宝可梦-新加坡15
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24023
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24023
+2026/05/23 12:36:14 builder.go:1403:    [24024] 宝可梦-新加坡14
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24024
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24024
+2026/05/23 12:36:14 builder.go:1403:    [24025] 宝可梦-新加坡9
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24025
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24025
+2026/05/23 12:36:14 builder.go:1403:    [24026] 宝可梦-新加坡11
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24026
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24026
+2026/05/23 12:36:14 builder.go:1403:    [24027] 宝可梦-新加坡10
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24027
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24027
+2026/05/23 12:36:14 builder.go:1403:    [24028] 宝可梦-日本7
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24028
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24028
+2026/05/23 12:36:14 builder.go:1403:    [24029] 宝可梦-日本8
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24029
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24029
+2026/05/23 12:36:14 builder.go:1403:    [24030] 宝可梦-日本20
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24030
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24030
+2026/05/23 12:36:14 builder.go:1403:    [24031] 宝可梦-日本21
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24031
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24031
+2026/05/23 12:36:14 builder.go:1403:    [24032] 宝可梦-日本9
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24032
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24032
+2026/05/23 12:36:14 builder.go:1403:    [24033] 宝可梦-日本14
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24033
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24033
+2026/05/23 12:36:14 builder.go:1403:    [24034] 宝可梦-日本10
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24034
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24034
+2026/05/23 12:36:14 builder.go:1403:    [24035] 宝可梦-日本15
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24035
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24035
+2026/05/23 12:36:14 builder.go:1403:    [24036] 宝可梦-日本11
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24036
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24036
+2026/05/23 12:36:14 builder.go:1403:    [24037] 宝可梦-美国12
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24037
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24037
+2026/05/23 12:36:14 builder.go:1403:    [24038] 宝可梦-英国1
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24038
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24038
+2026/05/23 12:36:14 builder.go:1403:    [24039] 宝可梦-韩国3
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24039
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24039
+2026/05/23 12:36:14 builder.go:1403:    [24040] 宝可梦-台湾1
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24040
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24040
+2026/05/23 12:36:14 builder.go:1403:    [24041] 宝可梦-香港10
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24041
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24041
+2026/05/23 12:36:14 builder.go:1403:    [24042] 宝可梦-香港11
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24042
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24042
+2026/05/23 12:36:14 builder.go:1403:    [24043] 宝可梦-香港12
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24043
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24043
+2026/05/23 12:36:14 builder.go:1403:    [24044] 宝可梦-香港13
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24044
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24044
+2026/05/23 12:36:14 builder.go:1403:    [24045] 宝可梦-新加坡12
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24045
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24045
+2026/05/23 12:36:14 builder.go:1403:    [24046] 宝可梦-新加坡12
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24046
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24046
+2026/05/23 12:36:14 builder.go:1403:    [24047] 宝可梦-新加坡18
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24047
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24047
+2026/05/23 12:36:14 builder.go:1403:    [24048] 宝可梦-日本16
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24048
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24048
+2026/05/23 12:36:14 builder.go:1403:    [24049] 宝可梦-日本17
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24049
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24049
+2026/05/23 12:36:14 builder.go:1403:    [24050] 宝可梦-日本18
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24050
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24050
+2026/05/23 12:36:14 builder.go:1403:    [24051] 宝可梦-日本19
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24051
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24051
+2026/05/23 12:36:14 builder.go:1403:    [24052] 宝可梦-韩国4
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24052
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24052
+2026/05/23 12:36:14 builder.go:1403:    [24053] 宝可梦-台湾2
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24053
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24053
+2026/05/23 12:36:14 builder.go:1403:    [24054] 宝可梦-英国2
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24054
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24054
+2026/05/23 12:36:14 builder.go:1403:    [24055] 宝可梦-英国3
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24055
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24055
+2026/05/23 12:36:14 builder.go:1403:    [24056] 宝可梦-美国11
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24056
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24056
+2026/05/23 12:36:14 builder.go:1403:    [24057] free-5-美国62
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24057
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24057
+2026/05/23 12:36:14 builder.go:1403:    [24058] free-5-美国8
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24058
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24058
+2026/05/23 12:36:14 builder.go:1403:    [24059] free-5-美国2
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24059
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24059
+2026/05/23 12:36:14 builder.go:1403:    [24060] free-5-美国32
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24060
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24060
+2026/05/23 12:36:14 builder.go:1403:    [24061] free-5-美国14
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24061
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24061
+2026/05/23 12:36:14 builder.go:1403:    [24062] free-5-美国47
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24062
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24062
+2026/05/23 12:36:14 builder.go:1403:    [24063] free-5-美国49
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24063
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24063
+2026/05/23 12:36:14 builder.go:1403:    [24064] free-5-美国61
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24064
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24064
+2026/05/23 12:36:14 builder.go:1403:    [24065] free-5-美国24
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24065
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24065
+2026/05/23 12:36:14 builder.go:1403:    [24066] free-5-美国26
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24066
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24066
+2026/05/23 12:36:14 builder.go:1403:    [24067] free-5-美国34
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24067
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24067
+2026/05/23 12:36:14 builder.go:1403:    [24068] free-5-美国10
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24068
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24068
+2026/05/23 12:36:14 builder.go:1403:    [24069] free-5-美国39
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24069
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24069
+2026/05/23 12:36:14 builder.go:1403:    [24070] free-5-美国45
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24070
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24070
+2026/05/23 12:36:14 builder.go:1403:    [24071] free-5-美国17
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24071
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24071
+2026/05/23 12:36:14 builder.go:1403:    [24072] free-5-美国25
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24072
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24072
+2026/05/23 12:36:14 builder.go:1403:    [24073] free-5-美国48
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24073
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24073
+2026/05/23 12:36:14 builder.go:1403:    [24074] free-5-美国55
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24074
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24074
+2026/05/23 12:36:14 builder.go:1403:    [24075] free-5-美国64
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24075
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24075
+2026/05/23 12:36:14 builder.go:1403:    [24076] free-5-美国16
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24076
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24076
+2026/05/23 12:36:14 builder.go:1403:    [24077] free-5-美国51
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24077
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24077
+2026/05/23 12:36:14 builder.go:1403:    [24078] free-5-美国7
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24078
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24078
+2026/05/23 12:36:14 builder.go:1403:    [24079] free-5-美国43
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24079
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24079
+2026/05/23 12:36:14 builder.go:1403:    [24080] free-5-美国56
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24080
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24080
+2026/05/23 12:36:14 builder.go:1403:    [24081] free-5-美国37
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24081
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24081
+2026/05/23 12:36:14 builder.go:1403:    [24082] free-5-香港1
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24082
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24082
+2026/05/23 12:36:14 builder.go:1403:    [24083] free-5-美国23
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24083
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24083
+2026/05/23 12:36:14 builder.go:1403:    [24084] free-5-美国29
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24084
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24084
+2026/05/23 12:36:14 builder.go:1403:    [24085] free-5-美国27
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24085
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24085
+2026/05/23 12:36:14 builder.go:1403:    [24086] free-5-美国35
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24086
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24086
+2026/05/23 12:36:14 builder.go:1403:    [24087] free-5-美国4
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24087
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24087
+2026/05/23 12:36:14 builder.go:1403:    [24088] free-5-美国5
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24088
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24088
+2026/05/23 12:36:14 builder.go:1403:    [24089] free-5-美国53
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24089
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24089
+2026/05/23 12:36:14 builder.go:1403:    [24090] free-5-美国59
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24090
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24090
+2026/05/23 12:36:14 builder.go:1403:    [24091] free-5-美国60
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24091
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24091
+2026/05/23 12:36:14 builder.go:1403:    [24092] free-5-美国3
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24092
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24092
+2026/05/23 12:36:14 builder.go:1403:    [24093] free-5-美国31
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24093
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24093
+2026/05/23 12:36:14 builder.go:1403:    [24094] free-5-美国42
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24094
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24094
+2026/05/23 12:36:14 builder.go:1403:    [24095] free-5-美国6
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24095
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24095
+2026/05/23 12:36:14 builder.go:1403:    [24096] free-5-美国63
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24096
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24096
+2026/05/23 12:36:14 builder.go:1403:    [24097] free-5-美国18
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24097
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24097
+2026/05/23 12:36:14 builder.go:1403:    [24098] free-5-美国9
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24098
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24098
+2026/05/23 12:36:14 builder.go:1403:    [24099] free-5-美国28
+2026/05/23 12:36:14 builder.go:1404:        HTTP:   http://127.0.0.1:24099
+2026/05/23 12:36:14 builder.go:1405:        SOCKS5: socks5://127.0.0.1:24099
+2026/05/23 12:36:14 builder.go:1409: ═══════════════════════════════════════════════════════════════
+2026/05/23 12:36:14 builder.go:1410: 
+2026/05/23 12:36:14 manager.go:748: [boxmgr] periodic health check started, interval: 5m0s
+2026/05/23 12:36:14 manager.go:748: [boxmgr] starting health check for 100 nodes
+2026/05/23 12:36:15 manager.go:748: [boxmgr] health check passed: 6/100 nodes available
+2026/05/23 12:36:15 manager.go:748: [boxmgr] sing-box instance started with 100 nodes
+2026/05/23 12:36:15 manager.go:545: [subscription] starting subscription refresh, interval: 24h0m0s
+2026/05/23 12:36:15 router.go:81: 🌐 GeoIP Router started on 127.0.0.1:1221
+2026/05/23 12:36:15 router.go:82:    Routes: /jp, /kr, /us, /hk, /tw, /sg, /other (default: all nodes)
+2026/05/23 12:36:24 manager.go:752: [boxmgr] WARN: probe failed for free-5-48: read response: read tcp 192.168.50.166:61799->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:24 manager.go:752: [boxmgr] WARN: probe failed for free-5-18: read response: read tcp 192.168.50.166:61796->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:24 manager.go:752: [boxmgr] WARN: probe failed for free-5-55: read response: read tcp 192.168.50.166:61797->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:25 manager.go:752: [boxmgr] WARN: probe failed for free-5-43: read response: read tcp 192.168.50.166:61832->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:25 manager.go:752: [boxmgr] WARN: probe failed for free-5-4: read response: read tcp 192.168.50.166:61833->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:25 manager.go:752: [boxmgr] WARN: probe failed for free-5-34: read response: read tcp 192.168.50.166:61854->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:25 manager.go:752: [boxmgr] WARN: probe failed for free-5-25: read response: read tcp 192.168.50.166:61855->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:25 manager.go:752: [boxmgr] WARN: probe failed for free-5-17: read response: read tcp 192.168.50.166:61801->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:26 manager.go:752: [boxmgr] WARN: probe failed for free-5-9: read response: read tcp 192.168.50.166:61868->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:27 manager.go:752: [boxmgr] WARN: probe failed for free-5-14: read response: read tcp 192.168.50.166:58610->82.198.246.97:180: i/o timeout
+2026/05/23 12:36:27 manager.go:748: [boxmgr] health check completed: 90 available, 10 failed
+2026/05/23 12:39:42 manager.go:748: [boxmgr] reloading with 100 nodes
+2026/05/23 12:39:42 manager.go:748: [boxmgr] stopping old instance to release ports...
+2026/05/23 12:39:42 geoip.go:253: 🔄 GeoIP auto-update enabled (interval: 24h0m0s)
+2026/05/23 12:39:42 builder.go:51: ✅ GeoIP database loaded: ./GeoLite2-Country.mmdb
+2026/05/23 12:39:42 builder.go:112: 🌍 Resolving GeoIP for 100 nodes (concurrent)...
+2026/05/23 12:39:42 builder.go:171: 🌍 GeoIP resolution completed in 0.2s
+2026/05/23 12:39:42 builder.go:193: ✅ Successfully built 100/100 nodes
+2026/05/23 12:39:42 builder.go:197: 🌍 GeoIP Region Distribution:
+2026/05/23 12:39:42 builder.go:201:    🇯🇵 Japan: 9 nodes
+2026/05/23 12:39:42 builder.go:201:    🇰🇷 Korea: 2 nodes
+2026/05/23 12:39:42 builder.go:201:    🇺🇸 USA: 5 nodes
+2026/05/23 12:39:42 builder.go:201:    🇭🇰 Hong Kong: 15 nodes
+2026/05/23 12:39:42 builder.go:201:    🇹🇼 Taiwan: 2 nodes
+2026/05/23 12:39:42 builder.go:201:    🇸🇬 Singapore: 6 nodes
+2026/05/23 12:39:42 builder.go:201:    🌍 Other: 61 nodes
+2026/05/23 12:39:42 builder.go:1358: 
+2026/05/23 12:39:42 builder.go:1359: 📡 Proxy Links:
+2026/05/23 12:39:42 builder.go:1360: ═══════════════════════════════════════════════════════════════
+2026/05/23 12:39:42 builder.go:1388: 🔌 Multi-Port Entry Points (100 nodes):
+2026/05/23 12:39:42 builder.go:1389: 
+2026/05/23 12:39:42 builder.go:1403:    [24000] 宝可梦-香港4
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24000
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24000
+2026/05/23 12:39:42 builder.go:1403:    [24001] 宝可梦-香港1
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24001
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24001
+2026/05/23 12:39:42 builder.go:1403:    [24002] 宝可梦-香港2
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24002
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24002
+2026/05/23 12:39:42 builder.go:1403:    [24003] 宝可梦-香港3
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24003
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24003
+2026/05/23 12:39:42 builder.go:1403:    [24004] 宝可梦-美国8
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24004
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24004
+2026/05/23 12:39:42 builder.go:1403:    [24005] 宝可梦-美国6
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24005
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24005
+2026/05/23 12:39:42 builder.go:1403:    [24006] 宝可梦-美国5
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24006
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24006
+2026/05/23 12:39:42 builder.go:1403:    [24007] 宝可梦-美国7
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24007
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24007
+2026/05/23 12:39:42 builder.go:1403:    [24008] 宝可梦-新加坡2
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24008
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24008
+2026/05/23 12:39:42 builder.go:1403:    [24009] 宝可梦-新加坡4
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24009
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24009
+2026/05/23 12:39:42 builder.go:1403:    [24010] 宝可梦-日本1
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24010
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24010
+2026/05/23 12:39:42 builder.go:1403:    [24011] 宝可梦-日本2
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24011
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24011
+2026/05/23 12:39:42 builder.go:1403:    [24012] 宝可梦-美国3
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24012
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24012
+2026/05/23 12:39:42 builder.go:1403:    [24013] 宝可梦-美国4
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24013
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24013
+2026/05/23 12:39:42 builder.go:1403:    [24014] 宝可梦-🇺🇸【北美洲】美国06丨IPLC【10x】
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24014
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24014
+2026/05/23 12:39:42 builder.go:1403:    [24015] 宝可梦-日本12
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24015
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24015
+2026/05/23 12:39:42 builder.go:1403:    [24016] 宝可梦-日本13
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24016
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24016
+2026/05/23 12:39:42 builder.go:1403:    [24017] 宝可梦-香港9
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24017
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24017
+2026/05/23 12:39:42 builder.go:1403:    [24018] 宝可梦-香港8
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24018
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24018
+2026/05/23 12:39:42 builder.go:1403:    [24019] 宝可梦-香港7
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24019
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24019
+2026/05/23 12:39:42 builder.go:1403:    [24020] 宝可梦-香港6
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24020
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24020
+2026/05/23 12:39:42 builder.go:1403:    [24021] 宝可梦-香港5
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24021
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24021
+2026/05/23 12:39:42 builder.go:1403:    [24022] 宝可梦-新加坡20
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24022
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24022
+2026/05/23 12:39:42 builder.go:1403:    [24023] 宝可梦-新加坡15
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24023
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24023
+2026/05/23 12:39:42 builder.go:1403:    [24024] 宝可梦-新加坡14
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24024
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24024
+2026/05/23 12:39:42 builder.go:1403:    [24025] 宝可梦-新加坡9
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24025
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24025
+2026/05/23 12:39:42 builder.go:1403:    [24026] 宝可梦-新加坡11
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24026
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24026
+2026/05/23 12:39:42 builder.go:1403:    [24027] 宝可梦-新加坡10
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24027
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24027
+2026/05/23 12:39:42 builder.go:1403:    [24028] 宝可梦-日本7
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24028
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24028
+2026/05/23 12:39:42 builder.go:1403:    [24029] 宝可梦-日本8
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24029
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24029
+2026/05/23 12:39:42 builder.go:1403:    [24030] 宝可梦-日本20
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24030
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24030
+2026/05/23 12:39:42 builder.go:1403:    [24031] 宝可梦-日本21
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24031
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24031
+2026/05/23 12:39:42 builder.go:1403:    [24032] 宝可梦-日本9
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24032
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24032
+2026/05/23 12:39:42 builder.go:1403:    [24033] 宝可梦-日本14
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24033
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24033
+2026/05/23 12:39:42 builder.go:1403:    [24034] 宝可梦-日本10
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24034
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24034
+2026/05/23 12:39:42 builder.go:1403:    [24035] 宝可梦-日本15
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24035
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24035
+2026/05/23 12:39:42 builder.go:1403:    [24036] 宝可梦-日本11
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24036
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24036
+2026/05/23 12:39:42 builder.go:1403:    [24037] 宝可梦-美国12
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24037
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24037
+2026/05/23 12:39:42 builder.go:1403:    [24038] 宝可梦-英国1
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24038
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24038
+2026/05/23 12:39:42 builder.go:1403:    [24039] 宝可梦-韩国3
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24039
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24039
+2026/05/23 12:39:42 builder.go:1403:    [24040] 宝可梦-台湾1
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24040
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24040
+2026/05/23 12:39:42 builder.go:1403:    [24041] 宝可梦-香港10
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24041
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24041
+2026/05/23 12:39:42 builder.go:1403:    [24042] 宝可梦-香港11
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24042
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24042
+2026/05/23 12:39:42 builder.go:1403:    [24043] 宝可梦-香港12
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24043
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24043
+2026/05/23 12:39:42 builder.go:1403:    [24044] 宝可梦-香港13
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24044
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24044
+2026/05/23 12:39:42 builder.go:1403:    [24045] 宝可梦-新加坡12
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24045
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24045
+2026/05/23 12:39:42 builder.go:1403:    [24046] 宝可梦-新加坡12
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24046
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24046
+2026/05/23 12:39:42 builder.go:1403:    [24047] 宝可梦-新加坡18
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24047
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24047
+2026/05/23 12:39:42 builder.go:1403:    [24048] 宝可梦-日本16
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24048
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24048
+2026/05/23 12:39:42 builder.go:1403:    [24049] 宝可梦-日本17
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24049
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24049
+2026/05/23 12:39:42 builder.go:1403:    [24050] 宝可梦-日本18
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24050
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24050
+2026/05/23 12:39:42 builder.go:1403:    [24051] 宝可梦-日本19
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24051
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24051
+2026/05/23 12:39:42 builder.go:1403:    [24052] 宝可梦-韩国4
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24052
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24052
+2026/05/23 12:39:42 builder.go:1403:    [24053] 宝可梦-台湾2
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24053
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24053
+2026/05/23 12:39:42 builder.go:1403:    [24054] 宝可梦-英国2
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24054
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24054
+2026/05/23 12:39:42 builder.go:1403:    [24055] 宝可梦-英国3
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24055
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24055
+2026/05/23 12:39:42 builder.go:1403:    [24056] 宝可梦-美国11
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24056
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24056
+2026/05/23 12:39:42 builder.go:1403:    [24057] free-5-美国62
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24057
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24057
+2026/05/23 12:39:42 builder.go:1403:    [24058] free-5-美国8
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24058
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24058
+2026/05/23 12:39:42 builder.go:1403:    [24059] free-5-美国2
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24059
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24059
+2026/05/23 12:39:42 builder.go:1403:    [24060] free-5-美国32
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24060
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24060
+2026/05/23 12:39:42 builder.go:1403:    [24061] free-5-美国14
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24061
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24061
+2026/05/23 12:39:42 builder.go:1403:    [24062] free-5-美国47
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24062
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24062
+2026/05/23 12:39:42 builder.go:1403:    [24063] free-5-美国49
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24063
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24063
+2026/05/23 12:39:42 builder.go:1403:    [24064] free-5-美国61
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24064
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24064
+2026/05/23 12:39:42 builder.go:1403:    [24065] free-5-美国24
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24065
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24065
+2026/05/23 12:39:42 builder.go:1403:    [24066] free-5-美国26
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24066
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24066
+2026/05/23 12:39:42 builder.go:1403:    [24067] free-5-美国34
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24067
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24067
+2026/05/23 12:39:42 builder.go:1403:    [24068] free-5-美国10
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24068
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24068
+2026/05/23 12:39:42 builder.go:1403:    [24069] free-5-美国39
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24069
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24069
+2026/05/23 12:39:42 builder.go:1403:    [24070] free-5-美国45
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24070
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24070
+2026/05/23 12:39:42 builder.go:1403:    [24071] free-5-美国17
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24071
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24071
+2026/05/23 12:39:42 builder.go:1403:    [24072] free-5-美国25
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24072
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24072
+2026/05/23 12:39:42 builder.go:1403:    [24073] free-5-美国48
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24073
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24073
+2026/05/23 12:39:42 builder.go:1403:    [24074] free-5-美国55
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24074
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24074
+2026/05/23 12:39:42 builder.go:1403:    [24075] free-5-美国64
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24075
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24075
+2026/05/23 12:39:42 builder.go:1403:    [24076] free-5-美国16
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24076
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24076
+2026/05/23 12:39:42 builder.go:1403:    [24077] free-5-美国51
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24077
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24077
+2026/05/23 12:39:42 builder.go:1403:    [24078] free-5-美国7
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24078
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24078
+2026/05/23 12:39:42 builder.go:1403:    [24079] free-5-美国43
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24079
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24079
+2026/05/23 12:39:42 builder.go:1403:    [24080] free-5-美国56
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24080
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24080
+2026/05/23 12:39:42 builder.go:1403:    [24081] free-5-美国37
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24081
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24081
+2026/05/23 12:39:42 builder.go:1403:    [24082] free-5-香港1
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24082
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24082
+2026/05/23 12:39:42 builder.go:1403:    [24083] free-5-美国23
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24083
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24083
+2026/05/23 12:39:42 builder.go:1403:    [24084] free-5-美国29
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24084
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24084
+2026/05/23 12:39:42 builder.go:1403:    [24085] free-5-美国27
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24085
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24085
+2026/05/23 12:39:42 builder.go:1403:    [24086] free-5-美国35
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24086
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24086
+2026/05/23 12:39:42 builder.go:1403:    [24087] free-5-美国4
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24087
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24087
+2026/05/23 12:39:42 builder.go:1403:    [24088] free-5-美国5
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24088
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24088
+2026/05/23 12:39:42 builder.go:1403:    [24089] free-5-美国53
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24089
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24089
+2026/05/23 12:39:42 builder.go:1403:    [24090] free-5-美国59
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24090
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24090
+2026/05/23 12:39:42 builder.go:1403:    [24091] free-5-美国60
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24091
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24091
+2026/05/23 12:39:42 builder.go:1403:    [24092] free-5-美国3
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24092
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24092
+2026/05/23 12:39:42 builder.go:1403:    [24093] free-5-美国31
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24093
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24093
+2026/05/23 12:39:42 builder.go:1403:    [24094] free-5-美国42
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24094
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24094
+2026/05/23 12:39:42 builder.go:1403:    [24095] free-5-美国6
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24095
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24095
+2026/05/23 12:39:42 builder.go:1403:    [24096] free-5-美国63
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24096
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24096
+2026/05/23 12:39:42 builder.go:1403:    [24097] free-5-美国18
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24097
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24097
+2026/05/23 12:39:42 builder.go:1403:    [24098] free-5-美国9
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24098
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24098
+2026/05/23 12:39:42 builder.go:1403:    [24099] free-5-美国28
+2026/05/23 12:39:42 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24099
+2026/05/23 12:39:42 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24099
+2026/05/23 12:39:42 builder.go:1409: ═══════════════════════════════════════════════════════════════
+2026/05/23 12:39:42 builder.go:1410: 
+2026/05/23 12:39:43 manager.go:748: [boxmgr] reload completed successfully with 100 nodes
+2026/05/23 12:39:43 manager.go:748: [boxmgr] starting health check for 100 nodes
+2026/05/23 12:39:43 router.go:81: 🌐 GeoIP Router started on 127.0.0.1:1221
+2026/05/23 12:39:43 router.go:82:    Routes: /jp, /kr, /us, /hk, /tw, /sg, /other (default: all nodes)
+2026/05/23 12:39:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-56: read response: read tcp 192.168.50.166:65282->82.198.246.233:180: i/o timeout
+2026/05/23 12:39:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-2: read response: read tcp 192.168.50.166:65285->82.198.246.233:180: i/o timeout
+2026/05/23 12:39:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-55: read response: read tcp 192.168.50.166:65283->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-25: read response: read tcp 192.168.50.166:65288->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-43: read response: read tcp 192.168.50.166:65290->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-34: read response: read tcp 192.168.50.166:50340->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-14: read response: read tcp 192.168.50.166:50344->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-17: read response: read tcp 192.168.50.166:50347->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-4: read response: read tcp 192.168.50.166:50351->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:54 manager.go:752: [boxmgr] WARN: probe failed for free-5-32: read response: read tcp 192.168.50.166:50367->82.198.246.233:180: i/o timeout
+2026/05/23 12:39:54 manager.go:752: [boxmgr] WARN: probe failed for free-5-9: read response: read tcp 192.168.50.166:50373->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:54 manager.go:752: [boxmgr] WARN: probe failed for free-5-48: read response: read tcp 192.168.50.166:57801->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:55 manager.go:752: [boxmgr] WARN: probe failed for free-5-18: read response: read tcp 192.168.50.166:57836->82.198.246.97:180: i/o timeout
+2026/05/23 12:39:55 manager.go:748: [boxmgr] health check completed: 87 available, 13 failed
+2026/05/23 12:40:25 manager.go:545: [subscription] subscription config updated: 3 URLs, enabled=true, interval=24h0m0s
+2026/05/23 12:40:25 manager.go:545: [subscription] triggered immediate refresh after config update
+2026/05/23 12:40:25 manager.go:545: [subscription] starting subscription refresh
+2026/05/23 12:40:26 manager.go:545: [subscription] fetched 46 nodes from subscription
+2026/05/23 12:40:27 manager.go:545: [subscription] fetched 48 nodes from subscription
+2026/05/23 12:40:30 manager.go:545: [subscription] fetched 183 nodes from subscription
+2026/05/23 12:40:30 manager.go:545: [subscription] fetched 277 nodes from subscriptions
+2026/05/23 12:40:30 manager.go:545: [subscription] written 277 nodes to nodes.txt
+2026/05/23 12:40:30 manager.go:545: [subscription] subscription refresh completed, 277 candidate nodes written to nodes.txt
+2026/05/23 12:41:27 manager.go:748: [boxmgr] starting health check for 100 nodes
+2026/05/23 12:41:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-8: read response: read tcp 192.168.50.166:61484->82.198.246.233:180: i/o timeout
+2026/05/23 12:41:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-56: read response: read tcp 192.168.50.166:61486->82.198.246.233:180: i/o timeout
+2026/05/23 12:41:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-32: read response: read tcp 192.168.50.166:61500->82.198.246.233:180: i/o timeout
+2026/05/23 12:41:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-47: read response: read tcp 192.168.50.166:61495->82.198.246.233:180: i/o timeout
+2026/05/23 12:41:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-4: read response: read tcp 192.168.50.166:61492->82.198.246.97:180: i/o timeout
+2026/05/23 12:41:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-61: read response: read tcp 192.168.50.166:61535->82.198.246.233:180: i/o timeout
+2026/05/23 12:41:38 manager.go:752: [boxmgr] WARN: probe failed for free-5-26: read response: read tcp 192.168.50.166:61556->82.198.246.233:180: i/o timeout
+2026/05/23 12:41:38 manager.go:752: [boxmgr] WARN: probe failed for free-5-62: read response: read tcp 192.168.50.166:61555->82.198.246.233:180: i/o timeout
+2026/05/23 12:41:39 manager.go:752: [boxmgr] WARN: probe failed for free-5-2: read response: read tcp 192.168.50.166:64101->82.198.246.233:180: i/o timeout
+2026/05/23 12:41:39 manager.go:752: [boxmgr] WARN: probe failed for free-5-45: read response: read tcp 192.168.50.166:64102->82.198.246.233:180: i/o timeout
+2026/05/23 12:41:39 manager.go:748: [boxmgr] health check completed: 90 available, 10 failed
+2026/05/23 12:46:27 manager.go:748: [boxmgr] starting health check for 100 nodes
+2026/05/23 12:46:32 manager.go:752: [boxmgr] WARN: probe failed for 06-iplc-10x: dial tcp 84.75.203.238:56019: i/o timeout
+2026/05/23 12:46:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-26: read response: read tcp 192.168.50.166:64570->82.198.246.233:180: i/o timeout
+2026/05/23 12:46:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-60: read response: read tcp 192.168.50.166:64560->82.198.246.250:180: i/o timeout
+2026/05/23 12:46:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-37: read response: read tcp 192.168.50.166:64562->82.198.246.250:180: i/o timeout
+2026/05/23 12:46:37 manager.go:752: [boxmgr] WARN: probe failed for free-5-49: read response: read tcp 192.168.50.166:64565->82.198.246.250:180: i/o timeout
+2026/05/23 12:46:39 manager.go:752: [boxmgr] WARN: probe failed for free-5-23: read response: read tcp 192.168.50.166:55753->82.198.246.9:180: i/o timeout
+2026/05/23 12:46:40 manager.go:752: [boxmgr] WARN: probe failed for free-5-63: read response: read tcp 192.168.50.166:55774->82.198.246.250:180: i/o timeout
+2026/05/23 12:46:40 manager.go:748: [boxmgr] health check completed: 93 available, 7 failed
+2026/05/23 12:49:37 manager.go:748: [boxmgr] reloading with 100 nodes
+2026/05/23 12:49:37 manager.go:748: [boxmgr] stopping old instance to release ports...
+2026/05/23 12:49:37 geoip.go:253: 🔄 GeoIP auto-update enabled (interval: 24h0m0s)
+2026/05/23 12:49:37 builder.go:51: ✅ GeoIP database loaded: ./GeoLite2-Country.mmdb
+2026/05/23 12:49:37 builder.go:112: 🌍 Resolving GeoIP for 100 nodes (concurrent)...
+2026/05/23 12:49:38 builder.go:171: 🌍 GeoIP resolution completed in 0.2s
+2026/05/23 12:49:38 builder.go:193: ✅ Successfully built 100/100 nodes
+2026/05/23 12:49:38 builder.go:197: 🌍 GeoIP Region Distribution:
+2026/05/23 12:49:38 builder.go:201:    🇯🇵 Japan: 9 nodes
+2026/05/23 12:49:38 builder.go:201:    🇰🇷 Korea: 2 nodes
+2026/05/23 12:49:38 builder.go:201:    🇺🇸 USA: 5 nodes
+2026/05/23 12:49:38 builder.go:201:    🇭🇰 Hong Kong: 15 nodes
+2026/05/23 12:49:38 builder.go:201:    🇹🇼 Taiwan: 2 nodes
+2026/05/23 12:49:38 builder.go:201:    🇸🇬 Singapore: 6 nodes
+2026/05/23 12:49:38 builder.go:201:    🌍 Other: 61 nodes
+2026/05/23 12:49:38 builder.go:1358: 
+2026/05/23 12:49:38 builder.go:1359: 📡 Proxy Links:
+2026/05/23 12:49:38 builder.go:1360: ═══════════════════════════════════════════════════════════════
+2026/05/23 12:49:38 builder.go:1388: 🔌 Multi-Port Entry Points (100 nodes):
+2026/05/23 12:49:38 builder.go:1389: 
+2026/05/23 12:49:38 builder.go:1403:    [24000] 宝可梦-香港4
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24000
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24000
+2026/05/23 12:49:38 builder.go:1403:    [24001] 宝可梦-香港1
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24001
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24001
+2026/05/23 12:49:38 builder.go:1403:    [24002] 宝可梦-香港2
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24002
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24002
+2026/05/23 12:49:38 builder.go:1403:    [24003] 宝可梦-香港3
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24003
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24003
+2026/05/23 12:49:38 builder.go:1403:    [24004] 宝可梦-美国8
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24004
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24004
+2026/05/23 12:49:38 builder.go:1403:    [24005] 宝可梦-美国6
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24005
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24005
+2026/05/23 12:49:38 builder.go:1403:    [24006] 宝可梦-美国5
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24006
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24006
+2026/05/23 12:49:38 builder.go:1403:    [24007] 宝可梦-美国7
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24007
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24007
+2026/05/23 12:49:38 builder.go:1403:    [24008] 宝可梦-新加坡2
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24008
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24008
+2026/05/23 12:49:38 builder.go:1403:    [24009] 宝可梦-新加坡4
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24009
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24009
+2026/05/23 12:49:38 builder.go:1403:    [24010] 宝可梦-日本1
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24010
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24010
+2026/05/23 12:49:38 builder.go:1403:    [24011] 宝可梦-日本2
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24011
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24011
+2026/05/23 12:49:38 builder.go:1403:    [24012] 宝可梦-美国3
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24012
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24012
+2026/05/23 12:49:38 builder.go:1403:    [24013] 宝可梦-美国4
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24013
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24013
+2026/05/23 12:49:38 builder.go:1403:    [24014] 宝可梦-🇺🇸【北美洲】美国06丨IPLC【10x】
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24014
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24014
+2026/05/23 12:49:38 builder.go:1403:    [24015] 宝可梦-日本12
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24015
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24015
+2026/05/23 12:49:38 builder.go:1403:    [24016] 宝可梦-日本13
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24016
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24016
+2026/05/23 12:49:38 builder.go:1403:    [24017] 宝可梦-香港9
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24017
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24017
+2026/05/23 12:49:38 builder.go:1403:    [24018] 宝可梦-香港8
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24018
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24018
+2026/05/23 12:49:38 builder.go:1403:    [24019] 宝可梦-香港7
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24019
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24019
+2026/05/23 12:49:38 builder.go:1403:    [24020] 宝可梦-香港6
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24020
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24020
+2026/05/23 12:49:38 builder.go:1403:    [24021] 宝可梦-香港5
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24021
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24021
+2026/05/23 12:49:38 builder.go:1403:    [24022] 宝可梦-新加坡20
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24022
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24022
+2026/05/23 12:49:38 builder.go:1403:    [24023] 宝可梦-新加坡15
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24023
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24023
+2026/05/23 12:49:38 builder.go:1403:    [24024] 宝可梦-新加坡14
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24024
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24024
+2026/05/23 12:49:38 builder.go:1403:    [24025] 宝可梦-新加坡9
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24025
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24025
+2026/05/23 12:49:38 builder.go:1403:    [24026] 宝可梦-新加坡11
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24026
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24026
+2026/05/23 12:49:38 builder.go:1403:    [24027] 宝可梦-新加坡10
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24027
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24027
+2026/05/23 12:49:38 builder.go:1403:    [24028] 宝可梦-日本7
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24028
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24028
+2026/05/23 12:49:38 builder.go:1403:    [24029] 宝可梦-日本8
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24029
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24029
+2026/05/23 12:49:38 builder.go:1403:    [24030] 宝可梦-日本20
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24030
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24030
+2026/05/23 12:49:38 builder.go:1403:    [24031] 宝可梦-日本21
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24031
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24031
+2026/05/23 12:49:38 builder.go:1403:    [24032] 宝可梦-日本9
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24032
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24032
+2026/05/23 12:49:38 builder.go:1403:    [24033] 宝可梦-日本14
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24033
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24033
+2026/05/23 12:49:38 builder.go:1403:    [24034] 宝可梦-日本10
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24034
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24034
+2026/05/23 12:49:38 builder.go:1403:    [24035] 宝可梦-日本15
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24035
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24035
+2026/05/23 12:49:38 builder.go:1403:    [24036] 宝可梦-日本11
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24036
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24036
+2026/05/23 12:49:38 builder.go:1403:    [24037] 宝可梦-美国12
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24037
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24037
+2026/05/23 12:49:38 builder.go:1403:    [24038] 宝可梦-英国1
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24038
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24038
+2026/05/23 12:49:38 builder.go:1403:    [24039] 宝可梦-韩国3
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24039
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24039
+2026/05/23 12:49:38 builder.go:1403:    [24040] 宝可梦-台湾1
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24040
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24040
+2026/05/23 12:49:38 builder.go:1403:    [24041] 宝可梦-香港10
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24041
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24041
+2026/05/23 12:49:38 builder.go:1403:    [24042] 宝可梦-香港11
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24042
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24042
+2026/05/23 12:49:38 builder.go:1403:    [24043] 宝可梦-香港12
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24043
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24043
+2026/05/23 12:49:38 builder.go:1403:    [24044] 宝可梦-香港13
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24044
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24044
+2026/05/23 12:49:38 builder.go:1403:    [24045] 宝可梦-新加坡12
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24045
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24045
+2026/05/23 12:49:38 builder.go:1403:    [24046] 宝可梦-新加坡12
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24046
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24046
+2026/05/23 12:49:38 builder.go:1403:    [24047] 宝可梦-新加坡18
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24047
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24047
+2026/05/23 12:49:38 builder.go:1403:    [24048] 宝可梦-日本16
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24048
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24048
+2026/05/23 12:49:38 builder.go:1403:    [24049] 宝可梦-日本17
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24049
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24049
+2026/05/23 12:49:38 builder.go:1403:    [24050] 宝可梦-日本18
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24050
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24050
+2026/05/23 12:49:38 builder.go:1403:    [24051] 宝可梦-日本19
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24051
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24051
+2026/05/23 12:49:38 builder.go:1403:    [24052] 宝可梦-韩国4
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24052
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24052
+2026/05/23 12:49:38 builder.go:1403:    [24053] 宝可梦-台湾2
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24053
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24053
+2026/05/23 12:49:38 builder.go:1403:    [24054] 宝可梦-英国2
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24054
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24054
+2026/05/23 12:49:38 builder.go:1403:    [24055] 宝可梦-英国3
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24055
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24055
+2026/05/23 12:49:38 builder.go:1403:    [24056] 宝可梦-美国11
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24056
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24056
+2026/05/23 12:49:38 builder.go:1403:    [24057] free-5-美国62
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24057
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24057
+2026/05/23 12:49:38 builder.go:1403:    [24058] free-5-美国8
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24058
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24058
+2026/05/23 12:49:38 builder.go:1403:    [24059] free-5-美国2
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24059
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24059
+2026/05/23 12:49:38 builder.go:1403:    [24060] free-5-美国32
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24060
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24060
+2026/05/23 12:49:38 builder.go:1403:    [24061] free-5-美国14
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24061
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24061
+2026/05/23 12:49:38 builder.go:1403:    [24062] free-5-美国47
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24062
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24062
+2026/05/23 12:49:38 builder.go:1403:    [24063] free-5-美国49
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24063
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24063
+2026/05/23 12:49:38 builder.go:1403:    [24064] free-5-美国61
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24064
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24064
+2026/05/23 12:49:38 builder.go:1403:    [24065] free-5-美国24
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24065
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24065
+2026/05/23 12:49:38 builder.go:1403:    [24066] free-5-美国26
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24066
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24066
+2026/05/23 12:49:38 builder.go:1403:    [24067] free-5-美国34
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24067
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24067
+2026/05/23 12:49:38 builder.go:1403:    [24068] free-5-美国10
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24068
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24068
+2026/05/23 12:49:38 builder.go:1403:    [24069] free-5-美国39
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24069
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24069
+2026/05/23 12:49:38 builder.go:1403:    [24070] free-5-美国45
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24070
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24070
+2026/05/23 12:49:38 builder.go:1403:    [24071] free-5-美国17
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24071
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24071
+2026/05/23 12:49:38 builder.go:1403:    [24072] free-5-美国25
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24072
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24072
+2026/05/23 12:49:38 builder.go:1403:    [24073] free-5-美国48
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24073
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24073
+2026/05/23 12:49:38 builder.go:1403:    [24074] free-5-美国55
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24074
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24074
+2026/05/23 12:49:38 builder.go:1403:    [24075] free-5-美国64
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24075
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24075
+2026/05/23 12:49:38 builder.go:1403:    [24076] free-5-美国16
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24076
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24076
+2026/05/23 12:49:38 builder.go:1403:    [24077] free-5-美国51
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24077
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24077
+2026/05/23 12:49:38 builder.go:1403:    [24078] free-5-美国7
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24078
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24078
+2026/05/23 12:49:38 builder.go:1403:    [24079] free-5-美国43
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24079
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24079
+2026/05/23 12:49:38 builder.go:1403:    [24080] free-5-美国56
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24080
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24080
+2026/05/23 12:49:38 builder.go:1403:    [24081] free-5-美国37
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24081
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24081
+2026/05/23 12:49:38 builder.go:1403:    [24082] free-5-香港1
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24082
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24082
+2026/05/23 12:49:38 builder.go:1403:    [24083] free-5-美国23
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24083
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24083
+2026/05/23 12:49:38 builder.go:1403:    [24084] free-5-美国29
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24084
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24084
+2026/05/23 12:49:38 builder.go:1403:    [24085] free-5-美国27
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24085
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24085
+2026/05/23 12:49:38 builder.go:1403:    [24086] free-5-美国35
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24086
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24086
+2026/05/23 12:49:38 builder.go:1403:    [24087] free-5-美国4
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24087
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24087
+2026/05/23 12:49:38 builder.go:1403:    [24088] free-5-美国5
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24088
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24088
+2026/05/23 12:49:38 builder.go:1403:    [24089] free-5-美国53
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24089
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24089
+2026/05/23 12:49:38 builder.go:1403:    [24090] free-5-美国59
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24090
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24090
+2026/05/23 12:49:38 builder.go:1403:    [24091] free-5-美国60
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24091
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24091
+2026/05/23 12:49:38 builder.go:1403:    [24092] free-5-美国3
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24092
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24092
+2026/05/23 12:49:38 builder.go:1403:    [24093] free-5-美国31
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24093
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24093
+2026/05/23 12:49:38 builder.go:1403:    [24094] free-5-美国42
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24094
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24094
+2026/05/23 12:49:38 builder.go:1403:    [24095] free-5-美国6
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24095
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24095
+2026/05/23 12:49:38 builder.go:1403:    [24096] free-5-美国63
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24096
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24096
+2026/05/23 12:49:38 builder.go:1403:    [24097] free-5-美国18
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24097
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24097
+2026/05/23 12:49:38 builder.go:1403:    [24098] free-5-美国9
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24098
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24098
+2026/05/23 12:49:38 builder.go:1403:    [24099] free-5-美国28
+2026/05/23 12:49:38 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24099
+2026/05/23 12:49:38 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24099
+2026/05/23 12:49:38 builder.go:1409: ═══════════════════════════════════════════════════════════════
+2026/05/23 12:49:38 builder.go:1410: 
+2026/05/23 12:49:38 manager.go:748: [boxmgr] reload completed successfully with 100 nodes
+2026/05/23 12:49:38 manager.go:748: [boxmgr] starting health check for 100 nodes
+2026/05/23 12:49:38 router.go:81: 🌐 GeoIP Router started on 127.0.0.1:1221
+2026/05/23 12:49:38 router.go:82:    Routes: /jp, /kr, /us, /hk, /tw, /sg, /other (default: all nodes)
+2026/05/23 12:49:39 manager.go:748: [boxmgr] reloading with 100 nodes
+2026/05/23 12:49:39 manager.go:748: [boxmgr] stopping old instance to release ports...
+2026/05/23 12:49:39 manager.go:752: [boxmgr] WARN: probe failed for 6: read response: Application error 0x0 (local)
+2026/05/23 12:49:40 manager.go:752: [boxmgr] WARN: probe failed for 5: read response: Application error 0x0 (local)
+2026/05/23 12:49:40 manager.go:752: [boxmgr] WARN: probe failed for 2-5: read response: Application error 0x0 (local)
+2026/05/23 12:49:40 manager.go:752: [boxmgr] WARN: probe failed for 3-4: read response: Application error 0x0 (local)
+2026/05/23 12:49:41 geoip.go:253: 🔄 GeoIP auto-update enabled (interval: 24h0m0s)
+2026/05/23 12:49:41 builder.go:51: ✅ GeoIP database loaded: ./GeoLite2-Country.mmdb
+2026/05/23 12:49:41 builder.go:112: 🌍 Resolving GeoIP for 100 nodes (concurrent)...
+2026/05/23 12:49:41 builder.go:171: 🌍 GeoIP resolution completed in 0.0s
+2026/05/23 12:49:41 builder.go:193: ✅ Successfully built 100/100 nodes
+2026/05/23 12:49:41 builder.go:197: 🌍 GeoIP Region Distribution:
+2026/05/23 12:49:41 builder.go:201:    🇯🇵 Japan: 9 nodes
+2026/05/23 12:49:41 builder.go:201:    🇰🇷 Korea: 2 nodes
+2026/05/23 12:49:41 builder.go:201:    🇺🇸 USA: 5 nodes
+2026/05/23 12:49:41 builder.go:201:    🇭🇰 Hong Kong: 15 nodes
+2026/05/23 12:49:41 builder.go:201:    🇹🇼 Taiwan: 2 nodes
+2026/05/23 12:49:41 builder.go:201:    🇸🇬 Singapore: 6 nodes
+2026/05/23 12:49:41 builder.go:201:    🌍 Other: 61 nodes
+2026/05/23 12:49:41 builder.go:1358: 
+2026/05/23 12:49:41 builder.go:1359: 📡 Proxy Links:
+2026/05/23 12:49:41 builder.go:1360: ═══════════════════════════════════════════════════════════════
+2026/05/23 12:49:41 builder.go:1388: 🔌 Multi-Port Entry Points (100 nodes):
+2026/05/23 12:49:41 builder.go:1389: 
+2026/05/23 12:49:41 builder.go:1403:    [24000] 宝可梦-香港4
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24000
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24000
+2026/05/23 12:49:41 builder.go:1403:    [24001] 宝可梦-香港1
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24001
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24001
+2026/05/23 12:49:41 builder.go:1403:    [24002] 宝可梦-香港2
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24002
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24002
+2026/05/23 12:49:41 builder.go:1403:    [24003] 宝可梦-香港3
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24003
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24003
+2026/05/23 12:49:41 builder.go:1403:    [24004] 宝可梦-美国8
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24004
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24004
+2026/05/23 12:49:41 builder.go:1403:    [24005] 宝可梦-美国6
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24005
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24005
+2026/05/23 12:49:41 builder.go:1403:    [24006] 宝可梦-美国5
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24006
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24006
+2026/05/23 12:49:41 builder.go:1403:    [24007] 宝可梦-美国7
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24007
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24007
+2026/05/23 12:49:41 builder.go:1403:    [24008] 宝可梦-新加坡2
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24008
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24008
+2026/05/23 12:49:41 builder.go:1403:    [24009] 宝可梦-新加坡4
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24009
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24009
+2026/05/23 12:49:41 builder.go:1403:    [24010] 宝可梦-日本1
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24010
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24010
+2026/05/23 12:49:41 builder.go:1403:    [24011] 宝可梦-日本2
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24011
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24011
+2026/05/23 12:49:41 builder.go:1403:    [24012] 宝可梦-美国3
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24012
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24012
+2026/05/23 12:49:41 builder.go:1403:    [24013] 宝可梦-美国4
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24013
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24013
+2026/05/23 12:49:41 builder.go:1403:    [24014] 宝可梦-🇺🇸【北美洲】美国06丨IPLC【10x】
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24014
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24014
+2026/05/23 12:49:41 builder.go:1403:    [24015] 宝可梦-日本12
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24015
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24015
+2026/05/23 12:49:41 builder.go:1403:    [24016] 宝可梦-日本13
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24016
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24016
+2026/05/23 12:49:41 builder.go:1403:    [24017] 宝可梦-香港9
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24017
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24017
+2026/05/23 12:49:41 builder.go:1403:    [24018] 宝可梦-香港8
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24018
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24018
+2026/05/23 12:49:41 builder.go:1403:    [24019] 宝可梦-香港7
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24019
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24019
+2026/05/23 12:49:41 builder.go:1403:    [24020] 宝可梦-香港6
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24020
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24020
+2026/05/23 12:49:41 builder.go:1403:    [24021] 宝可梦-香港5
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24021
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24021
+2026/05/23 12:49:41 builder.go:1403:    [24022] 宝可梦-新加坡20
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24022
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24022
+2026/05/23 12:49:41 builder.go:1403:    [24023] 宝可梦-新加坡15
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24023
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24023
+2026/05/23 12:49:41 builder.go:1403:    [24024] 宝可梦-新加坡14
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24024
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24024
+2026/05/23 12:49:41 builder.go:1403:    [24025] 宝可梦-新加坡9
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24025
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24025
+2026/05/23 12:49:41 builder.go:1403:    [24026] 宝可梦-新加坡11
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24026
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24026
+2026/05/23 12:49:41 builder.go:1403:    [24027] 宝可梦-新加坡10
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24027
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24027
+2026/05/23 12:49:41 builder.go:1403:    [24028] 宝可梦-日本7
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24028
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24028
+2026/05/23 12:49:41 builder.go:1403:    [24029] 宝可梦-日本8
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24029
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24029
+2026/05/23 12:49:41 builder.go:1403:    [24030] 宝可梦-日本20
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24030
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24030
+2026/05/23 12:49:41 builder.go:1403:    [24031] 宝可梦-日本21
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24031
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24031
+2026/05/23 12:49:41 builder.go:1403:    [24032] 宝可梦-日本9
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24032
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24032
+2026/05/23 12:49:41 builder.go:1403:    [24033] 宝可梦-日本14
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24033
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24033
+2026/05/23 12:49:41 builder.go:1403:    [24034] 宝可梦-日本10
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24034
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24034
+2026/05/23 12:49:41 builder.go:1403:    [24035] 宝可梦-日本15
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24035
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24035
+2026/05/23 12:49:41 builder.go:1403:    [24036] 宝可梦-日本11
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24036
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24036
+2026/05/23 12:49:41 builder.go:1403:    [24037] 宝可梦-美国12
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24037
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24037
+2026/05/23 12:49:41 builder.go:1403:    [24038] 宝可梦-英国1
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24038
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24038
+2026/05/23 12:49:41 builder.go:1403:    [24039] 宝可梦-韩国3
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24039
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24039
+2026/05/23 12:49:41 builder.go:1403:    [24040] 宝可梦-台湾1
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24040
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24040
+2026/05/23 12:49:41 builder.go:1403:    [24041] 宝可梦-香港10
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24041
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24041
+2026/05/23 12:49:41 builder.go:1403:    [24042] 宝可梦-香港11
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24042
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24042
+2026/05/23 12:49:41 builder.go:1403:    [24043] 宝可梦-香港12
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24043
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24043
+2026/05/23 12:49:41 builder.go:1403:    [24044] 宝可梦-香港13
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24044
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24044
+2026/05/23 12:49:41 builder.go:1403:    [24045] 宝可梦-新加坡12
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24045
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24045
+2026/05/23 12:49:41 builder.go:1403:    [24046] 宝可梦-新加坡12
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24046
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24046
+2026/05/23 12:49:41 builder.go:1403:    [24047] 宝可梦-新加坡18
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24047
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24047
+2026/05/23 12:49:41 builder.go:1403:    [24048] 宝可梦-日本16
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24048
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24048
+2026/05/23 12:49:41 builder.go:1403:    [24049] 宝可梦-日本17
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24049
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24049
+2026/05/23 12:49:41 builder.go:1403:    [24050] 宝可梦-日本18
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24050
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24050
+2026/05/23 12:49:41 builder.go:1403:    [24051] 宝可梦-日本19
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24051
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24051
+2026/05/23 12:49:41 builder.go:1403:    [24052] 宝可梦-韩国4
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24052
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24052
+2026/05/23 12:49:41 builder.go:1403:    [24053] 宝可梦-台湾2
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24053
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24053
+2026/05/23 12:49:41 builder.go:1403:    [24054] 宝可梦-英国2
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24054
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24054
+2026/05/23 12:49:41 builder.go:1403:    [24055] 宝可梦-英国3
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24055
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24055
+2026/05/23 12:49:41 builder.go:1403:    [24056] 宝可梦-美国11
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24056
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24056
+2026/05/23 12:49:41 builder.go:1403:    [24057] free-5-美国62
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24057
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24057
+2026/05/23 12:49:41 builder.go:1403:    [24058] free-5-美国8
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24058
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24058
+2026/05/23 12:49:41 builder.go:1403:    [24059] free-5-美国2
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24059
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24059
+2026/05/23 12:49:41 builder.go:1403:    [24060] free-5-美国32
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24060
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24060
+2026/05/23 12:49:41 builder.go:1403:    [24061] free-5-美国14
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24061
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24061
+2026/05/23 12:49:41 builder.go:1403:    [24062] free-5-美国47
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24062
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24062
+2026/05/23 12:49:41 builder.go:1403:    [24063] free-5-美国49
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24063
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24063
+2026/05/23 12:49:41 builder.go:1403:    [24064] free-5-美国61
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24064
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24064
+2026/05/23 12:49:41 builder.go:1403:    [24065] free-5-美国24
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24065
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24065
+2026/05/23 12:49:41 builder.go:1403:    [24066] free-5-美国26
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24066
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24066
+2026/05/23 12:49:41 builder.go:1403:    [24067] free-5-美国34
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24067
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24067
+2026/05/23 12:49:41 builder.go:1403:    [24068] free-5-美国10
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24068
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24068
+2026/05/23 12:49:41 builder.go:1403:    [24069] free-5-美国39
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24069
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24069
+2026/05/23 12:49:41 builder.go:1403:    [24070] free-5-美国45
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24070
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24070
+2026/05/23 12:49:41 builder.go:1403:    [24071] free-5-美国17
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24071
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24071
+2026/05/23 12:49:41 builder.go:1403:    [24072] free-5-美国25
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24072
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24072
+2026/05/23 12:49:41 builder.go:1403:    [24073] free-5-美国48
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24073
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24073
+2026/05/23 12:49:41 builder.go:1403:    [24074] free-5-美国55
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24074
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24074
+2026/05/23 12:49:41 builder.go:1403:    [24075] free-5-美国64
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24075
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24075
+2026/05/23 12:49:41 builder.go:1403:    [24076] free-5-美国16
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24076
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24076
+2026/05/23 12:49:41 builder.go:1403:    [24077] free-5-美国51
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24077
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24077
+2026/05/23 12:49:41 builder.go:1403:    [24078] free-5-美国7
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24078
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24078
+2026/05/23 12:49:41 builder.go:1403:    [24079] free-5-美国43
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24079
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24079
+2026/05/23 12:49:41 builder.go:1403:    [24080] free-5-美国56
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24080
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24080
+2026/05/23 12:49:41 builder.go:1403:    [24081] free-5-美国37
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24081
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24081
+2026/05/23 12:49:41 builder.go:1403:    [24082] free-5-香港1
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24082
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24082
+2026/05/23 12:49:41 builder.go:1403:    [24083] free-5-美国23
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24083
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24083
+2026/05/23 12:49:41 builder.go:1403:    [24084] free-5-美国29
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24084
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24084
+2026/05/23 12:49:41 builder.go:1403:    [24085] free-5-美国27
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24085
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24085
+2026/05/23 12:49:41 builder.go:1403:    [24086] free-5-美国35
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24086
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24086
+2026/05/23 12:49:41 builder.go:1403:    [24087] free-5-美国4
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24087
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24087
+2026/05/23 12:49:41 builder.go:1403:    [24088] free-5-美国5
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24088
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24088
+2026/05/23 12:49:41 builder.go:1403:    [24089] free-5-美国53
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24089
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24089
+2026/05/23 12:49:41 builder.go:1403:    [24090] free-5-美国59
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24090
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24090
+2026/05/23 12:49:41 builder.go:1403:    [24091] free-5-美国60
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24091
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24091
+2026/05/23 12:49:41 builder.go:1403:    [24092] free-5-美国3
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24092
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24092
+2026/05/23 12:49:41 builder.go:1403:    [24093] free-5-美国31
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24093
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24093
+2026/05/23 12:49:41 builder.go:1403:    [24094] free-5-美国42
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24094
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24094
+2026/05/23 12:49:41 builder.go:1403:    [24095] free-5-美国6
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24095
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24095
+2026/05/23 12:49:41 builder.go:1403:    [24096] free-5-美国63
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24096
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24096
+2026/05/23 12:49:41 builder.go:1403:    [24097] free-5-美国18
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24097
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24097
+2026/05/23 12:49:41 builder.go:1403:    [24098] free-5-美国9
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24098
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24098
+2026/05/23 12:49:41 builder.go:1403:    [24099] free-5-美国28
+2026/05/23 12:49:41 builder.go:1404:        HTTP:   http://mpuser:mppass@127.0.0.1:24099
+2026/05/23 12:49:41 builder.go:1405:        SOCKS5: socks5://mpuser:mppass@127.0.0.1:24099
+2026/05/23 12:49:41 builder.go:1409: ═══════════════════════════════════════════════════════════════
+2026/05/23 12:49:41 builder.go:1410: 
+2026/05/23 12:49:41 manager.go:748: [boxmgr] reload completed successfully with 100 nodes
+2026/05/23 12:49:41 manager.go:748: [boxmgr] starting health check for 100 nodes
+2026/05/23 12:49:41 router.go:81: 🌐 GeoIP Router started on 127.0.0.1:1221
+2026/05/23 12:49:41 router.go:82:    Routes: /jp, /kr, /us, /hk, /tw, /sg, /other (default: all nodes)
+2026/05/23 12:49:41 manager.go:752: [boxmgr] WARN: probe failed for 14-2: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:41 manager.go:752: [boxmgr] WARN: probe failed for 12: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:41 manager.go:752: [boxmgr] WARN: probe failed for 1-3: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:41 manager.go:752: [boxmgr] WARN: probe failed for 15-2: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:42 manager.go:752: [boxmgr] WARN: probe failed for 10-2: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:42 manager.go:752: [boxmgr] WARN: probe failed for 11-2: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:42 manager.go:752: [boxmgr] WARN: probe failed for 13: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:42 manager.go:752: [boxmgr] WARN: probe failed for 10: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:43 manager.go:752: [boxmgr] WARN: probe failed for 11: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:43 manager.go:752: [boxmgr] WARN: probe failed for 9-2: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:43 manager.go:752: [boxmgr] WARN: probe failed for 12-2: lookup cfyes.lxy1015.top: empty result
+2026/05/23 12:49:48 manager.go:752: [boxmgr] WARN: probe failed for 12-4: timeout: no recent network activity
+2026/05/23 12:49:48 manager.go:752: [boxmgr] WARN: probe failed for free-5-26: read response: read tcp 192.168.50.166:53268->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:48 manager.go:752: [boxmgr] WARN: probe failed for free-5-61: read response: read tcp 192.168.50.166:53271->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:48 manager.go:752: [boxmgr] WARN: probe failed for free-5-49: read response: read tcp 192.168.50.166:53272->82.198.246.250:180: i/o timeout
+2026/05/23 12:49:48 manager.go:752: [boxmgr] WARN: probe failed for free-5-37: read response: read tcp 192.168.50.166:53270->82.198.246.250:180: i/o timeout
+2026/05/23 12:49:48 manager.go:752: [boxmgr] WARN: probe failed for free-5-32: read response: read tcp 192.168.50.166:53273->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:48 manager.go:752: [boxmgr] WARN: probe failed for free-5-24: read response: read tcp 192.168.50.166:53300->82.198.246.37:180: i/o timeout
+2026/05/23 12:49:48 manager.go:752: [boxmgr] WARN: probe failed for free-5-45: read response: read tcp 192.168.50.166:53303->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:49 manager.go:752: [boxmgr] WARN: probe failed for free-5-8: read response: read tcp 192.168.50.166:53315->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:49 manager.go:752: [boxmgr] WARN: probe failed for free-5-3: read response: read tcp 192.168.50.166:53316->82.198.246.37:180: i/o timeout
+2026/05/23 12:49:49 manager.go:752: [boxmgr] WARN: probe failed for free-5-47: read response: read tcp 192.168.50.166:49956->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:49 manager.go:752: [boxmgr] WARN: probe failed for free-5-62: read response: read tcp 192.168.50.166:49962->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:49 manager.go:752: [boxmgr] WARN: probe failed for free-5-2: read response: read tcp 192.168.50.166:49963->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:50 manager.go:752: [boxmgr] WARN: probe failed for free-5-31: read response: read tcp 192.168.50.166:49985->82.198.246.37:180: i/o timeout
+2026/05/23 12:49:50 manager.go:752: [boxmgr] WARN: probe failed for free-5-63: read response: read tcp 192.168.50.166:53338->82.198.246.250:180: i/o timeout
+2026/05/23 12:49:50 manager.go:752: [boxmgr] WARN: probe failed for free-5-35: read response: read tcp 192.168.50.166:64877->82.198.246.37:180: i/o timeout
+2026/05/23 12:49:50 manager.go:752: [boxmgr] WARN: probe failed for free-5-56: read response: read tcp 192.168.50.166:64881->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:50 manager.go:752: [boxmgr] WARN: probe failed for free-5-60: read response: read tcp 192.168.50.166:64882->82.198.246.250:180: i/o timeout
+2026/05/23 12:49:50 manager.go:748: [boxmgr] health check completed: 79 available, 21 failed
+2026/05/23 12:49:51 manager.go:752: [boxmgr] WARN: probe failed for free-5-45: read response: read tcp 192.168.50.166:64910->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:51 manager.go:752: [boxmgr] WARN: probe failed for free-5-56: read response: read tcp 192.168.50.166:64914->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:51 manager.go:752: [boxmgr] WARN: probe failed for free-5-8: read response: read tcp 192.168.50.166:64919->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:51 manager.go:752: [boxmgr] WARN: probe failed for free-5-24: read response: read tcp 192.168.50.166:64912->82.198.246.37:180: i/o timeout
+2026/05/23 12:49:51 manager.go:752: [boxmgr] WARN: probe failed for free-5-35: read response: read tcp 192.168.50.166:64913->82.198.246.37:180: i/o timeout
+2026/05/23 12:49:51 manager.go:752: [boxmgr] WARN: probe failed for free-5-3: read response: read tcp 192.168.50.166:64907->82.198.246.37:180: i/o timeout
+2026/05/23 12:49:51 manager.go:752: [boxmgr] WARN: probe failed for free-5-32: read response: read tcp 192.168.50.166:64918->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:51 manager.go:752: [boxmgr] WARN: probe failed for free-5-60: read response: read tcp 192.168.50.166:55844->82.198.246.250:180: i/o timeout
+2026/05/23 12:49:51 manager.go:752: [boxmgr] WARN: probe failed for free-5-31: read response: read tcp 192.168.50.166:55845->82.198.246.37:180: i/o timeout
+2026/05/23 12:49:52 manager.go:752: [boxmgr] WARN: probe failed for free-5-49: read response: read tcp 192.168.50.166:55861->82.198.246.250:180: i/o timeout
+2026/05/23 12:49:52 manager.go:752: [boxmgr] WARN: probe failed for free-5-47: read response: read tcp 192.168.50.166:55872->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:52 manager.go:752: [boxmgr] WARN: probe failed for free-5-62: read response: read tcp 192.168.50.166:64917->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:52 manager.go:752: [boxmgr] WARN: probe failed for free-5-37: read response: read tcp 192.168.50.166:55877->82.198.246.250:180: i/o timeout
+2026/05/23 12:49:52 manager.go:752: [boxmgr] WARN: probe failed for free-5-61: read response: read tcp 192.168.50.166:55884->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:52 manager.go:752: [boxmgr] WARN: probe failed for free-5-63: read response: read tcp 192.168.50.166:55888->82.198.246.250:180: i/o timeout
+2026/05/23 12:49:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-5: read response: read tcp 192.168.50.166:55903->82.198.246.37:180: i/o timeout
+2026/05/23 12:49:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-2: read response: read tcp 192.168.50.166:55915->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:53 manager.go:752: [boxmgr] WARN: probe failed for free-5-26: read response: read tcp 192.168.50.166:55925->82.198.246.233:180: i/o timeout
+2026/05/23 12:49:53 manager.go:748: [boxmgr] health check completed: 70 available, 30 failed
+2026/05/23 12:51:27 manager.go:748: [boxmgr] starting health check for 100 nodes

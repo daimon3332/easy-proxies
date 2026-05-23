@@ -1,0 +1,31 @@
+ROLE_FILE: C:/Users/33033/.claude/.ccg/prompts/codex/builder.md
+
+Rewrite internal/monitor/assets/index.html completely with a BEAUTIFUL modern design.
+
+The current file is a 626-line embedded HTML page for a proxy pool manager. It has:
+- Three-column layout (nav, list, detail)
+- Dashboard stats, Canvas2D charts (region pie, latency bar, traffic line)
+- Import dialog (URL/paste subscription with tag prefix)
+- Port scanner
+- Log viewer
+- Settings
+- Auth system
+- Toast notifications
+- Dark/light theme
+- SSE traffic streaming
+
+API endpoints are documented as fetch calls.
+
+Design requirements:
+1. BEAUTIFUL, professional, modern
+2. Glassmorphism or dark-theme with subtle gradients
+3. Smooth transitions (0.2s-0.3s)
+4. Clean, minimal typography
+5. Proper spacing (generous padding)
+6. Animated status indicators
+7. Elegant import dialog with step indicators
+8. Node cards with latency color indicators
+9. Must work as single file with no external CSS frameworks
+10. Keep all existing functionality
+
+Use your MCP tools to inspect the current page before rewriting.

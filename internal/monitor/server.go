@@ -12,7 +12,8 @@ import (
 	"log"
 	mathrand "math/rand"
 	"net/http"
-	"net/url"
+	neturl "net/url"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/geoip"
+	"easy_proxies/internal/importer"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -70,12 +72,12 @@ type SubscriptionStatus struct {
 
 // Server exposes HTTP endpoints for monitoring.
 type Server struct {
-	cfg          Config
-	cfgMu        sync.RWMutex   // 保护动态配置字段
-	cfgSrc       *config.Config // 可持久化的配置对象
-	mgr          *Manager
-	srv          *http.Server
-	logger       *log.Logger
+	cfg    Config
+	cfgMu  sync.RWMutex   // 保护动态配置字段
+	cfgSrc *config.Config // 可持久化的配置对象
+	mgr    *Manager
+	srv    *http.Server
+	logger *log.Logger
 
 	// Session management
 	sessionMu  sync.RWMutex
@@ -87,6 +89,7 @@ type Server struct {
 
 	subRefresher SubscriptionRefresher
 	nodeMgr      NodeManager
+	importSvc    ImportService
 }
 
 // NewServer constructs a server; it can be nil when disabled.
@@ -130,9 +133,19 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	mux.HandleFunc("/api/subscription/status", s.withAuth(s.handleSubscriptionStatus))
 	mux.HandleFunc("/api/subscription/refresh", s.withAuth(s.handleSubscriptionRefresh))
 	mux.HandleFunc("/api/subscription/config", s.withAuth(s.handleSubscriptionConfig))
+	mux.HandleFunc("/api/subscription/delete", s.withAuth(s.handleSubscriptionDelete))
 	mux.HandleFunc("/api/reload", s.withAuth(s.handleReload))
 	mux.HandleFunc("/api/traffic", s.withAuth(s.handleTraffic))
 	mux.HandleFunc("/api/logs", s.withAuth(s.handleLogs))
+	mux.HandleFunc("/api/logs/clear", s.withAuth(s.handleLogsClear))
+	mux.HandleFunc("/api/import/parse", s.withAuth(s.handleImportParse))
+	mux.HandleFunc("/api/import/", s.withAuth(s.handleImportAction))
+	mux.HandleFunc("/api/nodes/all", s.withAuth(s.handleManagedNodesAll))
+	mux.HandleFunc("/api/nodes/pool", s.withAuth(s.handleManagedNodesPool))
+	mux.HandleFunc("/api/nodes/failed", s.withAuth(s.handleManagedNodesFailed))
+	mux.HandleFunc("/api/nodes/order", s.withAuth(s.handleManagedNodesOrder))
+	mux.HandleFunc("/api/managed-nodes/", s.withAuth(s.handleManagedNodeAction))
+	mux.HandleFunc("/api/ports/status", s.withAuth(s.handlePortsStatus))
 	s.srv = &http.Server{Addr: cfg.Listen, Handler: mux}
 	return s
 }
@@ -148,6 +161,13 @@ func (s *Server) SetSubscriptionRefresher(sr SubscriptionRefresher) {
 func (s *Server) SetNodeManager(nm NodeManager) {
 	if s != nil {
 		s.nodeMgr = nm
+	}
+}
+
+// SetImportService sets the import service for import/managed-node endpoints.
+func (s *Server) SetImportService(svc ImportService) {
+	if s != nil {
+		s.importSvc = svc
 	}
 }
 
@@ -939,7 +959,6 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-
 		// Update extended settings
 		s.cfgMu.Lock()
 		if s.cfgSrc != nil {
@@ -1058,16 +1077,43 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 	case http.MethodGet:
 		s.cfgMu.RLock()
 		var urls []string
-		var enabled bool
-		var interval string
+		enabled := true
+		interval := (24 * time.Hour).String()
 		if s.cfgSrc != nil {
 			urls = s.cfgSrc.Subscriptions
 			enabled = s.cfgSrc.SubscriptionRefresh.Enabled
-			interval = s.cfgSrc.SubscriptionRefresh.Interval.String()
+			if s.cfgSrc.SubscriptionRefresh.Interval > 0 {
+				interval = s.cfgSrc.SubscriptionRefresh.Interval.String()
+			}
 		}
 		s.cfgMu.RUnlock()
+		// Resolve a display name per URL: prefer the TagPrefix of any
+		// ManagedNode imported from that URL, fallback to the host part.
+		names := make(map[string]string, len(urls))
+		var imported []importer.ManagedNode
+		if s.importSvc != nil {
+			imported, _ = s.importSvc.ListAll()
+		}
+		for _, u := range urls {
+			name := ""
+			for _, n := range imported {
+				if n.ImportSource == u && n.TagPrefix != "" {
+					name = n.TagPrefix
+					break
+				}
+			}
+			if name == "" {
+				if parsed, err := neturl.Parse(u); err == nil && parsed.Host != "" {
+					name = parsed.Host
+				} else {
+					name = u
+				}
+			}
+			names[u] = name
+		}
 		writeJSON(w, map[string]any{
 			"subscriptions": urls,
+			"names":         names,
 			"enabled":       enabled,
 			"interval":      interval,
 		})
@@ -1077,6 +1123,7 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 			Subscriptions []string `json:"subscriptions"`
 			Enabled       bool     `json:"enabled"`
 			Interval      string   `json:"interval"` // e.g. "1h", "30m"
+			Refresh       *bool    `json:"refresh,omitempty"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -1087,7 +1134,7 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 		// Parse interval
 		interval, err := time.ParseDuration(req.Interval)
 		if err != nil || interval < 5*time.Minute {
-			interval = 1 * time.Hour // default
+			interval = 24 * time.Hour
 		}
 
 		// Clean URLs
@@ -1115,8 +1162,9 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 		}
 		s.cfgMu.Unlock()
 
-		// Hot-reload subscription manager and wait for refresh to complete
-		if s.subRefresher != nil {
+		refreshNow := req.Refresh == nil || *req.Refresh
+		// Hot-reload subscription manager and wait for refresh to complete when requested.
+		if refreshNow && s.subRefresher != nil {
 			if err := s.subRefresher.UpdateConfigAndRefresh(cleanURLs, req.Enabled, interval); err != nil {
 				// Config was saved but refresh failed — report partial success
 				writeJSON(w, map[string]any{
@@ -1130,18 +1178,104 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 			}
 		}
 
-		status := s.subRefresher.Status()
-		writeJSON(w, map[string]any{
+		resp := map[string]any{
 			"message":       "订阅配置已更新并生效",
 			"subscriptions": cleanURLs,
 			"enabled":       req.Enabled,
 			"interval":      interval.String(),
-			"node_count":    status.NodeCount,
-		})
+			"node_count":    0,
+			"refresh":       refreshNow,
+		}
+		if s.subRefresher != nil {
+			status := s.subRefresher.Status()
+			resp["node_count"] = status.NodeCount
+		}
+		writeJSON(w, resp)
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// handleSubscriptionDelete removes a subscription URL from config.yaml and
+// purges every imported ManagedNode whose ImportSource matches that URL.
+// Pool members get unregistered from sing-box; a single reload is triggered
+// after the bulk delete to refresh listeners. Body: {"url": "..."}.
+func (s *Server) handleSubscriptionDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 POST 请求"})
+		return
+	}
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "请求格式错误"})
+		return
+	}
+	target := strings.TrimSpace(req.URL)
+	if target == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "url 不能为空"})
+		return
+	}
+
+	// 1. Drop the URL from cfg.Subscriptions and persist.
+	s.cfgMu.Lock()
+	found := false
+	var remaining []string
+	enabled := true
+	interval := 24 * time.Hour
+	if s.cfgSrc != nil {
+		for _, u := range s.cfgSrc.Subscriptions {
+			if u == target {
+				found = true
+				continue
+			}
+			remaining = append(remaining, u)
+		}
+		s.cfgSrc.Subscriptions = remaining
+		enabled = s.cfgSrc.SubscriptionRefresh.Enabled
+		if s.cfgSrc.SubscriptionRefresh.Interval > 0 {
+			interval = s.cfgSrc.SubscriptionRefresh.Interval
+		}
+		if err := s.cfgSrc.SaveSettings(); err != nil {
+			s.cfgMu.Unlock()
+			w.WriteHeader(http.StatusInternalServerError)
+			writeJSON(w, map[string]any{"error": fmt.Sprintf("保存配置失败: %v", err)})
+			return
+		}
+	}
+	s.cfgMu.Unlock()
+
+	// 2. Purge managed nodes whose ImportSource matches the URL.
+	deleted := 0
+	if s.importSvc != nil {
+		n, err := s.importSvc.DeleteBySubscription(target)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			writeJSON(w, map[string]any{"error": fmt.Sprintf("删除节点失败: %v", err)})
+			return
+		}
+		deleted = n
+	}
+
+	// 3. Re-sync subscription manager so nodes.txt no longer contains the
+	//    removed URL's nodes.
+	if s.subRefresher != nil {
+		_ = s.subRefresher.UpdateConfigAndRefresh(remaining, enabled, interval)
+	}
+
+	writeJSON(w, map[string]any{
+		"message":         "订阅已删除",
+		"url":             target,
+		"removed":         found,
+		"deleted_nodes":   deleted,
+		"remaining_count": len(remaining),
+	})
 }
 
 // nodePayload is the JSON request body for node CRUD operations.
@@ -1202,7 +1336,7 @@ func (s *Server) handleConfigNodeItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	namePart := strings.TrimPrefix(r.URL.Path, "/api/nodes/config/")
-	nodeName, err := url.PathUnescape(namePart)
+	nodeName, err := neturl.PathUnescape(namePart)
 	if err != nil || nodeName == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		writeJSON(w, map[string]any{"error": "节点名称无效"})
@@ -1328,6 +1462,21 @@ func (s *Server) handleTraffic(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	content := SharedLogBuffer.Content()
 	writeJSON(w, map[string]any{"logs": content})
+}
+
+func (s *Server) handleLogsClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 POST 请求"})
+		return
+	}
+	SharedLogBuffer.Clear()
+	s.logger.Print("logs cleared from WebUI")
+	if s.cfgSrc != nil && s.cfgSrc.Log.File != "" {
+		_ = os.WriteFile(s.cfgSrc.Log.File, nil, 0644)
+	}
+	writeJSON(w, map[string]string{"status": "ok"})
 }
 
 // Session management functions

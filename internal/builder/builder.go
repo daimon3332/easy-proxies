@@ -486,7 +486,9 @@ func buildVLESSOptions(u *url.URL, skipCertVerify bool) (option.VLESSOutboundOpt
 	if flow := query.Get("flow"); flow != "" {
 		opts.Flow = flow
 	}
-	if packetEncoding := query.Get("packetEncoding"); packetEncoding != "" {
+	if packetEncoding, err := normalizeVLESSPacketEncoding(query); err != nil {
+		return option.VLESSOutboundOptions{}, err
+	} else if packetEncoding != "" {
 		opts.PacketEncoding = &packetEncoding
 	}
 	if transport, err := buildV2RayTransport(query); err != nil {
@@ -500,6 +502,22 @@ func buildVLESSOptions(u *url.URL, skipCertVerify bool) (option.VLESSOutboundOpt
 		opts.OutboundTLSOptionsContainer = option.OutboundTLSOptionsContainer{TLS: tlsOptions}
 	}
 	return opts, nil
+}
+
+func normalizeVLESSPacketEncoding(query url.Values) (string, error) {
+	packetEncoding := query.Get("packetEncoding")
+	if packetEncoding == "" {
+		packetEncoding = query.Get("packet_encoding")
+	}
+	packetEncoding = strings.ToLower(strings.TrimSpace(packetEncoding))
+	switch packetEncoding {
+	case "", "none":
+		return "", nil
+	case "packetaddr", "xudp":
+		return packetEncoding, nil
+	default:
+		return "", fmt.Errorf("unsupported vless packet encoding: %s", packetEncoding)
+	}
 }
 
 func buildHysteria2Options(u *url.URL, skipCertVerify bool) (option.Hysteria2OutboundOptions, error) {

@@ -1,0 +1,7 @@
+{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
+{"file": "internal/config/config.go", "reason": "parseSubscriptionContent() already handles base64/txt/clash formats, needs extension for tag prefix"}
+{"file": "internal/monitor/server.go", "reason": "HTTP API server, needs new import/geoip endpoints + WebUI HTML rewrite"}
+{"file": "internal/monitor/manager.go", "reason": "Health check manager, probeAllNodes() needs staging support for imported nodes"}
+{"file": "internal/monitor/assets/index.html", "reason": "Current WebUI 1753 lines, needs complete rewrite to sidebar layout"}
+{"file": "internal/builder/builder.go", "reason": "Converts config to sing-box Options, needs to support dynamically added nodes"}
+{"file": "internal/subscription/manager.go", "reason": "Auto-refresh loop, needs integration with new import pipeline"}

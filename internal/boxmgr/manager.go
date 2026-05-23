@@ -209,6 +209,17 @@ func (m *Manager) Reload(newCfg *config.Config) error {
 	}
 	m.mu.Unlock()
 
+	if err := m.rebuildMultiPortAssignments(newCfg); err != nil {
+		m.rollbackToOldConfig(ctx, oldCfg)
+		return fmt.Errorf("rebuild multi-port assignments: %w", err)
+	}
+	if newCfg.FilePath() != "" {
+		if err := newCfg.Save(); err != nil {
+			m.rollbackToOldConfig(ctx, oldCfg)
+			return fmt.Errorf("save rebuilt config: %w", err)
+		}
+	}
+
 	// Give OS time to release ports
 	time.Sleep(500 * time.Millisecond)
 
@@ -307,6 +318,75 @@ func (m *Manager) rollbackToOldConfig(ctx context.Context, oldCfg *config.Config
 	m.logger.Infof("rollback successful")
 }
 
+func (m *Manager) rebuildMultiPortAssignments(cfg *config.Config) error {
+	if cfg == nil {
+		return errors.New("config is nil")
+	}
+	if cfg.Mode != "multi-port" && cfg.Mode != "hybrid" {
+		return nil
+	}
+
+	base := cfg.MultiPort.BasePort
+	if base == 0 {
+		base = 24000
+	}
+	address := cfg.MultiPort.Address
+	if address == "" {
+		address = "0.0.0.0"
+	}
+
+	// Ports currently held by our own pool — skip OS-availability check on these
+	// so that mid-reload (when our existing listeners still hold their ports)
+	// the allocator doesn't falsely flag them as "occupied".
+	mineSet := make(map[uint16]bool, len(cfg.Nodes))
+	for _, n := range cfg.Nodes {
+		if n.Port > 0 {
+			mineSet[n.Port] = true
+		}
+	}
+
+	used := make(map[uint16]struct{}, len(cfg.Nodes)+1)
+	if cfg.Mode == "hybrid" && cfg.Listener.Port > 0 {
+		used[cfg.Listener.Port] = struct{}{}
+	}
+
+	var skipped []uint16
+	port := base
+	for i := range cfg.Nodes {
+		for {
+			if port == 0 {
+				port = 1
+			}
+			if port > 65535 {
+				return fmt.Errorf("no available ports found starting from %d", base)
+			}
+			if _, ok := used[port]; ok {
+				port++
+				continue
+			}
+			if cfg.Mode == "hybrid" && port == cfg.Listener.Port {
+				port++
+				continue
+			}
+			if !mineSet[port] && !config.IsPortAvailable(address, port) {
+				skipped = append(skipped, port)
+				port++
+				continue
+			}
+			break
+		}
+		cfg.Nodes[i].Port = port
+		if cfg.Nodes[i].Username == "" {
+			cfg.Nodes[i].Username = cfg.MultiPort.Username
+			cfg.Nodes[i].Password = cfg.MultiPort.Password
+		}
+		used[port] = struct{}{}
+		port++
+	}
+	config.RecordPortSkips(skipped)
+	return nil
+}
+
 // Close terminates the active instance and auxiliary components.
 func (m *Manager) Close() error {
 	m.mu.Lock()
@@ -346,6 +426,13 @@ func (m *Manager) MonitorServer() *monitor.Server {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.monitorServer
+}
+
+// EnsureMonitor initializes and starts the monitor server before the sing-box
+// instance is started. This allows app-level services to be wired before the
+// WebUI accepts user actions.
+func (m *Manager) EnsureMonitor(ctx context.Context) error {
+	return m.ensureMonitor(ctx)
 }
 
 // startGeoIPRouter starts the GeoIP region-routing HTTP proxy server.
@@ -471,7 +558,7 @@ func (m *Manager) createBox(ctx context.Context, cfg *config.Config) (*box.Box, 
 				if poolOpts, ok := ob.Options.(*pool.Options); ok {
 					poolOpts.Members = removeFromSlice(poolOpts.Members, badTag)
 					delete(poolOpts.Metadata, badTag)
-					
+
 					// If the pool is now empty, remove it to avoid another validation error
 					if len(poolOpts.Members) == 0 {
 						log.Printf("⚠️  Removing empty pool '%s'", ob.Tag)
@@ -808,6 +895,68 @@ func (m *Manager) DeleteNode(ctx context.Context, name string) error {
 	return nil
 }
 
+// ReorderNodes moves the named nodes to the front in the given order and saves
+// the config. In multi-port/hybrid mode it also reassigns sequential ports so
+// group ordering in the WebUI maps to visible port ranges.
+func (m *Manager) ReorderNodes(ctx context.Context, names []string) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.cfg == nil {
+		return errConfigUnavailable
+	}
+
+	backup := cloneNodes(m.cfg.Nodes)
+	byName := make(map[string]config.NodeConfig, len(m.cfg.Nodes))
+	for _, node := range m.cfg.Nodes {
+		byName[node.Name] = node
+	}
+
+	reordered := make([]config.NodeConfig, 0, len(m.cfg.Nodes))
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		node, ok := byName[name]
+		if !ok {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		reordered = append(reordered, node)
+		seen[name] = struct{}{}
+	}
+	for _, node := range m.cfg.Nodes {
+		if _, ok := seen[node.Name]; ok {
+			continue
+		}
+		reordered = append(reordered, node)
+	}
+	m.cfg.Nodes = reordered
+
+	if m.cfg.Mode == "multi-port" || m.cfg.Mode == "hybrid" {
+		if err := m.assignSequentialPortsLocked(); err != nil {
+			m.cfg.Nodes = backup
+			return err
+		}
+	}
+
+	if err := m.cfg.Save(); err != nil {
+		m.cfg.Nodes = backup
+		return fmt.Errorf("save config: %w", err)
+	}
+	return nil
+}
+
 // TriggerReload reloads the sing-box instance with current config.
 func (m *Manager) TriggerReload(ctx context.Context) error {
 	if ctx != nil {
@@ -818,28 +967,28 @@ func (m *Manager) TriggerReload(ctx context.Context) error {
 
 	m.mu.RLock()
 	cfgCopy := m.copyConfigLocked()
-	portMap := m.cfg.BuildPortMap() // Preserve existing port assignments
 	m.mu.RUnlock()
 
 	if cfgCopy == nil {
 		return errConfigUnavailable
 	}
-	return m.ReloadWithPortMap(cfgCopy, portMap)
-}
-
-// ReloadWithPortMap gracefully switches to a new configuration, preserving port assignments.
-func (m *Manager) ReloadWithPortMap(newCfg *config.Config, portMap map[string]uint16) error {
-	if newCfg == nil {
-		return errors.New("new config is nil")
-	}
-
-	// Apply port mapping to preserve existing node ports
-	if portMap != nil && len(portMap) > 0 {
-		if err := newCfg.NormalizeWithPortMap(portMap); err != nil {
-			return fmt.Errorf("normalize config with port map: %w", err)
+	if cfgCopy.Mode == "multi-port" || cfgCopy.Mode == "hybrid" {
+		if err := m.rebuildMultiPortAssignments(cfgCopy); err != nil {
+			return fmt.Errorf("rebuild multi-port assignments: %w", err)
+		}
+		if cfgCopy.FilePath() != "" {
+			if err := cfgCopy.Save(); err != nil {
+				return fmt.Errorf("save rebuilt config: %w", err)
+			}
 		}
 	}
+	return m.Reload(cfgCopy)
+}
 
+// ReloadWithPortMap is kept for compatibility.
+// Port assignments are recomputed from base_port during Reload so the runtime
+// ports always match the config file and the WebUI.
+func (m *Manager) ReloadWithPortMap(newCfg *config.Config, portMap map[string]uint16) error {
 	return m.Reload(newCfg)
 }
 
@@ -851,6 +1000,19 @@ func (m *Manager) CurrentPortMap() map[string]uint16 {
 		return nil
 	}
 	return m.cfg.BuildPortMap()
+}
+
+// RebuildPortAssignments repacks multi-port assignments sequentially from
+// base_port. Intended to be called once at startup after the caller has
+// finalized cfg.Nodes (e.g. after filtering to pool members), so the first
+// sing-box instance is created with deterministic, contiguous ports.
+func (m *Manager) RebuildPortAssignments() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cfg == nil {
+		return errConfigUnavailable
+	}
+	return m.rebuildMultiPortAssignments(m.cfg)
 }
 
 // --- Helper functions ---
@@ -874,7 +1036,6 @@ func extractPortFromBindError(err error) uint16 {
 	}
 	return 0
 }
-
 
 // reassignConflictingPort finds the node using the conflicting port and assigns a new port.
 func reassignConflictingPort(cfg *config.Config, conflictPort uint16) bool {
@@ -959,28 +1120,119 @@ func (m *Manager) portInUseLocked(port uint16, currentName string) bool {
 	return false
 }
 
+func (m *Manager) currentNodeHasPortLocked(port uint16, currentName string) bool {
+	if port == 0 || currentName == "" {
+		return false
+	}
+	for _, node := range m.cfg.Nodes {
+		if node.Name == currentName && node.Port == port {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Manager) nextAvailablePortLocked() uint16 {
 	base := m.cfg.MultiPort.BasePort
 	if base == 0 {
 		base = 24000
 	}
+	address := m.cfg.MultiPort.Address
+	if address == "" {
+		address = "0.0.0.0"
+	}
 	used := make(map[uint16]struct{}, len(m.cfg.Nodes))
+	var maxPort uint16
 	for _, node := range m.cfg.Nodes {
 		if node.Port > 0 {
 			used[node.Port] = struct{}{}
+			if node.Port > maxPort {
+				maxPort = node.Port
+			}
 		}
 	}
+	// New nodes get the next port after the current tail so growth stays sequential.
 	port := base
+	if maxPort >= base {
+		port = maxPort + 1
+	}
+	var skipped []uint16
 	for i := 0; i < 1<<16; i++ {
-		if _, ok := used[port]; !ok && port != 0 {
-			return port
-		}
-		port++
 		if port == 0 {
 			port = 1
 		}
+		if _, taken := used[port]; !taken && !(m.cfg.Mode == "hybrid" && port == m.cfg.Listener.Port) {
+			if config.IsPortAvailable(address, port) {
+				if len(skipped) > 0 {
+					config.RecordPortSkips(skipped)
+				}
+				return port
+			}
+			skipped = append(skipped, port)
+		}
+		port++
+	}
+	if len(skipped) > 0 {
+		config.RecordPortSkips(skipped)
 	}
 	return base
+}
+
+func (m *Manager) assignSequentialPortsLocked() error {
+	base := m.cfg.MultiPort.BasePort
+	if base == 0 {
+		base = 24000
+	}
+	address := m.cfg.MultiPort.Address
+	if address == "" {
+		address = "0.0.0.0"
+	}
+	// Pre-snapshot of ports we currently hold — skip OS check on these.
+	mineSet := make(map[uint16]bool, len(m.cfg.Nodes))
+	for _, node := range m.cfg.Nodes {
+		if node.Port > 0 {
+			mineSet[node.Port] = true
+		}
+	}
+	assigned := make(map[uint16]struct{}, len(m.cfg.Nodes))
+	var skipped []uint16
+	port := base
+	for i := range m.cfg.Nodes {
+		assignedNow := false
+		m.cfg.Nodes[i].Port = 0
+		for attempts := 0; attempts < 1<<16; attempts++ {
+			if port == 0 {
+				port = 1
+			}
+			if _, ok := assigned[port]; ok {
+				port++
+				continue
+			}
+			if m.cfg.Mode == "hybrid" && port == m.cfg.Listener.Port {
+				port++
+				continue
+			}
+			if !mineSet[port] && !config.IsPortAvailable(address, port) {
+				skipped = append(skipped, port)
+				port++
+				continue
+			}
+			m.cfg.Nodes[i].Port = port
+			assigned[port] = struct{}{}
+			port++
+			assignedNow = true
+			break
+		}
+		if !assignedNow {
+			return fmt.Errorf("no available ports found starting from %d", base)
+		}
+		if m.cfg.Nodes[i].Username == "" {
+			m.cfg.Nodes[i].Username = m.cfg.MultiPort.Username
+			m.cfg.Nodes[i].Password = m.cfg.MultiPort.Password
+		}
+	}
+	config.RecordPortSkips(skipped)
+	return nil
 }
 
 func (m *Manager) prepareNodeLocked(node config.NodeConfig, currentName string) (config.NodeConfig, error) {
@@ -1012,11 +1264,13 @@ func (m *Manager) prepareNodeLocked(node config.NodeConfig, currentName string) 
 	}
 
 	// Handle multi-port mode specifics
-	if m.cfg.Mode == "multi-port" {
+	if m.cfg.Mode == "multi-port" || m.cfg.Mode == "hybrid" {
 		if node.Port == 0 {
 			node.Port = m.nextAvailablePortLocked()
 		} else if m.portInUseLocked(node.Port, currentName) {
 			return config.NodeConfig{}, fmt.Errorf("%w: 端口 %d 已被占用", monitor.ErrNodeConflict, node.Port)
+		} else if !m.currentNodeHasPortLocked(node.Port, currentName) && !config.IsPortAvailable(m.cfg.MultiPort.Address, node.Port) {
+			return config.NodeConfig{}, fmt.Errorf("%w: 端口 %d 已被系统占用", monitor.ErrNodeConflict, node.Port)
 		}
 		if node.Username == "" {
 			node.Username = m.cfg.MultiPort.Username

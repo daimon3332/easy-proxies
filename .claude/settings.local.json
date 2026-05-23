@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"EXIT:$?\")",
+      "Read(//c/Users/33033/.claude/skills/collaborating-with-codex/**)",
+      "Bash(python scripts/codex_bridge.py --cd \"D:\\\\easy_proxies\" --sandbox read-only --PROMPT \"Analyze this Go project for extending with 5 new feature modules. The project is a sing-box based proxy pool manager. Key files: internal/config/config.go \\(subscription parsing at L631-659, port allocation at L341-355\\), internal/monitor/server.go \\(WebUI API routes at L119-136\\), internal/outbound/pool/pool.go \\(health check httpProbe at L508-527\\), internal/monitor/assets/index.html \\(single page WebUI\\). I need to add: 1\\) Enhanced subscription import with staging area \\(nodes go to candidate list before joining pool\\), 2\\) Batch generate_204 testing for candidates, 3\\) Real country detection via ipinfo.io through proxy, auto-rename prefix to tag-JP1/tag-SG2 etc, 4\\) Smart port pre-scanning and WebUI port status display, 5\\) Country-based drag-sort port reordering. Provide: architecture design with minimal changes to existing code, API endpoint design, data model for staging/candidate nodes, and step-by-step implementation plan. Output as analysis only, no file modifications.\")",
+      "Bash(go build:*)",
+      "Bash(go vet:*)"
+    ]
+  }
+}

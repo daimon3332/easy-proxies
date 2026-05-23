@@ -1,0 +1,71 @@
+2026/05/23 04:39:13 ✅ Loaded 46 nodes from subscription
+2026/05/23 04:39:14 ✅ Loaded 48 nodes from subscription
+2026/05/23 04:39:15 ✅ Loaded 183 nodes from subscription
+2026/05/23 04:39:15 ✅ Written 277 subscription nodes to nodes.txt
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-1]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-1]: registered node: node-1
+[36mINFO[0m[0000] outbound/pool[proxy-pool-40-51-gb]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-40-51-gb]: registered node: 40-51-gb
+[36mINFO[0m[0000] outbound/pool[proxy-pool-11]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-11]: registered node: 11
+[36mINFO[0m[0000] outbound/pool[proxy-pool-2026-06-03]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-2026-06-03]: registered node: 2026-06-03
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-5]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-5]: registered node: node-5
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x]: registered node: 01-v6-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-v6-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-v6-1x]: registered node: 02-v6-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x]: registered node: 01-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x]: registered node: 02-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x]: registered node: 03-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x]: registered node: 04-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-09-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-09-iplc-10x]: registered node: 09-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-10-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-10-iplc-10x]: registered node: 10-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-07-v6-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-07-v6-1x]: registered node: 07-v6-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-08-v6-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-08-v6-1x]: registered node: 08-v6-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x-2]: registered node: 01-3x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x-2]: registered node: 02-3x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x-2]: registered node: 03-3x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x-2]: registered node: 04-3x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x-2]: registered node: 01-v6-1x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-6-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-6-3x]: registered node: 02-6-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-iplc-10x]: registered node: 01-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-iplc-10x]: registered node: 02-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-6x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-6x]: registered node: 01-6x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-6x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-6x]: registered node: 02-6x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x-3]: registered node: 01-3x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x-3]: registered node: 02-3x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x-3]: registered node: 03-3x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x-3]: registered node: 04-3x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x-3]: registered node: 01-v6-1x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-v6-1x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-v6-1x-2]: registered node: 02-v6-1x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-iplc-10x]: registered node: 05-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-06-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-06-iplc-10x]: registered node: 06-iplc-10x
+proxy pool exited with error: start box manager: create sing-box instance: create clash-server: clash api is not included in this build, rebuild with -tags with_clash_api

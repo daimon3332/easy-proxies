@@ -370,29 +370,16 @@ func (m *Manager) doRefresh() {
 	m.status.NodesModified = false
 	m.mu.Unlock()
 
-	// Get current port mapping to preserve existing node ports
-	portMap := m.boxMgr.CurrentPortMap()
-
-	// Create new config with updated nodes
-	newCfg := m.createNewConfig(nodes)
-
-	// Trigger BoxManager reload with port preservation
-	if err := m.boxMgr.ReloadWithPortMap(newCfg, portMap); err != nil {
-		m.logger.Errorf("reload failed: %v", err)
-		m.mu.Lock()
-		m.status.LastError = err.Error()
-		m.status.LastRefresh = time.Now()
-		m.mu.Unlock()
-		return
-	}
-
+	// Subscription refresh only updates the candidate library (nodes.txt).
+	// sing-box listeners are exclusively managed by the importer pool (Promote/Demote).
+	// This guarantees: WebUI port count == netstat listener count == config.yaml pool count.
 	m.mu.Lock()
 	m.status.LastRefresh = time.Now()
 	m.status.NodeCount = len(nodes)
 	m.status.LastError = ""
 	m.mu.Unlock()
 
-	m.logger.Infof("subscription refresh completed, %d nodes active", len(nodes))
+	m.logger.Infof("subscription refresh completed, %d candidate nodes written to nodes.txt", len(nodes))
 }
 
 // getNodesFilePath returns the path to nodes.txt.
@@ -550,43 +537,6 @@ func (m *Manager) fetchSubscription(subURL string, timeout time.Duration) ([]con
 	}
 
 	return config.ParseSubscriptionContent(string(body))
-}
-
-// createNewConfig creates a new config with updated nodes while preserving other settings.
-func (m *Manager) createNewConfig(nodes []config.NodeConfig) *config.Config {
-	// Deep copy base config
-	newCfg := *m.baseCfg
-
-	// Assign port numbers to nodes in multi-port mode
-	if newCfg.Mode == "multi-port" {
-		portCursor := newCfg.MultiPort.BasePort
-		for i := range nodes {
-			nodes[i].Port = portCursor
-			portCursor++
-			// Apply default credentials
-			if nodes[i].Username == "" {
-				nodes[i].Username = newCfg.MultiPort.Username
-				nodes[i].Password = newCfg.MultiPort.Password
-			}
-		}
-	}
-
-	// Process node names
-	for i := range nodes {
-		nodes[i].Name = strings.TrimSpace(nodes[i].Name)
-		nodes[i].URI = strings.TrimSpace(nodes[i].URI)
-
-		// Auto-extract name from URI if not provided
-		if nodes[i].Name == "" {
-			nodes[i].Name = config.ExtractNodeName(nodes[i].URI)
-		}
-		if nodes[i].Name == "" {
-			nodes[i].Name = fmt.Sprintf("node-%d", i)
-		}
-	}
-
-	newCfg.Nodes = nodes
-	return &newCfg
 }
 
 type defaultLogger struct{}

@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"testing"
 
+	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 )
 
@@ -45,5 +46,61 @@ func TestBuildHysteria2Options_PortsFromQuery(t *testing.T) {
 	}
 	if opts.ServerPorts[0] != "10000:20000" || opts.ServerPorts[1] != "30000" {
 		t.Fatalf("unexpected server ports: %v", opts.ServerPorts)
+	}
+}
+
+func TestNormalizeVLESSPacketEncoding(t *testing.T) {
+	tests := []struct {
+		name      string
+		rawQuery  string
+		want      string
+		wantError bool
+	}{
+		{name: "missing", rawQuery: "", want: ""},
+		{name: "none camel", rawQuery: "packetEncoding=none", want: ""},
+		{name: "none snake", rawQuery: "packet_encoding=none", want: ""},
+		{name: "xudp", rawQuery: "packetEncoding=xudp", want: "xudp"},
+		{name: "packetaddr", rawQuery: "packetEncoding=packetaddr", want: "packetaddr"},
+		{name: "bad", rawQuery: "packetEncoding=bad", wantError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			values, err := url.ParseQuery(tt.rawQuery)
+			if err != nil {
+				t.Fatalf("parse query failed: %v", err)
+			}
+
+			got, err := normalizeVLESSPacketEncoding(values)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizeVLESSPacketEncoding() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("normalizeVLESSPacketEncoding() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildNodeOutbound_VLESSPacketEncodingNone(t *testing.T) {
+	outbound, err := buildNodeOutbound("test-vless", "vless://a42c8b66-d0a7-4b49-9143-b98f1c84edba@example.com:443?security=reality&type=tcp&packetEncoding=none&sni=www.microsoft.com&fp=chrome&flow=xtls-rprx-vision&sid=ce9f790791426d83&pbk=UDLhjunZjP-5A6KBMeuWe3qp_FusLAshcQIcCF7EZh8#test", false)
+	if err != nil {
+		t.Fatalf("build node outbound failed: %v", err)
+	}
+	if outbound.Type != C.TypeVLESS {
+		t.Fatalf("expected vless outbound, got %q", outbound.Type)
+	}
+	opts, ok := outbound.Options.(*option.VLESSOutboundOptions)
+	if !ok {
+		t.Fatalf("expected *option.VLESSOutboundOptions, got %T", outbound.Options)
+	}
+	if opts.PacketEncoding != nil {
+		t.Fatalf("expected packet encoding to be unset for none, got %q", *opts.PacketEncoding)
 	}
 }

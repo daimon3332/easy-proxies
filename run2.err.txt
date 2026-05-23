@@ -1,0 +1,563 @@
+2026/05/23 04:34:52 ✅ Loaded 46 nodes from subscription
+2026/05/23 04:34:52 ✅ Loaded 48 nodes from subscription
+2026/05/23 04:34:54 ✅ Loaded 183 nodes from subscription
+2026/05/23 04:34:54 ✅ Written 277 subscription nodes to nodes.txt
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-1]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-1]: registered node: node-1
+[36mINFO[0m[0000] outbound/pool[proxy-pool-40-51-gb]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-40-51-gb]: registered node: 40-51-gb
+[36mINFO[0m[0000] outbound/pool[proxy-pool-11]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-11]: registered node: 11
+[36mINFO[0m[0000] outbound/pool[proxy-pool-2026-06-03]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-2026-06-03]: registered node: 2026-06-03
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-5]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-5]: registered node: node-5
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01]: registered node: 01
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02]: registered node: 02
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03]: registered node: 03
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04]: registered node: 04
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-vless]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-vless]: registered node: 01-vless
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-vless]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-vless]: registered node: 02-vless
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-vless-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-vless-2]: registered node: 01-vless-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-vless-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-vless-2]: registered node: 02-vless-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-vless-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-vless-3]: registered node: 01-vless-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-vless-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-vless-3]: registered node: 02-vless-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-2]: registered node: 01-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-2]: registered node: 02-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-2x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-2x]: registered node: 03-2x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-2x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-2x]: registered node: 04-2x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x]: registered node: 01-v6-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-v6-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-v6-1x]: registered node: 02-v6-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x]: registered node: 01-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x]: registered node: 02-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x]: registered node: 03-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x]: registered node: 04-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-09-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-09-iplc-10x]: registered node: 09-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-10-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-10-iplc-10x]: registered node: 10-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-07-v6-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-07-v6-1x]: registered node: 07-v6-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-08-v6-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-08-v6-1x]: registered node: 08-v6-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x-2]: registered node: 01-3x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x-2]: registered node: 02-3x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x-2]: registered node: 03-3x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x-2]: registered node: 04-3x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x-2]: registered node: 01-v6-1x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-6-3x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-6-3x]: registered node: 02-6-3x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-iplc-10x]: registered node: 01-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-iplc-10x]: registered node: 02-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-6x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-6x]: registered node: 01-6x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-6x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-6x]: registered node: 02-6x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3x-3]: registered node: 01-3x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-3x-3]: registered node: 02-3x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-3x-3]: registered node: 03-3x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-3x-3]: registered node: 04-3x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-v6-1x-3]: registered node: 01-v6-1x-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-v6-1x-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-v6-1x-2]: registered node: 02-v6-1x-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-iplc-10x]: registered node: 05-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-06-iplc-10x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-06-iplc-10x]: registered node: 06-iplc-10x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-877-86-gb]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-877-86-gb]: registered node: 877-86-gb
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-49]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-node-49]: registered node: node-49
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-ctcu-0-5x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-ctcu-0-5x]: registered node: 01-ctcu-0-5x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-ctcu-0-5x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-ctcu-0-5x]: registered node: 02-ctcu-0-5x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-cmcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-cmcu]: registered node: 01-bgp-cmcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-cmcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-cmcu]: registered node: 02-bgp-cmcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-cmcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-cmcu]: registered node: 03-bgp-cmcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-cmcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-cmcu]: registered node: 04-bgp-cmcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-bgp-cmcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-bgp-cmcu]: registered node: 05-bgp-cmcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-ctcucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-ctcucm]: registered node: 01-bgp-ctcucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-ctcucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-ctcucm]: registered node: 02-bgp-ctcucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-ctcucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-ctcucm]: registered node: 03-bgp-ctcucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-ctcucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-ctcucm]: registered node: 04-bgp-ctcucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-bgp-ctcucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-bgp-ctcucm]: registered node: 05-bgp-ctcucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-06-bgp-ctcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-06-bgp-ctcu]: registered node: 06-bgp-ctcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-07-bgp-ctcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-07-bgp-ctcu]: registered node: 07-bgp-ctcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-08-bgp-ctcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-08-bgp-ctcu]: registered node: 08-bgp-ctcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-cucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-cucm]: registered node: 01-bgp-cucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-cucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-cucm]: registered node: 02-bgp-cucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-cucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-cucm]: registered node: 03-bgp-cucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-cucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-cucm]: registered node: 04-bgp-cucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-bgp-cucm]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-05-bgp-cucm]: registered node: 05-bgp-cucm
+[36mINFO[0m[0000] outbound/pool[proxy-pool-06-bgp-ctcu-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-06-bgp-ctcu-2]: registered node: 06-bgp-ctcu-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-07-bgp-ctcu-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-07-bgp-ctcu-2]: registered node: 07-bgp-ctcu-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-08-bgp-ctcu-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-08-bgp-ctcu-2]: registered node: 08-bgp-ctcu-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-09-bgp-ctcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-09-bgp-ctcu]: registered node: 09-bgp-ctcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-ctcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-ctcu]: registered node: 01-ctcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-ctcu]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-ctcu]: registered node: 02-ctcu
+[36mINFO[0m[0000] outbound/pool[proxy-pool-ctcu-0-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-ctcu-0-1x]: registered node: ctcu-0-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp]: registered node: 01-bgp
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-2]: registered node: 01-bgp-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-3]: registered node: 01-bgp-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp]: registered node: 02-bgp
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp]: registered node: 03-bgp
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp]: registered node: 04-bgp
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-4]: registered node: 01-bgp-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-2]: registered node: 02-bgp-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-2]: registered node: 03-bgp-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-2]: registered node: 04-bgp-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-5]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-5]: registered node: 01-bgp-5
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-bgp-3]: registered node: 02-bgp-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-03-bgp-3]: registered node: 03-bgp-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-04-bgp-3]: registered node: 04-bgp-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-6]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-6]: registered node: 01-bgp-6
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-7]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-bgp-7]: registered node: 01-bgp-7
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-0-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-0-1x]: registered node: 01-0-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-0-1x]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-02-0-1x]: registered node: 02-0-1x
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-01-3]: registered node: 01-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-01]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-01]: registered node: fr-vless-01
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-01]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-01]: registered node: fr-vmess-01
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-01]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-01]: registered node: fr-trojan-01
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-02]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-02]: registered node: fr-vless-02
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-02]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-02]: registered node: fr-vmess-02
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-02]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-02]: registered node: fr-trojan-02
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-03]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-03]: registered node: fr-vless-03
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-03]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-03]: registered node: fr-vmess-03
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-03]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-03]: registered node: fr-trojan-03
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-04]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-04]: registered node: fr-vless-04
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-04]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-04]: registered node: fr-vmess-04
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-04]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-04]: registered node: fr-trojan-04
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-05]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-05]: registered node: fr-vless-05
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-05]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-05]: registered node: fr-vmess-05
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-05]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-05]: registered node: fr-trojan-05
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-06]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-06]: registered node: fr-vless-06
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-06]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-06]: registered node: fr-vmess-06
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-06]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-06]: registered node: fr-trojan-06
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-07]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-07]: registered node: fr-vless-07
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-07]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-07]: registered node: fr-vmess-07
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-07]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-07]: registered node: fr-trojan-07
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-08]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-08]: registered node: fr-vless-08
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-08]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-08]: registered node: fr-vmess-08
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-08]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-08]: registered node: fr-trojan-08
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-09]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-09]: registered node: fr-vless-09
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-09]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-09]: registered node: fr-vmess-09
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-09]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-09]: registered node: fr-trojan-09
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-10]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-10]: registered node: fr-vless-10
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-10]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-10]: registered node: fr-vmess-10
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-10]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-10]: registered node: fr-trojan-10
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-11]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-11]: registered node: fr-vless-11
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-11]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-11]: registered node: fr-vmess-11
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-11]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-11]: registered node: fr-trojan-11
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-12]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-12]: registered node: fr-vless-12
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-12]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-12]: registered node: fr-vmess-12
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-12]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-12]: registered node: fr-trojan-12
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-13]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-13]: registered node: fr-vless-13
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-13]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-13]: registered node: fr-vmess-13
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-13]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-13]: registered node: fr-trojan-13
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-14]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-14]: registered node: fr-vless-14
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-14]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-14]: registered node: fr-vmess-14
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-14]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-14]: registered node: fr-trojan-14
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-15]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-15]: registered node: fr-vless-15
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-15]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-15]: registered node: fr-vmess-15
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-15]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-15]: registered node: fr-trojan-15
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-16]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-16]: registered node: fr-vless-16
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-16]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-16]: registered node: fr-vmess-16
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-16]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-16]: registered node: fr-trojan-16
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-17]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-17]: registered node: fr-vless-17
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-17]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-17]: registered node: fr-vmess-17
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-17]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-17]: registered node: fr-trojan-17
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-18]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-18]: registered node: fr-vless-18
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-18]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-18]: registered node: fr-vmess-18
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-18]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-18]: registered node: fr-trojan-18
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-19]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-19]: registered node: fr-vless-19
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-19]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-19]: registered node: fr-vmess-19
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-19]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-19]: registered node: fr-trojan-19
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-20]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-20]: registered node: fr-vless-20
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-20]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-20]: registered node: fr-vmess-20
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-20]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-20]: registered node: fr-trojan-20
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-21]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vless-21]: registered node: fr-vless-21
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-21]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-vmess-21]: registered node: fr-vmess-21
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-21]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-fr-trojan-21]: registered node: fr-trojan-21
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-1]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-1]: registered node: vless-1
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-1]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-1]: registered node: vmess-1
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-1]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-1]: registered node: trojan-1
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-2]: registered node: vless-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-2]: registered node: vmess-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-2]: registered node: trojan-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-3]: registered node: vless-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-3]: registered node: vmess-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-3]: registered node: trojan-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-4]: registered node: vless-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-4]: registered node: vmess-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-4]: registered node: trojan-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-5]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-5]: registered node: vless-5
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-5]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-5]: registered node: vmess-5
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-5]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-5]: registered node: trojan-5
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-6]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-6]: registered node: vless-6
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-6]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-6]: registered node: vmess-6
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-6]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-6]: registered node: trojan-6
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-7]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-7]: registered node: vless-7
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-7]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-7]: registered node: vmess-7
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-7]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-7]: registered node: trojan-7
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-8]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-8]: registered node: vless-8
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-8]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-8]: registered node: vmess-8
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-8]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-8]: registered node: trojan-8
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-9]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-9]: registered node: vless-9
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-9]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-9]: registered node: vmess-9
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-9]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-9]: registered node: trojan-9
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-10]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-10]: registered node: vless-10
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-10]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-10]: registered node: vmess-10
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-10]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-10]: registered node: trojan-10
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-1-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-1-2]: registered node: vless-1-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-1-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-1-2]: registered node: vmess-1-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-1-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-1-2]: registered node: trojan-1-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-2-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-2-2]: registered node: vless-2-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-2-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-2-2]: registered node: vmess-2-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-2-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-2-2]: registered node: trojan-2-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-3-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-3-2]: registered node: vless-3-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-3-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-3-2]: registered node: vmess-3-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-3-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-3-2]: registered node: trojan-3-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-4-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-4-2]: registered node: vless-4-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-4-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-4-2]: registered node: vmess-4-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-4-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-4-2]: registered node: trojan-4-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-5-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-5-2]: registered node: vless-5-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-5-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-5-2]: registered node: vmess-5-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-5-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-5-2]: registered node: trojan-5-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-6-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-6-2]: registered node: vless-6-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-6-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-6-2]: registered node: vmess-6-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-6-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-6-2]: registered node: trojan-6-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-7-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-7-2]: registered node: vless-7-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-7-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-7-2]: registered node: vmess-7-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-7-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-7-2]: registered node: trojan-7-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-8-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-8-2]: registered node: vless-8-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-8-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-8-2]: registered node: vmess-8-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-8-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-8-2]: registered node: trojan-8-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-9-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-9-2]: registered node: vless-9-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-9-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-9-2]: registered node: vmess-9-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-9-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-9-2]: registered node: trojan-9-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-10-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-10-2]: registered node: vless-10-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-10-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-10-2]: registered node: vmess-10-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-10-2]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-10-2]: registered node: trojan-10-2
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-1-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-1-3]: registered node: vless-1-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-1-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-1-3]: registered node: vmess-1-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-1-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-1-3]: registered node: trojan-1-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-2-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-2-3]: registered node: vless-2-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-2-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-2-3]: registered node: vmess-2-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-2-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-2-3]: registered node: trojan-2-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-3-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-3-3]: registered node: vless-3-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-3-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-3-3]: registered node: vmess-3-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-3-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-3-3]: registered node: trojan-3-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-4-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-4-3]: registered node: vless-4-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-4-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-4-3]: registered node: vmess-4-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-4-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-4-3]: registered node: trojan-4-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-5-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-5-3]: registered node: vless-5-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-5-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-5-3]: registered node: vmess-5-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-5-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-5-3]: registered node: trojan-5-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-6-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-6-3]: registered node: vless-6-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-6-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-6-3]: registered node: vmess-6-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-6-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-6-3]: registered node: trojan-6-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-7-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-7-3]: registered node: vless-7-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-7-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-7-3]: registered node: vmess-7-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-7-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-7-3]: registered node: trojan-7-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-8-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-8-3]: registered node: vless-8-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-8-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-8-3]: registered node: vmess-8-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-8-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-8-3]: registered node: trojan-8-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-9-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-9-3]: registered node: vless-9-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-9-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-9-3]: registered node: vmess-9-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-9-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-9-3]: registered node: trojan-9-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-10-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-10-3]: registered node: vless-10-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-10-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-10-3]: registered node: vmess-10-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-10-3]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-10-3]: registered node: trojan-10-3
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-1-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-1-4]: registered node: vless-1-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-1-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-1-4]: registered node: vmess-1-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-1-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-1-4]: registered node: trojan-1-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-2-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-2-4]: registered node: vless-2-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-2-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-2-4]: registered node: vmess-2-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-2-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-2-4]: registered node: trojan-2-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-3-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-3-4]: registered node: vless-3-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-3-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-3-4]: registered node: vmess-3-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-3-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-3-4]: registered node: trojan-3-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-4-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-4-4]: registered node: vless-4-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-4-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-4-4]: registered node: vmess-4-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-4-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-4-4]: registered node: trojan-4-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-5-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-5-4]: registered node: vless-5-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-5-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-5-4]: registered node: vmess-5-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-5-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-5-4]: registered node: trojan-5-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-6-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-6-4]: registered node: vless-6-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-6-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-6-4]: registered node: vmess-6-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-6-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-6-4]: registered node: trojan-6-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-7-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-7-4]: registered node: vless-7-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-7-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-7-4]: registered node: vmess-7-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-7-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-7-4]: registered node: trojan-7-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-8-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-8-4]: registered node: vless-8-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-8-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-8-4]: registered node: vmess-8-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-8-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-8-4]: registered node: trojan-8-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-9-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-9-4]: registered node: vless-9-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-9-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-9-4]: registered node: vmess-9-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-9-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-9-4]: registered node: trojan-9-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-10-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vless-10-4]: registered node: vless-10-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-10-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-vmess-10-4]: registered node: vmess-10-4
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-10-4]: registering 1 nodes to monitor
+[36mINFO[0m[0000] outbound/pool[proxy-pool-trojan-10-4]: registered node: trojan-10-4
+[36mINFO[0m[0000] network: updated default interface WLAN, index 3
+[36mINFO[0m[0000] inbound/mixed[in-node-1]: tcp server started at 127.0.0.1:24000
+proxy pool exited with error: start box manager: start sing-box: start inbound/mixed[in-40-51-gb]: listen tcp 127.0.0.1:24000: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.

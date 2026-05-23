@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -37,6 +38,40 @@ type Config struct {
 	SkipCertVerify      bool                      `yaml:"skip_cert_verify"` // 全局跳过 SSL 证书验证
 
 	filePath string `yaml:"-"` // 配置文件路径，用于保存
+}
+
+// Port allocator skip log. Populated when sequential allocation has to advance
+// past ports occupied by external processes. Process-wide singleton because
+// only one pool runs at a time, and avoids embedding a mutex in Config.
+var (
+	portSkipsMu sync.RWMutex
+	portSkips   []uint16
+	portSkipsAt time.Time
+)
+
+// RecordPortSkips replaces the latest skipped-port log. Pass nil/empty to clear.
+func RecordPortSkips(skips []uint16) {
+	portSkipsMu.Lock()
+	defer portSkipsMu.Unlock()
+	if len(skips) == 0 {
+		portSkips = nil
+		portSkipsAt = time.Time{}
+		return
+	}
+	portSkips = append(portSkips[:0], skips...)
+	portSkipsAt = time.Now()
+}
+
+// LastPortSkips returns the latest skipped-port list and its timestamp.
+func LastPortSkips() ([]uint16, time.Time) {
+	portSkipsMu.RLock()
+	defer portSkipsMu.RUnlock()
+	if len(portSkips) == 0 {
+		return nil, time.Time{}
+	}
+	out := make([]uint16, len(portSkips))
+	copy(out, portSkips)
+	return out, portSkipsAt
 }
 
 // LogConfig controls log output and rotation.
@@ -243,7 +278,7 @@ func (c *Config) normalize() error {
 
 	// Subscription refresh defaults
 	if c.SubscriptionRefresh.Interval <= 0 {
-		c.SubscriptionRefresh.Interval = 1 * time.Hour
+		c.SubscriptionRefresh.Interval = 24 * time.Hour
 	}
 	if c.SubscriptionRefresh.Timeout <= 0 {
 		c.SubscriptionRefresh.Timeout = 30 * time.Second
@@ -320,7 +355,14 @@ func (c *Config) normalize() error {
 	if len(c.Nodes) == 0 {
 		return errors.New("config.nodes cannot be empty (configure nodes in config or use nodes_file)")
 	}
+	usedPorts := make(map[uint16]bool)
+	if c.Mode == "hybrid" {
+		usedPorts[c.Listener.Port] = true
+	}
 	portCursor := c.MultiPort.BasePort
+	if portCursor == 0 {
+		portCursor = 24000
+	}
 	for idx := range c.Nodes {
 		c.Nodes[idx].Name = strings.TrimSpace(c.Nodes[idx].Name)
 		c.Nodes[idx].URI = strings.TrimSpace(c.Nodes[idx].URI)
@@ -338,27 +380,37 @@ func (c *Config) normalize() error {
 			c.Nodes[idx].Name = fmt.Sprintf("node-%d", idx)
 		}
 
-		// Auto-assign port in multi-port/hybrid mode, skip occupied ports
-		if c.Nodes[idx].Port == 0 && (c.Mode == "multi-port" || c.Mode == "hybrid") {
-			for !IsPortAvailable(c.MultiPort.Address, portCursor) {
-				log.Printf("⚠️  Port %d is in use, trying next port", portCursor)
-				portCursor++
-				if portCursor > 65535 {
-					return fmt.Errorf("no available ports found starting from %d", c.MultiPort.BasePort)
+		if c.Mode == "multi-port" || c.Mode == "hybrid" {
+			if c.Nodes[idx].Port > 0 {
+				if usedPorts[c.Nodes[idx].Port] || (c.Mode == "hybrid" && c.Nodes[idx].Port == c.Listener.Port) || !IsPortAvailable(c.MultiPort.Address, c.Nodes[idx].Port) {
+					log.Printf("⚠️  Port %d for node %q conflicts, will reassign", c.Nodes[idx].Port, c.Nodes[idx].Name)
+					c.Nodes[idx].Port = 0
+				} else {
+					usedPorts[c.Nodes[idx].Port] = true
 				}
 			}
-			c.Nodes[idx].Port = portCursor
-			portCursor++
-		} else if c.Nodes[idx].Port == 0 {
-			c.Nodes[idx].Port = portCursor
-			portCursor++
-		}
-
-		if c.Mode == "multi-port" || c.Mode == "hybrid" {
+			if c.Nodes[idx].Port == 0 {
+				for usedPorts[portCursor] || !IsPortAvailable(c.MultiPort.Address, portCursor) {
+					log.Printf("⚠️  Port %d is in use, trying next port", portCursor)
+					portCursor++
+					if portCursor > 65535 {
+						return fmt.Errorf("no available ports found starting from %d", c.MultiPort.BasePort)
+					}
+				}
+				c.Nodes[idx].Port = portCursor
+				usedPorts[portCursor] = true
+				portCursor++
+			}
 			if c.Nodes[idx].Username == "" {
 				c.Nodes[idx].Username = c.MultiPort.Username
 				c.Nodes[idx].Password = c.MultiPort.Password
 			}
+			continue
+		}
+
+		if c.Nodes[idx].Port == 0 {
+			c.Nodes[idx].Port = portCursor
+			portCursor++
 		}
 	}
 	if c.LogLevel == "" {
@@ -367,31 +419,6 @@ func (c *Config) normalize() error {
 
 	// Log config defaults
 	c.normalizeLogConfig()
-
-	// Auto-fix port conflicts in hybrid mode (pool port vs multi-port)
-	if c.Mode == "hybrid" {
-		poolPort := c.Listener.Port
-		usedPorts := make(map[uint16]bool)
-		usedPorts[poolPort] = true
-		for idx := range c.Nodes {
-			usedPorts[c.Nodes[idx].Port] = true
-		}
-		for idx := range c.Nodes {
-			if c.Nodes[idx].Port == poolPort {
-				// Find next available port
-				newPort := c.Nodes[idx].Port + 1
-				for usedPorts[newPort] || !IsPortAvailable(c.MultiPort.Address, newPort) {
-					newPort++
-					if newPort > 65535 {
-						return fmt.Errorf("no available port for node %q after conflict with pool port %d", c.Nodes[idx].Name, poolPort)
-					}
-				}
-				log.Printf("⚠️  Node %q port %d conflicts with pool port, reassigned to %d", c.Nodes[idx].Name, poolPort, newPort)
-				usedPorts[newPort] = true
-				c.Nodes[idx].Port = newPort
-			}
-		}
-	}
 
 	return nil
 }
@@ -454,7 +481,7 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 		c.Management.Enabled = &defaultEnabled
 	}
 	if c.SubscriptionRefresh.Interval <= 0 {
-		c.SubscriptionRefresh.Interval = 1 * time.Hour
+		c.SubscriptionRefresh.Interval = 24 * time.Hour
 	}
 	if c.SubscriptionRefresh.Timeout <= 0 {
 		c.SubscriptionRefresh.Timeout = 30 * time.Second
@@ -473,13 +500,17 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 		return errors.New("config.nodes cannot be empty")
 	}
 
-	// Build set of ports already assigned from portMap
+	// Build set of ports already assigned so we never duplicate ports in one config.
 	usedPorts := make(map[uint16]bool)
 	if c.Mode == "hybrid" {
 		usedPorts[c.Listener.Port] = true
 	}
+	portCursor := c.MultiPort.BasePort
+	if portCursor == 0 {
+		portCursor = 24000
+	}
 
-	// First pass: assign ports from portMap for existing nodes
+	// First pass: normalize nodes and keep any already valid port assignments.
 	for idx := range c.Nodes {
 		c.Nodes[idx].Name = strings.TrimSpace(c.Nodes[idx].Name)
 		c.Nodes[idx].URI = strings.TrimSpace(c.Nodes[idx].URI)
@@ -495,23 +526,37 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 			c.Nodes[idx].Name = fmt.Sprintf("node-%d", idx)
 		}
 
-		// Check if this node has a preserved port from portMap
 		if c.Mode == "multi-port" || c.Mode == "hybrid" {
+			if c.Nodes[idx].Port > 0 {
+				if usedPorts[c.Nodes[idx].Port] || (c.Mode == "hybrid" && c.Nodes[idx].Port == c.Listener.Port) || !IsPortAvailable(c.MultiPort.Address, c.Nodes[idx].Port) {
+					log.Printf("⚠️  Port %d for node %q conflicts, will reassign", c.Nodes[idx].Port, c.Nodes[idx].Name)
+					c.Nodes[idx].Port = 0
+				} else {
+					usedPorts[c.Nodes[idx].Port] = true
+				}
+				continue
+			}
+
 			nodeKey := c.Nodes[idx].NodeKey()
 			if existingPort, ok := portMap[nodeKey]; ok && existingPort > 0 {
-				c.Nodes[idx].Port = existingPort
-				usedPorts[existingPort] = true
-				log.Printf("✅ Preserved port %d for node %q", existingPort, c.Nodes[idx].Name)
+				if usedPorts[existingPort] || (c.Mode == "hybrid" && existingPort == c.Listener.Port) || !IsPortAvailable(c.MultiPort.Address, existingPort) {
+					log.Printf("⚠️  Preserved port %d for node %q conflicts, will reassign", existingPort, c.Nodes[idx].Name)
+					c.Nodes[idx].Port = 0
+				} else {
+					c.Nodes[idx].Port = existingPort
+					usedPorts[existingPort] = true
+					log.Printf("✅ Preserved port %d for node %q", existingPort, c.Nodes[idx].Name)
+				}
 			}
 		}
 	}
 
-	// Second pass: assign new ports for nodes without preserved ports
-	portCursor := c.MultiPort.BasePort
+	// Second pass: assign new ports for nodes without preserved ports.
 	for idx := range c.Nodes {
 		if c.Nodes[idx].Port == 0 && (c.Mode == "multi-port" || c.Mode == "hybrid") {
 			// Find next available port that's not used
 			for usedPorts[portCursor] || !IsPortAvailable(c.MultiPort.Address, portCursor) {
+				log.Printf("⚠️  Port %d is in use, trying next port", portCursor)
 				portCursor++
 				if portCursor > 65535 {
 					return fmt.Errorf("no available ports found starting from %d", c.MultiPort.BasePort)
@@ -641,16 +686,7 @@ func parseSubscriptionContent(content string) ([]NodeConfig, error) {
 	}
 
 	// Check if it's base64 encoded (common for v2ray subscriptions)
-	if isBase64(content) {
-		decoded, err := base64.StdEncoding.DecodeString(content)
-		if err != nil {
-			// Try URL-safe base64
-			decoded, err = base64.RawStdEncoding.DecodeString(content)
-			if err != nil {
-				// Not base64, try as plain text
-				return parseNodesFromContent(content)
-			}
-		}
+	if decoded, ok := decodeBase64Subscription(content); ok {
 		content = string(decoded)
 	}
 
@@ -690,32 +726,58 @@ func parseNodesFromContent(content string) ([]NodeConfig, error) {
 
 // isBase64 checks if a string looks like base64 encoded content (optimized version)
 func isBase64(s string) bool {
+	_, ok := decodeBase64Subscription(s)
+	return ok
+}
+
+func decodeBase64Subscription(s string) ([]byte, bool) {
 	// Remove whitespace
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
-		return false
+		return nil, false
 	}
 
 	// Remove newlines for checking
 	s = strings.ReplaceAll(s, "\n", "")
 	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, " ", "")
 
 	// Quick check: if it contains proxy URI schemes, it's not base64
 	if strings.Contains(s, "://") {
-		return false
+		return nil, false
 	}
 
-	// Check character set - base64 only contains A-Za-z0-9+/=
+	// Check character set before trying decoders.
 	// This is much faster than trying to decode
 	for _, c := range s {
 		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-			(c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=') {
-			return false
+			(c >= '0' && c <= '9') || c == '+' || c == '/' || c == '-' || c == '_' || c == '=') {
+			return nil, false
 		}
 	}
 
-	// Length must be multiple of 4 (with padding)
-	return len(s)%4 == 0
+	encodings := []*base64.Encoding{
+		base64.StdEncoding,
+		base64.RawStdEncoding,
+		base64.URLEncoding,
+		base64.RawURLEncoding,
+	}
+	for _, enc := range encodings {
+		if decoded, err := enc.DecodeString(s); err == nil && containsProxyURI(string(decoded)) {
+			return decoded, true
+		}
+	}
+
+	if rem := len(s) % 4; rem != 0 {
+		padded := s + strings.Repeat("=", 4-rem)
+		for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.URLEncoding} {
+			if decoded, err := enc.DecodeString(padded); err == nil && containsProxyURI(string(decoded)) {
+				return decoded, true
+			}
+		}
+	}
+
+	return nil, false
 }
 
 // IsProxyURI checks if a string is a valid proxy URI
@@ -724,6 +786,17 @@ func IsProxyURI(s string) bool {
 	lower := strings.ToLower(s)
 	for _, scheme := range schemes {
 		if strings.HasPrefix(lower, scheme) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsProxyURI(s string) bool {
+	schemes := []string{"vmess://", "vless://", "trojan://", "ss://", "ssr://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "socks5://", "socks://", "http://", "https://", "anytls://"}
+	lower := strings.ToLower(s)
+	for _, scheme := range schemes {
+		if strings.Contains(lower, scheme) {
 			return true
 		}
 	}

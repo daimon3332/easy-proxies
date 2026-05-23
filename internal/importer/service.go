@@ -706,6 +706,10 @@ func (s *Service) Promote(nodeID string, autoReload bool) (ManagedNode, error) {
 	}
 	cn, err := s.nodeMgr.CreateNode(context.Background(), node.ToConfigNode())
 	if err != nil {
+		if strings.Contains(err.Error(), "节点名称或端口已存在") {
+			_ = s.store.DeleteNode(nodeID)
+			return ManagedNode{}, nil
+		}
 		return node, err
 	}
 	if _, err := s.store.MarkInPool(nodeID, cn.Port); err != nil {

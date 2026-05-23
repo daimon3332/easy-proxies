@@ -1,7 +1,0 @@
-.git
-Dockerfile
-config.yaml
-config*.yml
-*.md
-bin
-**/node_modules

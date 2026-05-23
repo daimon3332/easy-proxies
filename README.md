@@ -1,988 +1,354 @@
 # Easy Proxies
 
-[简体中文](README_CN.md)
+基于 [sing-box](https://github.com/SagerNet/sing-box) 的代理池与节点生命周期管理器。导入大批订阅、自动测速、保留失败节点便于重试，将可用节点通过统一池入口或独立端口对外暴露。WebUI 是主要工作流。
 
-Easy Proxies is a sing-box based proxy pool and node lifecycle manager. It is designed for people who import large proxy subscriptions, test every node, keep failed nodes for later retesting, and expose only usable nodes through a stable local proxy pool or per-node ports.
+> 致谢：本项目脱胎于 [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies)，在其基础上进行了大量重构与功能扩展（节点池过滤、端口对齐、批量异步测试、订阅删除、Multi-Port 凭证 WebUI 编辑等）。
 
-The WebUI is the primary workflow. It supports importing subscription URLs, raw URI lists, Base64 subscriptions, and Clash YAML, then testing nodes against `generate_204`, detecting the real exit country, renaming nodes by tag and country, promoting selected nodes into the pool, and managing ports from the browser.
+---
 
-## Table Of Contents
+## 目录
 
-- [Highlights](#highlights)
-- [How It Works](#how-it-works)
-- [Quick Start](#quick-start)
-- [Build From Source](#build-from-source)
-- [Docker](#docker)
-- [Configuration](#configuration)
-- [WebUI Guide](#webui-guide)
-- [Node Lifecycle](#node-lifecycle)
-- [Import Formats](#import-formats)
-- [Testing And Country Detection](#testing-and-country-detection)
-- [Port Management](#port-management)
-- [GeoIP Region Router](#geoip-region-router)
-- [Management API](#management-api)
-- [Supported Protocols](#supported-protocols)
-- [Files And Persistence](#files-and-persistence)
-- [Troubleshooting](#troubleshooting)
-- [Development](#development)
+- [如何使用](#如何使用)
+- [运行模式](#运行模式)
+- [WebUI 详解](#webui-详解)
+- [节点生命周期](#节点生命周期)
+- [配置文件](#配置文件)
+- [REST API](#rest-api)
+- [从源码编译](#从源码编译)
+- [支持的协议](#支持的协议)
+- [文件与持久化](#文件与持久化)
+- [常见问题](#常见问题)
 
-## Highlights
+---
 
-- **Modern WebUI workflow**: Light blue and green interface with focused pages for import, candidate nodes, pool nodes, failed nodes, ports, logs, and settings.
-- **No dashboard dependency**: The WebUI starts from practical operations instead of a decorative dashboard.
-- **Four import entry points**: Subscription URL, URI list, Base64 content, and Clash YAML.
-- **URL auto-detection**: HTTP and HTTPS subscription URLs are fetched, then parsed as Clash YAML, Base64, or URI content according to the response body.
-- **Tag based naming**: Imported nodes use a tag prefix, defaulting to `local`.
-- **Country based renaming**: Country testing renames nodes to a stable pattern such as `tag-JP1`, `tag-SG2`, or `local-US3`.
-- **Candidate pool workflow**: Nodes that pass speed testing become candidates first. They are not added to the runtime pool until selected and promoted.
-- **Failed node retention**: Failed nodes stay in the failed list. They can be retested later instead of being discarded.
-- **Batch operations**: Tables support row checkboxes, select-all, batch speed test, batch country test, batch promotion, and batch failed-node retest.
-- **Automatic testing per page**: Candidate nodes, pool nodes, and failed nodes each have independent auto-test controls.
-- **Fast batch testing**: Backend batch testing is concurrent, with a capped per-node timeout to avoid long serial waits.
-- **Port visibility**: Pool nodes show assigned ports, and the port page shows assigned ports plus unavailable port summaries.
-- **Automatic port recommendation**: The port scanner recommends a usable range based on the current pool size and the requested start port.
-- **Hot reload support**: Promoting, deleting, subscription refresh, and selected settings can trigger sing-box reloads without manually editing files.
-- **Wide protocol support**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, AnyTLS, SOCKS5, HTTP, and HTTPS.
-- **GeoIP region routing**: Optional route endpoints such as `/jp`, `/us`, `/hk`, `/sg`, and `/other`.
-- **REST API**: The browser UI is backed by HTTP APIs for automation and external tooling.
+## 如何使用
 
-## How It Works
+### 1. 启动
 
-Easy Proxies has two related but separate layers:
-
-| Layer | Purpose |
-| --- | --- |
-| Managed node store | Keeps imported nodes, their state, latency, country, tag, original name, pool status, and last error. This is persisted in `managed_nodes.json`. |
-| Runtime sing-box config | Contains active nodes that are actually exposed by the local proxy pool or per-node ports. |
-
-The important distinction is:
-
-- **Candidate nodes** passed speed testing but are not yet active in the runtime pool.
-- **Pool nodes** are active runtime nodes and have assigned ports when multi-port or hybrid mode is enabled.
-- **Failed nodes** failed speed testing or were removed from the pool after a failed retest.
-- **Deleted nodes** are permanently removed from the managed store and, if needed, from runtime config.
-
-## Quick Start
-
-### 1. Create `config.yaml`
-
-If you are running from this repository, a `config.yaml` may already exist. If not, create a minimal one:
-
-```yaml
-mode: pool
-
-listener:
-  address: 127.0.0.1
-  port: 2323
-  username: username
-  password: password
-
-multi_port:
-  address: 127.0.0.1
-  base_port: 24000
-  username: mpuser
-  password: mppass
-
-pool:
-  mode: sequential
-  failure_threshold: 3
-  blacklist_duration: 24h
-
-management:
-  enabled: true
-  listen: 127.0.0.1:9091
-  probe_target: http://cp.cloudflare.com/generate_204
-  password: ""
-
-subscription_refresh:
-  enabled: true
-  interval: 24h
-  timeout: 30s
-  health_check_timeout: 1m
-  drain_timeout: 30s
-  min_available_nodes: 1
-
-geoip:
-  enabled: true
-  database_path: ./GeoLite2-Country.mmdb
-  auto_update_enabled: true
-  auto_update_interval: 24h
-
-log:
-  output: stdout
-  file: logs/easy_proxies.log
-  max_size: 50
-  max_backups: 3
-  max_age: 7
-  compress: false
-
-nodes: []
-nodes_file: ""
-subscriptions: []
-external_ip: ""
-log_level: info
-skip_cert_verify: false
-```
-
-### 2. Run
-
-Windows PowerShell:
+确保当前目录有 `easy_proxies.exe`、`config.yaml`、`GeoLite2-Country.mmdb` 三个文件，然后运行：
 
 ```powershell
-$env:GOPROXY = "https://goproxy.cn,direct"
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/easy_proxies
 .\easy_proxies.exe -config config.yaml
 ```
 
-Linux or macOS:
+或者直接双击 `easy_proxies.exe`（默认会找同目录下的 `config.yaml`）。
+
+启动后会看到：
+
+```
+✅ Monitor server started on http://127.0.0.1:9091
+🔌 Multi-Port Entry Points (197 nodes):
+   [24000] node-A    HTTP/SOCKS5: 127.0.0.1:24000
+   [24001] node-B    HTTP/SOCKS5: 127.0.0.1:24001
+   ...
+```
+
+### 2. 打开 WebUI
+
+浏览器访问 [http://127.0.0.1:9091](http://127.0.0.1:9091)。
+
+### 3. 导入订阅
+
+进入 **导入节点** 页面：
+
+- **订阅链接格式**：粘贴 `http://...` / `https://...`，每行一个，自动识别 Clash YAML / Base64 / URI 格式
+- **URI 格式**：粘贴 `vless://`、`vmess://`、`trojan://` 等节点 URI，每行一个
+- **Base64 格式**：粘贴 Base64 编码的节点列表
+- **Clash YAML 格式**：粘贴 Clash 配置中的 `proxies:` 部分
+
+填写 **标签前缀**（默认 `local`），用于生成节点名（`local-JP1`、`local-HK2` 这样）。
+
+点击 **解析** → **提交** 完成导入。
+
+### 4. 测速 + 测国家 + 加入节点池
+
+新导入的节点处于 **候选节点** 页面。两种方式处理：
+
+**方式 A：批量测试子页面（推荐）**
+
+进入 **批量测试** 页面：
+
+1. 勾选 **测试范围**（多选）：候选节点 / 节点池 / 失败节点
+2. 勾选 **操作**（多选）：测速 / 测试国家
+3. 可选勾选 **测速成功后自动加入节点池**
+4. 点击 **开始** → 弹出实时进度条（阶段、完成数、成功/失败计数）
+
+**方式 B：单独操作**
+
+- **候选节点** 页：勾选若干节点 → 点 `测速`、`测试国家`、`加入节点池`
+- **失败节点** 页：勾选若干节点 → 点 `一键测速`（自动补测国家）
+- **节点池** 页：勾选若干节点 → 点 `测速` / `测试国家`，失败的会自动降级到失败节点
+
+> **速度优化**：测速使用 64 并发 + 5 秒超时 + probe/国家并发请求；197 节点全量测速约 30 秒。
+
+### 5. 使用代理
+
+**Multi-Port 模式**（默认）：每个池中节点一个端口，从 `multi_port.base_port`（默认 24000）开始连续编号。
 
 ```bash
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies ./cmd/easy_proxies
-./easy_proxies -config config.yaml
+# 不需要认证（config.yaml 默认 username/password 为空）
+curl -x http://127.0.0.1:24000 https://ipinfo.io
+
+# 启用认证后（在 设置 → Multi 用户名/密码 中配置）
+curl -x http://mpuser:mppass@127.0.0.1:24000 https://ipinfo.io
 ```
 
-### 3. Open WebUI
-
-Open:
-
-```text
-http://127.0.0.1:9091
-```
-
-If `management.password` is empty, no login is required. If it is set, call `/api/auth` or log in through the browser.
-
-### 4. Import Nodes
-
-Use **Import Nodes** in the WebUI:
-
-1. Select import format.
-2. Enter a tag prefix, for example `local`, `provider`, or `liangxin`.
-3. Paste subscription URLs, URI lines, Base64 content, or Clash YAML.
-4. Click import and test.
-5. Passed nodes appear in **Candidate Nodes**.
-6. Failed nodes appear in **Failed Nodes** and can be retested later.
-7. Select candidate nodes and add them to **Node Pool** when you want them active.
-
-## Build From Source
-
-This project uses Go 1.24.
-
-Recommended build:
+**Pool 模式**：单一统一入口（默认 `127.0.0.1:2323`），sing-box 内部路由到池中可用节点。
 
 ```bash
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies ./cmd/easy_proxies
+curl -x http://127.0.0.1:2323 https://ipinfo.io
 ```
 
-Windows:
+### 6. 管理节点
 
-```powershell
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/easy_proxies
-```
+- **节点池** 页：查看所有在用节点 + 端口；可按国家/标签筛选；支持 `删除选中`
+- **候选节点** 页：测速成功但未入池的节点；同样支持筛选 + 删除
+- **失败节点** 页：测速失败的节点；可重试，也可批量删除
+- **端口状态** 页：扫描本机端口占用情况，节点池占用 / 外部进程占用 / 空闲分别统计
 
-Recommended full feature build:
+### 7. 订阅管理
 
-```bash
-go build -tags "with_clash_api with_utls with_quic with_grpc with_wireguard with_gvisor" -o easy_proxies ./cmd/easy_proxies
-```
+进入 **设置** 页：
 
-Build tag notes:
+- **订阅自动刷新**：开关 + 间隔（天/小时/分钟），保存后立即触发一次刷新
+- **当前订阅**：显示已记录的所有订阅 `名称：URL`，每条带 `删除` 按钮
+  - 删除会同时：① 从 `config.yaml` 移除 URL；② 删除该订阅导入的所有节点（候选+失败+池中）；③ 自动重写 `nodes.txt`
 
-| Tag | Why it matters |
-| --- | --- |
-| `with_clash_api` | Required for sing-box Clash API integration used by monitoring and traffic APIs. |
-| `with_utls` | Enables uTLS fingerprint behavior used by many modern VLESS, VMess, and Trojan nodes. |
-| `with_quic` | Required for QUIC based protocols such as Hysteria2 and TUIC. |
-| `with_grpc` | Enables gRPC transport support where required. |
-| `with_wireguard` | Enables WireGuard support in sing-box builds. |
-| `with_gvisor` | Enables gVisor support in sing-box builds. |
+### 8. 关闭
 
-If Hysteria2, TUIC, or other QUIC based nodes fail with an error like `QUIC is not included in this build`, rebuild with `with_quic`.
+`Ctrl+C` 优雅退出，会等待已有连接 drain 完。
 
-## Docker
+---
 
-The repository includes `docker-compose.yml` and `start.sh`.
+## 运行模式
 
-Linux:
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| `multi-port` | 每个池中节点一个独立端口（24000、24001、...） | 需要每个出口绑定固定端口（比如 IP 业务隔离） |
+| `pool` | 一个统一入口（默认 2323），内部按池策略路由 | 普通代理使用，无需关心具体节点 |
+| `hybrid` | 同时启用以上两种 | 兼顾灵活性与统一入口 |
 
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-Manual Docker Compose:
-
-```bash
-touch config.yaml nodes.txt
-docker compose up -d
-```
-
-The compose file uses host networking by default. This is recommended for automatic port allocation and multi-port mode.
-
-Important Docker notes:
-
-- `config.yaml` and `nodes.txt` must exist as files before Docker starts.
-- If a bind mount target does not exist, Docker may create a directory instead of a file.
-- `start.sh` fixes that common bind-mount problem automatically.
-- WebUI settings need write access to `config.yaml`.
-- If settings cannot be saved, check file permissions on the host.
-
-## Configuration
-
-### Runtime Mode
+在 `config.yaml` 中：
 
 ```yaml
-mode: pool
+mode: multi-port   # 或 pool / hybrid
 ```
 
-Supported modes:
+也可在 WebUI **设置** 页热修改并自动 reload。
 
-| Mode | Behavior |
-| --- | --- |
-| `pool` | One local mixed proxy entry. All pool nodes share one endpoint and are selected by pool scheduling. |
-| `multi-port` | Each active node gets a dedicated local port. |
-| `hybrid` | Enables both pool entry and per-node ports. |
+---
 
-### Listener
+## WebUI 详解
+
+| 页面 | 功能 |
+|------|------|
+| **导入节点** | 四种格式导入（订阅链接 / URI / Base64 / Clash） |
+| **候选节点** | 测速成功但未入池；按国家/标签下拉筛选；批量测速 / 测国家 / 加入池 / 删除 |
+| **节点池** | 当前在用节点；显示分配端口；按国家/标签筛选；测速 / 测国家 / 删除 |
+| **失败节点** | 测速失败节点；批量重测（成功后自动测国家），可设置成功自动入池 |
+| **批量测试** | 范围多选 + 操作多选 + 自动入池开关，弹出实时进度 |
+| **端口状态** | 扫描 base_port 起 200 个端口，区分节点池占用 / 其他进程 / 空闲 |
+| **日志** | 浏览运行时日志 |
+| **设置** | 运行模式 / 监听 / Multi-Port 凭证 / 池策略 / 管理端 / GeoIP / 订阅刷新 / 当前订阅 |
+
+WebUI 修改后会自动持久化到 `config.yaml`，必要时触发 sing-box reload，不需要手动重启。
+
+---
+
+## 节点生命周期
+
+```
+导入(parsed) ──测速──► passed ──手动入池──► in_pool ──健康检查失败──► failed
+                       │                       ▲                       │
+                       └─ 测国家 ──┐           │  ┌──测速成功──────────┘
+                                   │           │  │
+                                   └────► 测国家成功 (可入池)
+```
+
+- 新导入：`state=parsed`
+- 测速成功：`state=passed`（加入"候选节点"）
+- 加入节点池：`state=in_pool`、`InPool=true`、分配端口
+- 健康检查失败：从池移除，`state=failed`
+- 失败节点重测成功：回到 `passed`；若选择"自动入池"则自动补测国家并入池
+
+> **重要不变量**：sing-box 实际监听端口数 == WebUI 节点池数 == `config.yaml` 中 pool 节点数。运行期间 pool 增减时，端口会从 `base_port` 重新连续编排。
+
+---
+
+## 配置文件
+
+`config.yaml` 主要字段：
 
 ```yaml
-listener:
+mode: multi-port          # pool / multi-port / hybrid
+
+listener:                  # pool 模式的统一入口
   address: 127.0.0.1
   port: 2323
-  username: username
-  password: password
-```
+  username: ""             # 空 = 无需认证
+  password: ""
 
-This is the shared local mixed proxy entry for `pool` and `hybrid` mode.
-
-Example:
-
-```bash
-curl -x http://username:password@127.0.0.1:2323 https://ipinfo.io
-```
-
-### Multi-Port
-
-```yaml
-multi_port:
+multi_port:                # multi-port / hybrid 模式
   address: 127.0.0.1
-  base_port: 24000
-  username: mpuser
-  password: mppass
-```
+  base_port: 24000         # 起始端口；池里第 N 个节点的端口 = base_port + N
+  username: ""             # 空 = 无需认证；可在 WebUI 设置页修改
+  password: ""
 
-In `multi-port` and `hybrid` mode, active pool nodes can receive individual ports. If the requested port is unavailable, Easy Proxies can move to a later available port and show the result in the WebUI.
-
-### Pool
-
-```yaml
-pool:
-  mode: sequential
-  failure_threshold: 3
+pool:                      # 池路由策略
+  mode: sequential         # sequential / random
+  failure_threshold: 3     # 节点连续失败几次进入黑名单
   blacklist_duration: 24h
-```
 
-Pool options:
-
-| Field | Description |
-| --- | --- |
-| `mode` | Scheduling mode. Common values are `sequential` and `random`. |
-| `failure_threshold` | Number of failures before a runtime node is considered unhealthy. |
-| `blacklist_duration` | How long an unhealthy node stays blacklisted before it can be retried. |
-
-### Management
-
-```yaml
-management:
+management:                # WebUI + REST API 服务
   enabled: true
   listen: 127.0.0.1:9091
   probe_target: http://cp.cloudflare.com/generate_204
-  password: ""
-```
+  password: ""             # 设置后 WebUI 需要登录
 
-| Field | Description |
-| --- | --- |
-| `enabled` | Enables WebUI and management API. |
-| `listen` | WebUI/API listen address. |
-| `probe_target` | Default connectivity target used by runtime probing. |
-| `password` | WebUI password. Empty means no login required. |
-
-### Subscription Refresh
-
-```yaml
 subscription_refresh:
   enabled: true
-  interval: 24h
+  interval: 24h            # 自动刷新间隔（最小 5 分钟）
   timeout: 30s
-  health_check_timeout: 1m
-  drain_timeout: 30s
   min_available_nodes: 1
-```
 
-The WebUI settings page exposes auto-refresh as day, hour, and minute inputs. It applies to subscription URLs that have been imported through **Import Nodes**. The settings page intentionally does not duplicate a large subscription URL editor.
-
-### GeoIP
-
-```yaml
-geoip:
+geoip:                     # 可选：按国家路由
   enabled: true
   database_path: ./GeoLite2-Country.mmdb
-  listen: ""
+  listen: ""               # 空 = 不开启分国家路由入口
   port: 0
   auto_update_enabled: true
   auto_update_interval: 24h
-```
 
-If `port` is `0`, the default GeoIP router port is used. The common default is `1221`.
-
-### Logging
-
-```yaml
 log:
-  output: stdout
+  output: stdout           # stdout / file / both
   file: logs/easy_proxies.log
-  max_size: 50
+  max_size: 50             # MB
   max_backups: 3
-  max_age: 7
+  max_age: 7               # 天
   compress: false
 
-log_level: info
+subscriptions:             # 订阅链接列表（WebUI 可增删）
+  - https://example.com/sub?token=xxx
+  - https://another.com/api/v1/client/subscribe?token=yyy
+
+skip_cert_verify: false    # 跳过上游 TLS 校验（不推荐）
 ```
 
-`log.output` can be `stdout` or `file`. The WebUI log page reads recent logs from an in-memory ring buffer.
-
-### Nodes
-
-Static nodes can be configured directly:
-
-```yaml
-nodes:
-  - name: example-node
-    uri: vless://uuid@example.com:443?security=tls&type=ws&path=/path#example-node
-    port: 24000
-```
-
-Or from a file:
-
-```yaml
-nodes_file: nodes.txt
-```
-
-`nodes.txt` uses one URI per line.
-
-### Subscriptions
-
-```yaml
-subscriptions:
-  - https://provider.example/api/v1/client/subscribe?token=xxx
-```
-
-Subscriptions are also maintained when imported through the WebUI subscription URL mode.
-
-## WebUI Guide
-
-The WebUI uses a simple page structure:
-
-| Page | Purpose |
-| --- | --- |
-| Import Nodes | Import subscription URLs, URI lists, Base64 content, or Clash YAML. |
-| Candidate Nodes | Nodes that passed speed testing but are not active in the pool. |
-| Node Pool | Active nodes currently exposed by the runtime config. |
-| Failed Nodes | Nodes that failed testing and can be retested later. |
-| Port Status | Current assigned ports, unavailable port summary, and recommended port range. |
-| Logs | Full-width recent runtime logs. |
-| Settings | Probe target, log options, GeoIP toggle, and subscription auto-refresh interval. |
-
-### Import Nodes
-
-Import modes:
-
-| Button | Input |
-| --- | --- |
-| Subscription URL | One or more HTTP/HTTPS subscription URLs, one per line. |
-| URI Format | One proxy URI per line. |
-| Base64 Format | Base64 encoded V2Ray-style subscription content. |
-| Clash YAML Format | Clash or Mihomo YAML containing `proxies`. |
-
-The subscription URL mode fetches each URL first, then detects the response content. A URL can return Clash YAML, Base64, or raw URI lines.
-
-Import behavior:
-
-- Tag prefix defaults to `local`.
-- Imported node names initially use `tag-originalName`.
-- Speed testing is run during import.
-- Passed nodes go to **Candidate Nodes**.
-- Failed nodes go to **Failed Nodes**.
-- Import does not require a preview confirmation.
-- Imported subscription URLs are saved for subscription auto-refresh.
-
-### Candidate Nodes
-
-Candidate nodes are usable but not yet active.
-
-Available actions:
-
-- Select rows with checkboxes.
-- Select all visible rows.
-- Click table headers to sort by that column.
-- Click the same header again to reverse sort direction.
-- Batch speed test selected nodes.
-- Batch country test selected nodes.
-- Add selected nodes to the node pool.
-- Delete a node permanently.
-- Enable per-page auto-test.
-
-Failure behavior:
-
-- If a candidate node fails speed testing, it moves to **Failed Nodes**.
-- Country testing does not include speed testing.
-- If you want speed validation before country testing, run speed test first.
-
-### Node Pool
-
-Node pool nodes are active runtime nodes.
-
-Available actions:
-
-- Select rows with checkboxes.
-- Batch speed test selected pool nodes.
-- Batch country test selected pool nodes.
-- Reorder ports by country.
-- Reorder ports by tag.
-- Reorder ports by latency.
-- Delete a node permanently.
-- Enable per-page auto-test.
-
-Failure behavior:
-
-- If a pool node fails speed testing, it is removed from the pool and moved to **Failed Nodes**.
-- Removing a pool node triggers runtime config updates and reload where applicable.
-
-Port reorder behavior:
-
-- **By country** groups nodes by detected country code.
-- **By tag** groups nodes by import tag prefix.
-- **By latency** places lower latency nodes earlier.
-- Reordering affects active pool node order and therefore assigned ports.
-
-### Failed Nodes
-
-Failed nodes are retained for later recovery.
-
-Available actions:
-
-- Select rows with checkboxes.
-- Select all visible rows.
-- Run one-click speed test for selected failed nodes.
-- Delete a node permanently.
-- Enable per-page auto-test.
-- Toggle whether recovered failed nodes go directly to the node pool.
-
-Recovery behavior:
-
-- Failed node speed test succeeds.
-- Country test is run automatically for recovered failed nodes.
-- If **auto add to node pool** is enabled, recovered nodes are promoted directly to the pool.
-- If it is disabled, recovered nodes go to **Candidate Nodes**.
-
-### Port Status
-
-The port page is based on the current node pool size.
-
-It shows:
-
-- Multi-port listen address.
-- Requested start port.
-- Target node count.
-- Recommended assignable port range.
-- Unavailable port count and exact unavailable ports.
-- Assigned port and node name for pool nodes.
-
-Unavailable reasons:
-
-| Reason | Meaning |
-| --- | --- |
-| `listener_conflict` | The port conflicts with the shared listener port. |
-| `occupied_by_os` | The port is already used by the OS or another process. |
-| `used_by_config` | The port is already assigned in config. |
-
-### Logs
-
-The log page is designed as a full-width console view. It reads recent runtime logs from the in-memory log buffer.
-
-### Settings
-
-Settings includes:
-
-- External IP used by exported proxy URLs.
-- Probe target.
-- Skip certificate verification.
-- GeoIP enable toggle.
-- Log output and rotation settings.
-- Subscription auto-refresh interval with day, hour, and minute inputs.
-- Save and refresh subscription button.
-
-## Node Lifecycle
-
-The managed lifecycle is:
-
-```text
-parsed -> testing -> passed -> in_pool
-                  -> failed
-in_pool -> failed
-failed -> testing -> passed
-passed -> excluded
-any visible state -> deleted
-```
-
-State meanings:
-
-| State | Meaning |
-| --- | --- |
-| `parsed` | Node was parsed from an import but has not completed testing. |
-| `testing` | Node is currently being tested. |
-| `passed` | Node passed speed testing and is a candidate. |
-| `failed` | Node failed speed testing or was removed from the pool after failing. |
-| `in_pool` | Node is active in runtime config. |
-| `excluded` | Node was excluded from active use. |
-
-Name behavior:
-
-- Before country detection: `tag-originalName`.
-- After country detection: `tag-CCN`.
-- Example: `liangxin-JP1`, `liangxin-SG2`, `local-US3`.
-- When a node fails, its name is reset to `tag-originalName` so the failed list remains understandable.
-
-## Import Formats
-
-### Subscription URL
-
-Input:
-
-```text
-https://provider.example/api/v1/client/subscribe?token=xxx
-https://another-provider.example/sub
-```
-
-Behavior:
-
-- One URL per line.
-- Only `http://` and `https://` URLs are accepted.
-- Response content is parsed automatically.
-- Clash rules are ignored. Only nodes under `proxies` are imported.
-- Subscription URLs are saved for auto-refresh.
-
-### URI List
-
-Input:
-
-```text
-vless://uuid@example.com:443?security=tls&type=ws&path=/path#node-1
-trojan://password@example.com:443?security=tls&type=ws#node-2
-ss://method:password@example.com:443#node-3
-vmess://base64-json
-```
-
-Behavior:
-
-- One URI per line.
-- Supported URI schemes are listed in [Supported Protocols](#supported-protocols).
-- Empty lines are ignored.
-
-### Base64
-
-Input:
-
-```text
-dmxlc3M6Ly8...
-```
-
-Behavior:
-
-- Common V2Ray subscription format.
-- Decoded content is expected to contain URI lines.
-
-### Clash YAML
-
-Input:
-
-```yaml
-proxies:
-  - name: example
-    type: vless
-    server: example.com
-    port: 443
-    uuid: 00000000-0000-0000-0000-000000000000
-    tls: true
-    network: ws
-    ws-opts:
-      path: /path
-      headers:
-        Host: example.com
-```
-
-Behavior:
-
-- Only `proxies` are imported.
-- Rules, proxy groups, DNS, and other Clash config sections are ignored.
-- Clash YAML can include inline JSON-style proxy objects.
-
-## Testing And Country Detection
-
-### Speed Test
-
-Speed testing checks actual proxy connectivity against a `generate_204` target. It does not only validate syntax.
-
-Backend behavior:
-
-- A temporary sing-box instance is created for the node under test.
-- The tester connects through that proxy.
-- Latency is measured.
-- Batch tests run concurrently.
-- Per-node timeout is capped to avoid very slow total runs.
-
-### Country Test
-
-Country testing is separate from speed testing. It checks the real proxy exit location.
-
-The backend tries:
-
-1. `https://ipinfo.io/json`
-2. `http://ip-api.com/json/?fields=status,countryCode,country`
-3. `https://api.country.is`
-
-Country detection updates:
-
-- `country_code`
-- `country_name`
-- display name
-- active runtime node name if the node is already in the pool
-
-### Auto-Test
-
-Each node table has its own auto-test setting:
-
-| Page | Auto-test behavior |
-| --- | --- |
-| Candidate Nodes | Retests candidates. Failed candidates move to Failed Nodes. |
-| Node Pool | Retests active nodes. Failed pool nodes are removed from pool and moved to Failed Nodes. |
-| Failed Nodes | Retests failed nodes. Recovered nodes are country-tested and then moved to candidate or pool depending on the toggle. |
-
-## Port Management
-
-Ports matter in `multi-port` and `hybrid` mode.
-
-The port system is designed around this rule:
-
-- The user provides a preferred start port.
-- Easy Proxies checks actual port availability.
-- It skips unavailable ports.
-- It recommends enough usable ports for the current pool size.
-- It shows unavailable ports as a summary instead of pretending assigned pool ports are unusable.
-
-API example:
-
-```bash
-curl "http://127.0.0.1:9091/api/ports/status?from=24000&count=60"
-```
-
-Response fields:
-
-| Field | Meaning |
-| --- | --- |
-| `address` | Multi-port bind address. |
-| `base_port` | Scan start port. |
-| `target_count` | Number of nodes that need ports. |
-| `recommended` | Suggested usable range and skipped ports. |
-| `ports` | Port scan details. |
-
-## GeoIP Region Router
-
-When GeoIP routing is enabled, Easy Proxies can expose region-specific routes.
-
-Common routes:
-
-| Route | Meaning |
-| --- | --- |
-| `/jp` | Japan nodes |
-| `/kr` | Korea nodes |
-| `/us` | United States nodes |
-| `/hk` | Hong Kong nodes |
-| `/tw` | Taiwan nodes |
-| `/sg` | Singapore nodes |
-| `/other` | Other regions |
-
-Example:
-
-```bash
-curl -x http://username:password@127.0.0.1:1221/jp/ https://ipinfo.io
-```
-
-The exact router listen address and port are controlled by `geoip.listen` and `geoip.port`.
-
-## Management API
-
-All API endpoints except `/api/auth` require authentication when `management.password` is set.
-
-Auth header:
-
-```http
-Authorization: Bearer <token>
-```
-
-### Auth
-
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/api/auth` | Login with `{"password":"..."}` and receive a session token. |
-
-### Import
-
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/api/import/parse` | Parse URL or pasted content into managed nodes. |
-| `POST` | `/api/import/{import_id}/commit` | Commit parsed nodes and start testing. |
-| `GET` | `/api/import/jobs/{job_id}` | Read import job progress. |
-
-Parse subscription URL:
-
-```bash
-curl -X POST http://127.0.0.1:9091/api/import/parse \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"mode":"url","url":"https://provider.example/sub","tag_prefix":"local"}'
-```
-
-Parse pasted content:
-
-```bash
-curl -X POST http://127.0.0.1:9091/api/import/parse \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"mode":"content","content":"vless://...","tag_prefix":"local"}'
-```
-
-Commit all parsed nodes:
-
-```bash
-curl -X POST http://127.0.0.1:9091/api/import/<import_id>/commit \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"auto_reload":true}'
-```
-
-Commit selected parsed nodes:
-
-```bash
-curl -X POST http://127.0.0.1:9091/api/import/<import_id>/commit \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"node_ids":["node-id-1","node-id-2"],"auto_reload":true}'
-```
-
-### Managed Nodes
-
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/api/nodes/all` | List all managed nodes. |
-| `GET` | `/api/nodes/pool` | List active pool nodes. |
-| `GET` | `/api/nodes/failed` | List failed nodes. |
-| `PUT` | `/api/nodes/order` | Save pool node order. |
-| `POST` | `/api/managed-nodes/batch-test` | Batch speed test, country test, and optional promotion. |
-| `POST` | `/api/managed-nodes/{id}/retest` | Speed test one node. |
-| `POST` | `/api/managed-nodes/{id}/country` | Country test one node. |
-| `POST` | `/api/managed-nodes/{id}/promote` | Add a passed candidate to the pool. |
-| `POST` | `/api/managed-nodes/{id}/exclude` | Exclude a node. |
-| `POST` | `/api/managed-nodes/{id}/delete` | Permanently delete a node. |
-| `DELETE` | `/api/managed-nodes/{id}/delete` | Permanently delete a node. |
-
-Batch speed test:
-
-```bash
-curl -X POST http://127.0.0.1:9091/api/managed-nodes/batch-test \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"node_ids":["id1","id2"],"retest":true,"auto_reload":true}'
-```
-
-Batch country test:
-
-```bash
-curl -X POST http://127.0.0.1:9091/api/managed-nodes/batch-test \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"node_ids":["id1","id2"],"country":true,"auto_reload":true}'
-```
-
-Failed node recovery directly into pool:
-
-```bash
-curl -X POST http://127.0.0.1:9091/api/managed-nodes/batch-test \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"node_ids":["id1","id2"],"retest":true,"country":true,"promote_passed":true,"auto_reload":true}'
-```
-
-Batch response:
+---
+
+## REST API
+
+WebUI 背后的全部接口（base URL `http://127.0.0.1:9091`）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/settings` | 读取运行设置 |
+| `PUT` | `/api/settings` | 修改运行设置（含 multi_port 凭证） |
+| `GET` | `/api/subscription/config` | 订阅列表 + 名称映射 + 自动刷新设置 |
+| `PUT` | `/api/subscription/config` | 更新订阅列表 / 自动刷新 |
+| `POST` | `/api/subscription/delete` | 删除某条订阅及其全部节点 `{url}` |
+| `POST` | `/api/subscription/refresh` | 立即刷新 |
+| `POST` | `/api/import/parse` | 解析订阅 / URI / Base64 / Clash |
+| `POST` | `/api/import/{job}/commit` | 确认导入 |
+| `GET` | `/api/nodes/all` / `/api/nodes/pool` / `/api/nodes/failed` | 列出节点 |
+| `POST` | `/api/managed-nodes/{id}/{retest\|country\|promote\|exclude\|delete}` | 单节点操作 |
+| `POST` | `/api/managed-nodes/batch-test` | 同步批量测试（旧） |
+| `POST` | `/api/managed-nodes/batch-test/start` | **异步批量测试，返回 `job_id`** |
+| `GET` | `/api/managed-nodes/batch-test/status?id=` | **轮询测试进度** |
+| `GET` | `/api/ports/status?from=&to=` | 扫描端口占用 |
+| `POST` | `/api/reload` | 手动 reload sing-box |
+| `GET` | `/api/logs` | 拉取最近日志 |
+
+异步批量测试响应 schema：
 
 ```json
 {
-  "total": 2,
-  "retested": 2,
-  "passed": 1,
-  "failed": 1,
-  "country_ok": 1,
+  "id": "abcdef123456",
+  "status": "running",
+  "phase": "probe",
+  "total": 197,
+  "done": 87,
+  "passed": 65,
+  "failed": 22,
+  "country_ok": 0,
   "country_bad": 0,
-  "promoted": 1,
-  "nodes": []
+  "promoted": 0
 }
 ```
 
-### Ports
+---
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/api/ports/status?from=24000&count=60` | Scan ports and return recommendation. |
-| `GET` | `/api/ports/status?from=24000&to=24200` | Scan explicit port range. |
+## 从源码编译
 
-### Runtime Nodes
+需要 Go 1.24+：
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/api/nodes` | Runtime node snapshot. |
-| `POST` | `/api/nodes/{tag}/probe` | Probe one runtime node. |
-| `POST` | `/api/nodes/{tag}/release` | Release one node from blacklist. |
-| `POST` | `/api/nodes/{tag}/blacklist` | Blacklist one runtime node. |
-| `POST` | `/api/nodes/probe-all` | Probe all runtime nodes with SSE output. |
+```bash
+go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/easy_proxies
+```
 
-### Subscription And Settings
-
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/api/subscription/config` | Read subscription refresh config. |
-| `POST` | `/api/subscription/config` | Save subscription refresh config. |
-| `GET` | `/api/subscription/status` | Read subscription refresher status. |
-| `POST` | `/api/subscription/refresh` | Trigger subscription refresh. |
-| `GET` | `/api/settings` | Read global settings. |
-| `POST` | `/api/settings` | Save global settings. |
-| `POST` | `/api/reload` | Reload runtime core. |
-| `GET` | `/api/export` | Export proxy URLs. |
-| `GET` | `/api/logs` | Read recent logs. |
-
-### Config Node CRUD
-
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/api/nodes/config` | List config nodes. |
-| `POST` | `/api/nodes/config` | Create a config node. |
-| `PUT` | `/api/nodes/config/{name}` | Update a config node. |
-| `DELETE` | `/api/nodes/config/{name}` | Delete a config node. |
-
-## Supported Protocols
-
-| Protocol | URI scheme | Notes |
-| --- | --- | --- |
-| VLESS | `vless://` | Supports TLS, Reality, TCP, WS, HTTP/2, gRPC, and related fields parsed from supported formats. |
-| VMess | `vmess://` | Supports common Base64 JSON VMess URI format and Clash input. |
-| Trojan | `trojan://` | Supports TLS, WS, SNI, and common query parameters. |
-| Shadowsocks | `ss://` | Supports SIP002 style URIs and plugin fields where parser support exists. |
-| Hysteria2 | `hysteria2://`, `hy2://` | Requires `with_quic` build tag. |
-| TUIC | `tuic://` | Requires `with_quic` build tag. |
-| AnyTLS | `anytls://` | Supported by sing-box where build and config support exist. |
-| SOCKS5 | `socks5://`, `socks://` | Direct upstream SOCKS proxy. |
-| HTTP/HTTPS | `http://`, `https://` | Direct upstream HTTP proxy. |
-
-## Files And Persistence
-
-| File | Purpose |
-| --- | --- |
-| `config.yaml` | Main runtime config. WebUI settings and active pool changes can write to this file. |
-| `managed_nodes.json` | Managed node store with imported nodes, state, latency, country, and pool metadata. |
-| `nodes.txt` | Optional URI list loaded by `nodes_file`. |
-| `GeoLite2-Country.mmdb` | GeoIP database used by region routing. |
-| `logs/easy_proxies.log` | Optional rotating log file when file logging is enabled. |
-
-Delete behavior:
-
-- Deleting a candidate removes it from `managed_nodes.json`.
-- Deleting a failed node removes it from `managed_nodes.json`.
-- Deleting a pool node removes it from both managed state and runtime config, then reloads runtime where applicable.
-
-## Troubleshooting
-
-### `QUIC is not included in this build`
-
-Rebuild with `with_quic`:
+Linux：
 
 ```bash
 go build -tags "with_clash_api with_utls with_quic" -o easy_proxies ./cmd/easy_proxies
 ```
 
-### `import service not available`
+构建标签说明：
 
-This means the monitor server is running without the import service attached. Restart the current full application entrypoint:
+| Tag | 作用 |
+|-----|------|
+| `with_clash_api` | sing-box 流量统计 / Clash 兼容 API（管理端需要） |
+| `with_utls` | uTLS 指纹伪装（部分协议需要） |
+| `with_quic` | QUIC / Hysteria2 / TUIC 支持 |
 
-```bash
-./easy_proxies -config config.yaml
-```
+---
 
-Do not serve the embedded WebUI from a partial test harness if you need import features.
+## 支持的协议
 
-### `snap.forEach is not a function`
+VLESS / VMess / Trojan / Shadowsocks / Hysteria2（含端口跳跃）/ TUIC / AnyTLS / SOCKS5 / HTTP / HTTPS
 
-This is a frontend symptom of receiving a non-array response where the UI expected a node list, often caused by API errors or stale browser code. Hard refresh the page and check `/api/nodes/all`, `/api/nodes/pool`, and `/api/nodes/failed`.
+URI 格式遵循 v2rayN URI scheme。
 
-### `Cannot read properties of null (reading 'error')`
+---
 
-This usually means an API call failed but returned an unexpected body. Check the browser network panel or the WebUI logs page for the endpoint response.
+## 文件与持久化
 
-### Imported node fails with DNS `NXDOMAIN`
+| 文件 | 内容 | 是否需要手动管理 |
+|------|------|------------------|
+| `config.yaml` | 全部配置 | 通常通过 WebUI 修改 |
+| `nodes.txt` | 订阅刷新拉到的全部节点 URI | 自动生成，候选库 |
+| `managed_nodes.json` | 池中 / 候选 / 失败节点完整状态 | 自动管理，不要手改 |
+| `GeoLite2-Country.mmdb` | MaxMind GeoIP 数据库 | 自动定期更新 |
+| `logs/easy_proxies.log` | 运行日志（如启用 file output） | 按 max_size/max_backups 滚动 |
 
-The node was parsed but the upstream configuration may be invalid or provider-side DNS/SNI/Reality fields are not usable. Keep it in Failed Nodes and retest later, or delete it if you do not want it to appear again.
+**设计原则**：sing-box 只为节点池中的节点开监听。订阅自动刷新只更新 `nodes.txt`（候选库），不会注入 sing-box。只有手动 / 自动 Promote 才会让节点真正占用端口。
 
-### Country test fails or rate limits
+---
 
-Country testing uses external IP lookup services through the proxy. If one service fails, the tester tries fallbacks. Temporary rate limits can still happen when testing many nodes.
+## 常见问题
 
-### Port shown by logs differs from requested base port
+**Q: WebUI 显示的端口数 / netstat 看到的监听端口数 / config.yaml 节点数 不一致？**
+A: 不应该发生。本项目核心不变量就是三者相等。如果你看到不一致，请重启进程，并提 issue。
 
-Another process or listener may already be using one or more ports. Use **Port Status** to scan from your desired start port. Easy Proxies will recommend enough usable ports for the current node pool and summarize skipped ports.
+**Q: 启动时报 "Port 24000 is in use, trying next port"？**
+A: 24000 被其他程序占用了，会自动顺延到下一个可用端口。WebUI **端口状态** 页会标出哪些端口被外部进程占了。
 
-### WebUI settings cannot be saved in Docker
+**Q: 重复导入同一个订阅会怎样？**
+A: 同 URI 的节点会被覆盖（按 sha256(URI) 主键），**状态会被重置为 parsed**。原本在池里的节点会被降级到候选。
 
-Check host file permissions:
+**Q: 测速很慢？**
+A: 检查你的网络。默认 probe target 是 `www.gstatic.com/generate_204`（5 秒超时，64 并发）。197 节点全量约 30s。如果远超这个时间，多半是上游订阅给的节点本身大量超时。
 
-```bash
-chmod 666 config.yaml nodes.txt
-```
+**Q: 失败节点测速成功后会自动入池吗？**
+A: 默认不会，需要在 **失败节点** 页打开"自动加入到节点池"开关，或在 **批量测试** 页勾选"测速成功后自动加入节点池"。失败节点入池前会自动补测国家。
 
-Also make sure `config.yaml` is a file, not a directory.
+**Q: 怎么完全删除一条订阅？**
+A: **设置 → 当前订阅 → 删除** 按钮。会原子地从 `config.yaml` 移除 URL + 删除所有 `ImportSource` 匹配的节点（候选 + 失败 + 池中）+ 重写 `nodes.txt`。
 
-## Development
+**Q: 想给管理端加密码？**
+A: 编辑 `config.yaml` 里 `management.password`，重启。访问 WebUI 时浏览器会提示 Bearer Token 输入。
 
-Run tests:
-
-```bash
-go test ./...
-```
-
-Run vet:
-
-```bash
-go vet ./...
-```
-
-Build recommended local binary:
-
-```bash
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies ./cmd/easy_proxies
-```
-
-Build Docker image:
-
-```bash
-docker build -t easy_proxies:local .
-```
+---
 
 ## License
 
-MIT License
+继承自上游项目 [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies) 的许可证。

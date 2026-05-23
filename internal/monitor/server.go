@@ -25,7 +25,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-//go:embed assets/index.html
+//go:embed assets/index.html assets/logo.png
 var embeddedFS embed.FS
 
 // Session represents a user session with expiration.
@@ -121,6 +121,7 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/logo.png", s.handleLogo)
 	mux.HandleFunc("/api/auth", s.handleAuth)
 	mux.HandleFunc("/api/settings", s.withAuth(s.handleSettings))
 	mux.HandleFunc("/api/nodes", s.withAuth(s.handleNodes))
@@ -295,6 +296,17 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(data)
+}
+
+func (s *Server) handleLogo(w http.ResponseWriter, r *http.Request) {
+	data, err := embeddedFS.ReadFile("assets/logo.png")
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	_, _ = w.Write(data)
 }
 

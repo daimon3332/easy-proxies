@@ -42,7 +42,7 @@ button{cursor:pointer}
 .app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
 .side{padding:26px 18px;border-right:1px solid var(--line);background:rgba(255,255,255,.66);backdrop-filter:blur(18px);position:sticky;top:0;height:100vh}
 .brand{display:flex;align-items:center;gap:12px;margin:0 8px 28px}
-.logo{width:42px;height:42px;border-radius:15px;background:linear-gradient(135deg,var(--blue),var(--green));box-shadow:0 12px 28px rgba(47,159,216,.25)}
+.logo{width:42px;height:42px;border-radius:15px;background:url('/logo.png') center/cover no-repeat;box-shadow:0 12px 28px rgba(47,159,216,.25)}
 .brand strong{display:block;font-size:19px;letter-spacing:-.03em}
 .brand span{display:block;color:var(--muted);font-size:12px}
 .nav{display:grid;gap:8px}
@@ -410,11 +410,15 @@ function renderManaged(kind){
   const baseItems=kind==='pool'||kind==='failed'?(S.viewNodes.length?S.viewNodes:items):S.nodes;
   const countries=unique(baseItems.map(n=>n.country_code).filter(Boolean));
   const tags=unique(baseItems.map(n=>n.tag_prefix||'local'));
-  const filters=(kind==='nodes'||kind==='pool')?`<p class="muted">${kind==='nodes'?'这里只显示测速成功、还没有加入节点池的候选节点；':'当前节点池；'}可按国家和标签筛选，点击表头列名排序，再点一次反向。</p>
+  const filterHint=kind==='nodes'?'这里只显示测速成功、还没有加入节点池的候选节点；可按国家、标签和名称筛选，点击表头列名排序，再点一次反向。'
+    :kind==='pool'?'当前节点池；可按国家、标签和名称筛选，点击表头列名排序，再点一次反向。'
+    :'失败节点可按国家、标签和名称筛选。';
+  const filters=`<p class="muted">${filterHint}</p>
       <div class="filters compact">
         <select id="countryFilter" onchange="updateFilters()"><option value="">全部国家</option>${countries.map(v=>`<option value="${esc(v)}">${esc(countryLabel(v))} (${esc(v)})</option>`).join('')}</select>
         <select id="tagFilter" onchange="updateFilters()"><option value="">全部标签</option>${tags.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select>
-      </div>`:'';
+        <input id="nameFilter" type="search" placeholder="根据名称搜索" oninput="onNameFilterInput(event)" value="${esc(S.filters.q||'')}">
+      </div>`;
   const heading=kind==='pool'?'节点池':kind==='failed'?'失败节点':'候选节点';
   const hint=kind==='failed'
     ? '<p class="muted">失败节点可多选后一键测速；测速成功后会自动测试国家，并按开关进入候选节点或直接加入节点池。</p>'
@@ -473,7 +477,6 @@ function failedOptionBar(tags=[]){
   return `<div class="pool-toolbar">
     <div><strong>失败节点测速结果</strong><div class="muted">开启后，失败节点测速成功并测试国家后直接进入节点池；关闭则进入候选节点。</div></div>
     <div class="row">
-      <label class="row"><span class="muted">标签</span><select id="tagFilter" onchange="updateFilters()"><option value="">全部标签</option>${tags.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select></label>
       <label class="row"><input type="checkbox" style="width:auto" ${S.failedAutoPromote?'checked':''} onchange="setFailedAutoPromote(this.checked)"> 自动加入到节点池</label>
     </div>
   </div>`;
@@ -582,11 +585,22 @@ function sortPoolItems(items){
 }
 function setFilterValues(scope){
   const set=(id,val)=>{const el=qs('#'+id);if(el)el.value=val};
-  set('countryFilter',S.filters.country);set('tagFilter',S.filters.tag);
+  set('countryFilter',S.filters.country);set('tagFilter',S.filters.tag);set('nameFilter',S.filters.q||'');
+  const nameEl=qs('#nameFilter');
+  if(nameEl&&!nameEl.dataset.composeBound){
+    nameEl.dataset.composeBound='1';
+    nameEl.addEventListener('compositionend',()=>{S.filters.q=nameEl.value||'';updateFilters()});
+  }
 }
 function updateFilters(){
   ['country','tag'].forEach(k=>{const el=qs('#'+k+'Filter');if(el&&!el.disabled)S.filters[k]=el.value});
+  const nameEl=qs('#nameFilter');if(nameEl)S.filters.q=nameEl.value||'';
   renderManaged(S.page);
+  const nameInput=qs('#nameFilter');if(nameInput){nameInput.focus();const v=nameInput.value;nameInput.setSelectionRange(v.length,v.length)}
+}
+function onNameFilterInput(e){
+  if(e&&e.isComposing){S.filters.q=e.target.value||'';return}
+  updateFilters();
 }
 function toggleNode(id,checked){if(checked)S.selected.add(id);else S.selected.delete(id)}
 function currentVisibleIds(){return qsa('#nodeList .table-row').map(el=>el.dataset.id).filter(Boolean)}

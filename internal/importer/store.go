@@ -178,29 +178,50 @@ func (s *Store) UpdateNodeState(id string, state ManagedNodeState, lastErr strin
 }
 
 func (s *Store) MarkInPool(id string, port uint16) (ManagedNode, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	n, ok := s.nodes[id]
-	if !ok {
+	nodes, err := s.MarkInPoolMany(map[string]uint16{id: port})
+	if err != nil {
+		return ManagedNode{}, err
+	}
+	if len(nodes) == 0 {
 		return ManagedNode{}, fmt.Errorf("node %s not found", id)
 	}
-	wasInPool := n.InPool && n.State == StateInPool
-	n.State = StateInPool
-	n.InPool = true
-	n.Enabled = true
-	n.Port = port
-	if !wasInPool {
-		maxOrder := -1
-		for _, existing := range s.nodes {
-			if existing.InPool && existing.State == StateInPool && existing.Order > maxOrder {
-				maxOrder = existing.Order
-			}
+	return nodes[0], nil
+}
+
+func (s *Store) MarkInPoolMany(ports map[string]uint16) ([]ManagedNode, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	maxOrder := -1
+	for _, existing := range s.nodes {
+		if existing.InPool && existing.State == StateInPool && existing.Order > maxOrder {
+			maxOrder = existing.Order
 		}
-		n.Order = maxOrder + 1
 	}
-	n.UpdatedAt = time.Now()
-	s.nodes[id] = n
-	return n, s.saveLocked()
+
+	updated := make([]ManagedNode, 0, len(ports))
+	for id, port := range ports {
+		n, ok := s.nodes[id]
+		if !ok {
+			continue
+		}
+		wasInPool := n.InPool && n.State == StateInPool
+		n.State = StateInPool
+		n.InPool = true
+		n.Enabled = true
+		n.Port = port
+		if !wasInPool {
+			maxOrder++
+			n.Order = maxOrder
+		}
+		n.UpdatedAt = now
+		s.nodes[id] = n
+		updated = append(updated, n)
+	}
+	if len(updated) == 0 {
+		return nil, nil
+	}
+	return updated, s.saveLocked()
 }
 
 func (s *Store) SetOrder(ids []string) error {
@@ -243,8 +264,14 @@ func (s *Store) UpdateJob(id string, fn func(*ImportJob)) error {
 }
 
 func (s *Store) DeleteNode(id string) error {
+	return s.DeleteNodes([]string{id})
+}
+
+func (s *Store) DeleteNodes(ids []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.nodes, id)
+	for _, id := range ids {
+		delete(s.nodes, id)
+	}
 	return s.saveLocked()
 }

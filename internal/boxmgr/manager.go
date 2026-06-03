@@ -791,9 +791,21 @@ func (m *Manager) ListConfigNodes(ctx context.Context) ([]config.NodeConfig, err
 
 // CreateNode adds a new node to the config and saves it.
 func (m *Manager) CreateNode(ctx context.Context, node config.NodeConfig) (config.NodeConfig, error) {
+	nodes, err := m.CreateNodes(ctx, []config.NodeConfig{node})
+	if err != nil {
+		return config.NodeConfig{}, err
+	}
+	if len(nodes) == 0 {
+		return config.NodeConfig{}, fmt.Errorf("%w: 节点未创建", monitor.ErrInvalidNode)
+	}
+	return nodes[0], nil
+}
+
+// CreateNodes adds multiple nodes to the config and saves once.
+func (m *Manager) CreateNodes(ctx context.Context, nodes []config.NodeConfig) ([]config.NodeConfig, error) {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
-			return config.NodeConfig{}, err
+			return nil, err
 		}
 	}
 
@@ -801,30 +813,38 @@ func (m *Manager) CreateNode(ctx context.Context, node config.NodeConfig) (confi
 	defer m.mu.Unlock()
 
 	if m.cfg == nil {
-		return config.NodeConfig{}, errConfigUnavailable
+		return nil, errConfigUnavailable
 	}
 
-	normalized, err := m.prepareNodeLocked(node, "")
-	if err != nil {
-		return config.NodeConfig{}, err
+	backup := cloneNodes(m.cfg.Nodes)
+	created := make([]config.NodeConfig, 0, len(nodes))
+
+	for _, node := range nodes {
+		normalized, err := m.prepareNodeLocked(node, "")
+		if err != nil {
+			m.cfg.Nodes = backup
+			return nil, err
+		}
+
+		// Determine source: if subscriptions exist, new nodes go to nodes.txt (subscription source)
+		// Otherwise, if nodes_file exists, use file source; else inline
+		if len(m.cfg.Subscriptions) > 0 {
+			normalized.Source = config.NodeSourceSubscription
+		} else if m.cfg.NodesFile != "" {
+			normalized.Source = config.NodeSourceFile
+		} else {
+			normalized.Source = config.NodeSourceInline
+		}
+
+		m.cfg.Nodes = append(m.cfg.Nodes, normalized)
+		created = append(created, normalized)
 	}
 
-	// Determine source: if subscriptions exist, new nodes go to nodes.txt (subscription source)
-	// Otherwise, if nodes_file exists, use file source; else inline
-	if len(m.cfg.Subscriptions) > 0 {
-		normalized.Source = config.NodeSourceSubscription
-	} else if m.cfg.NodesFile != "" {
-		normalized.Source = config.NodeSourceFile
-	} else {
-		normalized.Source = config.NodeSourceInline
-	}
-
-	m.cfg.Nodes = append(m.cfg.Nodes, normalized)
 	if err := m.cfg.Save(); err != nil {
-		m.cfg.Nodes = m.cfg.Nodes[:len(m.cfg.Nodes)-1]
-		return config.NodeConfig{}, fmt.Errorf("save config: %w", err)
+		m.cfg.Nodes = backup
+		return nil, fmt.Errorf("save config: %w", err)
 	}
-	return normalized, nil
+	return created, nil
 }
 
 // UpdateNode updates an existing node by name and saves the config.
@@ -865,15 +885,69 @@ func (m *Manager) UpdateNode(ctx context.Context, name string, node config.NodeC
 	return normalized, nil
 }
 
+// UpdateNodes updates multiple existing nodes by old name and saves once.
+func (m *Manager) UpdateNodes(ctx context.Context, nodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.cfg == nil {
+		return nil, errConfigUnavailable
+	}
+	if len(nodes) == 0 {
+		return map[string]config.NodeConfig{}, nil
+	}
+
+	backup := cloneNodes(m.cfg.Nodes)
+	updated := make(map[string]config.NodeConfig, len(nodes))
+	for oldName, node := range nodes {
+		oldName = strings.TrimSpace(oldName)
+		if oldName == "" {
+			continue
+		}
+		idx := m.nodeIndexLocked(oldName)
+		if idx == -1 {
+			m.cfg.Nodes = backup
+			return nil, monitor.ErrNodeNotFound
+		}
+		normalized, err := m.prepareNodeLocked(node, oldName)
+		if err != nil {
+			m.cfg.Nodes = backup
+			return nil, err
+		}
+		normalized.Source = m.cfg.Nodes[idx].Source
+		m.cfg.Nodes[idx] = normalized
+		updated[normalized.Name] = normalized
+	}
+
+	if len(updated) == 0 {
+		return updated, nil
+	}
+	if err := m.cfg.Save(); err != nil {
+		m.cfg.Nodes = backup
+		return nil, fmt.Errorf("save config: %w", err)
+	}
+	return updated, nil
+}
+
 // DeleteNode removes a node by name and saves the config.
 func (m *Manager) DeleteNode(ctx context.Context, name string) error {
+	return m.DeleteNodes(ctx, []string{name})
+}
+
+// DeleteNodes removes multiple nodes by name and saves once.
+func (m *Manager) DeleteNodes(ctx context.Context, names []string) error {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 	}
 
-	name = strings.TrimSpace(name)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -881,13 +955,31 @@ func (m *Manager) DeleteNode(ctx context.Context, name string) error {
 		return errConfigUnavailable
 	}
 
-	idx := m.nodeIndexLocked(name)
-	if idx == -1 {
+	nameSet := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			nameSet[name] = struct{}{}
+		}
+	}
+	if len(nameSet) == 0 {
 		return monitor.ErrNodeNotFound
 	}
 
 	backup := cloneNodes(m.cfg.Nodes)
-	m.cfg.Nodes = append(m.cfg.Nodes[:idx], m.cfg.Nodes[idx+1:]...)
+	filtered := make([]config.NodeConfig, 0, len(m.cfg.Nodes))
+	deleted := 0
+	for _, node := range m.cfg.Nodes {
+		if _, ok := nameSet[node.Name]; ok {
+			deleted++
+			continue
+		}
+		filtered = append(filtered, node)
+	}
+	if deleted == 0 {
+		return monitor.ErrNodeNotFound
+	}
+	m.cfg.Nodes = filtered
 	if err := m.cfg.Save(); err != nil {
 		m.cfg.Nodes = backup
 		return fmt.Errorf("save config: %w", err)

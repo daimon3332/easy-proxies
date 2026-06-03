@@ -17,8 +17,10 @@ type ImportService interface {
 	StartBatchTest(req importer.BatchTestRequest) (string, error)
 	GetTestJob(jobID string) (importer.TestJob, bool)
 	Promote(nodeID string, autoReload bool) (importer.ManagedNode, error)
+	PromoteMany(nodeIDs []string, autoReload bool) ([]importer.ManagedNode, error)
 	Exclude(nodeID string) (importer.ManagedNode, error)
 	Delete(nodeID string) error
+	DeleteMany(nodeIDs []string) (int, error)
 	DeleteBySubscription(url string) (int, error)
 	ListAll() ([]importer.ManagedNode, error)
 	ListPool() ([]importer.ManagedNode, error)
@@ -195,6 +197,14 @@ func (s *Server) handleManagedNodeAction(w http.ResponseWriter, r *http.Request)
 		s.handleManagedNodesBatchTestStatus(w, r)
 		return
 	}
+	if strings.TrimRight(r.URL.Path, "/") == "/api/managed-nodes/batch-promote" {
+		s.handleManagedNodesBatchPromote(w, r)
+		return
+	}
+	if strings.TrimRight(r.URL.Path, "/") == "/api/managed-nodes/batch-delete" {
+		s.handleManagedNodesBatchDelete(w, r)
+		return
+	}
 	nodeID, action := extractManagedNodeAction(r.URL.Path)
 	if nodeID == "" || action == "" {
 		w.WriteHeader(http.StatusNotFound)
@@ -318,6 +328,53 @@ func (s *Server) handleManagedNodesBatchTestStart(w http.ResponseWriter, r *http
 		return
 	}
 	writeJSON(w, map[string]string{"job_id": jobID})
+}
+
+func (s *Server) handleManagedNodesBatchPromote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 POST 请求"})
+		return
+	}
+	var req struct {
+		NodeIDs    []string `json:"node_ids"`
+		AutoReload bool     `json:"auto_reload"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "请求格式错误"})
+		return
+	}
+	nodes, err := s.importSvc.PromoteMany(req.NodeIDs, req.AutoReload)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"promoted": len(nodes), "nodes": nodes})
+}
+
+func (s *Server) handleManagedNodesBatchDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 POST/DELETE 请求"})
+		return
+	}
+	var req struct {
+		NodeIDs []string `json:"node_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "请求格式错误"})
+		return
+	}
+	deleted, err := s.importSvc.DeleteMany(req.NodeIDs)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]any{"deleted": deleted})
 }
 
 func (s *Server) handleManagedNodesBatchTestStatus(w http.ResponseWriter, r *http.Request) {

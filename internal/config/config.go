@@ -825,6 +825,48 @@ func (fi *flexInt) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// flexBool handles Clash/Mihomo fields that are often emitted as bools,
+// quoted bools, or 0/1 numbers depending on the subscription provider.
+type flexBool bool
+
+func (fb *flexBool) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var boolVal bool
+	if err := unmarshal(&boolVal); err == nil {
+		*fb = flexBool(boolVal)
+		return nil
+	}
+
+	var intVal int
+	if err := unmarshal(&intVal); err == nil {
+		switch intVal {
+		case 0:
+			*fb = false
+			return nil
+		case 1:
+			*fb = true
+			return nil
+		default:
+			return fmt.Errorf("cannot parse bool from int %d", intVal)
+		}
+	}
+
+	var strVal string
+	if err := unmarshal(&strVal); err != nil {
+		return fmt.Errorf("cannot unmarshal bool: expected bool, 0/1, or string")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(strVal)) {
+	case "", "false", "0", "no", "n", "off":
+		*fb = false
+		return nil
+	case "true", "1", "yes", "y", "on":
+		*fb = true
+		return nil
+	default:
+		return fmt.Errorf("cannot parse bool %q", strVal)
+	}
+}
+
 type clashConfig struct {
 	Proxies []clashProxy `yaml:"proxies"`
 }
@@ -838,14 +880,14 @@ type clashProxy struct {
 	UUID              string                 `yaml:"uuid"`
 	Password          string                 `yaml:"password"`
 	Cipher            string                 `yaml:"cipher"`
-	AlterId           int                    `yaml:"alterId"`
+	AlterId           flexInt                `yaml:"alterId"`
 	Network           string                 `yaml:"network"`
-	TLS               bool                   `yaml:"tls"`
-	SkipCertVerify    bool                   `yaml:"skip-cert-verify"`
+	TLS               flexBool               `yaml:"tls"`
+	SkipCertVerify    flexBool               `yaml:"skip-cert-verify"`
 	ServerName        string                 `yaml:"servername"`
 	SNI               string                 `yaml:"sni"`
 	Flow              string                 `yaml:"flow"`
-	UDP               bool                   `yaml:"udp"`
+	UDP               flexBool               `yaml:"udp"`
 	WSOpts            *clashWSOptions        `yaml:"ws-opts"`
 	GrpcOpts          *clashGrpcOptions      `yaml:"grpc-opts"`
 	RealityOpts       *clashRealityOptions   `yaml:"reality-opts"`

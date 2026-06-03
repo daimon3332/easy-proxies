@@ -346,13 +346,13 @@ async function refresh(){
     }else if(S.page==='settings'){
       await Promise.all([loadSettings(),loadSubscriptionConfig()]);
       renderSettings();
-    }else if(S.page==='bulk'){
-      await loadManaged('nodes');
-      renderBulk();
-    }else{
-      await loadSubscriptionConfig();
-      renderImport();
-    }
+	}else if(S.page==='bulk'){
+	  await loadManaged('nodes');
+	  renderBulk();
+	}else{
+	  await Promise.all([loadSubscriptionConfig(), loadManaged('nodes')]);
+	  renderImport();
+	}
     renderNav();
   }catch(err){toast(err.message,'err')}
 }
@@ -718,20 +718,20 @@ async function retestFailedNodes(ids){
   await refresh();
 }
 async function promoteNodes(ids){
-  let ok=0,fail=0;
-  for(const id of ids){
-    try{
-      const n=await api('/api/managed-nodes/'+encodeURIComponent(id)+'/promote',{method:'POST'});
-      if(inPool(n))ok++;else fail++;
-    }
-    catch(e){fail++}
+  if(!ids.length){toast('请先选择候选节点','err');return}
+  setActionStatus(`正在加入节点池 ${ids.length} 个节点...`);
+  try{
+    const res=await api('/api/managed-nodes/batch-promote',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true})});
+    const ok=res.promoted||0,fail=Math.max(0,ids.length-ok);
+    const msg=`加入节点池完成：成功 ${ok}，失败 ${fail}`;
+    setActionStatus(msg,fail?'err':'ok');
+    toast(msg,fail?'err':'ok');
+    S.selected.clear();
+    await refresh();
+  }catch(err){
+    setActionStatus(err.message,'err');
+    toast(err.message,'err');
   }
-  if(ok){
-    try{await api('/api/reload',{method:'POST'})}catch(e){toast(`已加入 ${ok} 个，重载失败：${e.message}`,'err')}
-  }
-  toast(`加入节点池完成：成功 ${ok}，失败 ${fail}`);
-  S.selected.clear();
-  await refresh();
 }
 async function runAutoProbe(kind,manual){
   if(!['nodes','pool','failed'].includes(kind))return;
@@ -799,7 +799,7 @@ async function deleteManagedNode(id){
   if(!confirm('删除后将从所有列表移除，确定继续？'))return;
   try{
     setActionStatus('正在删除节点...');
-    await api('/api/managed-nodes/'+encodeURIComponent(id)+'/delete',{method:'POST'});
+    await api('/api/managed-nodes/batch-delete',{method:'POST',body:JSON.stringify({node_ids:[id]})});
     S.selected.delete(id);
     setActionStatus('节点已删除');
     toast('节点已删除');
@@ -814,20 +814,18 @@ async function deleteSelectedVisible(){
   if(!ids.length){toast('请先选择要删除的节点','err');return}
   if(!confirm(`将删除当前选中的 ${ids.length} 个节点，删除后不会出现在任何列表中，确定继续？`))return;
   setActionStatus(`正在删除 ${ids.length} 个节点...`);
-  let ok=0,fail=0;
-  for(const id of ids){
-    try{
-      await api('/api/managed-nodes/'+encodeURIComponent(id)+'/delete',{method:'POST'});
-      S.selected.delete(id);
-      ok++;
-    }catch(err){
-      fail++;
-    }
+  try{
+    const res=await api('/api/managed-nodes/batch-delete',{method:'POST',body:JSON.stringify({node_ids:ids})});
+    const ok=res.deleted||0,fail=Math.max(0,ids.length-ok);
+    ids.forEach(id=>S.selected.delete(id));
+    const msg=`删除完成：成功 ${ok}，失败 ${fail}`;
+    setActionStatus(msg,fail?'err':'ok');
+    toast(msg,fail?'err':'ok');
+    await refresh();
+  }catch(err){
+    setActionStatus(err.message,'err');
+    toast(err.message,'err');
   }
-  const msg=`删除完成：成功 ${ok}，失败 ${fail}`;
-  setActionStatus(msg,fail?'err':'ok');
-  toast(msg,fail?'err':'ok');
-  await refresh();
 }
 async function saveOrder(){
   const ids=S.nodes.filter(n=>n.state==='in_pool'||n.in_pool).map(n=>n.id);

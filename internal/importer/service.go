@@ -22,12 +22,24 @@ type NodeManager interface {
 	TriggerReload(ctx context.Context) error
 }
 
+type NodeBatchCreator interface {
+	CreateNodes(ctx context.Context, nodes []config.NodeConfig) ([]config.NodeConfig, error)
+}
+
 type NodeUpdater interface {
 	UpdateNode(ctx context.Context, name string, node config.NodeConfig) (config.NodeConfig, error)
 }
 
+type NodeBatchUpdater interface {
+	UpdateNodes(ctx context.Context, nodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error)
+}
+
 type NodeRemover interface {
 	DeleteNode(ctx context.Context, name string) error
+}
+
+type NodeBatchRemover interface {
+	DeleteNodes(ctx context.Context, names []string) error
 }
 
 type NodeReorderer interface {
@@ -239,6 +251,8 @@ func (s *Service) runPipeline(jobID string, nodes []ManagedNode) {
 	total := len(nodes)
 	passed := 0
 	failed := 0
+	updates := make([]ManagedNode, 0, len(nodes))
+	usedNames := s.usedNodeNames()
 
 	for event := range s.tester.TestBatch(ctx, nodes) {
 		node, ok := s.store.GetNode(event.NodeID)
@@ -246,16 +260,16 @@ func (s *Service) runPipeline(jobID string, nodes []ManagedNode) {
 			continue
 		}
 		if event.Result.Error != nil {
-			_ = s.markFailed(node, event.Result.Error.Error())
+			updated, _ := failedNodeUpdate(node, event.Result.Error.Error())
+			updates = append(updates, updated)
 			failed++
 		} else {
-			if err := s.markPassed(node, event.Result); err != nil {
-				s.store.UpdateNodeState(event.NodeID, StateFailed, err.Error())
-				failed++
-				continue
-			}
+			updates = append(updates, s.passedNodeUpdateWithNames(node, event.Result, usedNames))
 			passed++
 		}
+	}
+	if len(updates) > 0 {
+		_ = s.store.UpsertNodes(updates)
 	}
 
 	status := ImportStatusCompleted
@@ -335,7 +349,10 @@ func (s *Service) BatchTest(req BatchTestRequest) (BatchTestResponse, error) {
 
 	var mu sync.Mutex
 	changed := false
+	needReload := false
 	if req.Retest {
+		updates := make([]ManagedNode, 0, len(nodes))
+		poolNamesToDelete := make([]string, 0)
 		for event := range s.tester.ProbeBatch(context.Background(), nodes) {
 			node, ok := s.store.GetNode(event.NodeID)
 			if !ok {
@@ -345,24 +362,30 @@ func (s *Service) BatchTest(req BatchTestRequest) (BatchTestResponse, error) {
 			resp.Retested++
 			mu.Unlock()
 			if event.Result.Error != nil {
-				_ = s.markFailed(node, event.Result.Error.Error())
+				updated, poolName := failedNodeUpdate(node, event.Result.Error.Error())
+				updates = append(updates, updated)
+				if poolName != "" {
+					poolNamesToDelete = append(poolNamesToDelete, poolName)
+					needReload = true
+				}
 				mu.Lock()
 				resp.Failed++
 				changed = true
 				mu.Unlock()
 				continue
 			}
-			if err := s.markProbePassed(node, event.Result); err != nil {
-				_ = s.markFailed(node, err.Error())
-				mu.Lock()
-				resp.Failed++
-				changed = true
-				mu.Unlock()
-				continue
-			}
+			updates = append(updates, probePassedNodeUpdate(node, event.Result))
 			mu.Lock()
 			resp.Passed++
 			mu.Unlock()
+		}
+		if len(poolNamesToDelete) > 0 {
+			s.deleteConfigNodes(poolNamesToDelete)
+		}
+		if len(updates) > 0 {
+			if err := s.store.UpsertNodes(updates); err != nil {
+				return resp, err
+			}
 		}
 	}
 
@@ -375,6 +398,9 @@ func (s *Service) BatchTest(req BatchTestRequest) (BatchTestResponse, error) {
 			}
 			countryNodes = append(countryNodes, node)
 		}
+		updates := make([]ManagedNode, 0, len(countryNodes))
+		configUpdates := make(map[string]config.NodeConfig)
+		usedNames := s.usedNodeNames()
 		for event := range s.tester.CountryBatch(context.Background(), countryNodes) {
 			node, ok := s.store.GetNode(event.NodeID)
 			if !ok {
@@ -383,38 +409,50 @@ func (s *Service) BatchTest(req BatchTestRequest) (BatchTestResponse, error) {
 			if event.Result.Error != nil {
 				node.LastError = event.Result.Error.Error()
 				node.UpdatedAt = time.Now()
-				_ = s.store.UpsertNode(node)
+				updates = append(updates, node)
 				mu.Lock()
 				resp.CountryBad++
 				mu.Unlock()
 				continue
 			}
-			if err := s.markCountry(node, event.Result); err != nil {
-				mu.Lock()
-				resp.CountryBad++
-				mu.Unlock()
-				continue
+			updated, oldName, needsConfigUpdate := s.countryNodeUpdateWithNames(node, event.Result, usedNames)
+			if needsConfigUpdate {
+				configUpdates[oldName] = updated.ToConfigNode()
+				needReload = true
 			}
+			updates = append(updates, updated)
 			mu.Lock()
 			resp.CountryOK++
 			changed = true
 			mu.Unlock()
 		}
-	}
-
-	if req.PromotePassed {
-		for _, id := range req.NodeIDs {
-			node, ok := s.store.GetNode(id)
-			if !ok || node.State != StatePassed || node.InPool {
-				continue
+		if len(configUpdates) > 0 {
+			normalized, err := s.updateConfigNodes(configUpdates)
+			if err != nil {
+				return resp, err
 			}
-			if promoted, err := s.Promote(id, false); err == nil && (promoted.InPool || promoted.State == StateInPool) {
-				resp.Promoted++
-				changed = true
+			for i := range updates {
+				if cn, ok := normalized[updates[i].Name]; ok {
+					updates[i].Port = cn.Port
+				}
+			}
+		}
+		if len(updates) > 0 {
+			if err := s.store.UpsertNodes(updates); err != nil {
+				return resp, err
 			}
 		}
 	}
-	if changed && (req.AutoReload || req.PromotePassed) {
+
+	if req.PromotePassed {
+		promoted, err := s.PromoteMany(req.NodeIDs, false)
+		if err == nil && len(promoted) > 0 {
+			resp.Promoted += len(promoted)
+			changed = true
+			needReload = true
+		}
+	}
+	if needReload || (changed && (req.AutoReload || req.PromotePassed)) {
 		_ = s.nodeMgr.TriggerReload(context.Background())
 	}
 	for _, id := range req.NodeIDs {
@@ -509,11 +547,14 @@ func (s *Service) runBatchTestJob(jobID string, req BatchTestRequest) {
 	}
 
 	changed := false
+	needReload := false
 	ctx := context.Background()
 
 	// --- Phase: probe ---
 	if req.Retest {
 		s.updateJob(jobID, func(j *TestJob) { j.Phase = "probe"; j.Done = 0 })
+		updates := make([]ManagedNode, 0, len(nodes))
+		poolNamesToDelete := make([]string, 0)
 		for event := range s.tester.ProbeBatch(ctx, nodes) {
 			node, ok := s.store.GetNode(event.NodeID)
 			if !ok {
@@ -521,18 +562,24 @@ func (s *Service) runBatchTestJob(jobID string, req BatchTestRequest) {
 				continue
 			}
 			if event.Result.Error != nil {
-				_ = s.markFailed(node, event.Result.Error.Error())
+				updated, poolName := failedNodeUpdate(node, event.Result.Error.Error())
+				updates = append(updates, updated)
+				if poolName != "" {
+					poolNamesToDelete = append(poolNamesToDelete, poolName)
+					needReload = true
+				}
 				changed = true
 				s.updateJob(jobID, func(j *TestJob) { j.Done++; j.Failed++ })
 				continue
 			}
-			if err := s.markProbePassed(node, event.Result); err != nil {
-				_ = s.markFailed(node, err.Error())
-				changed = true
-				s.updateJob(jobID, func(j *TestJob) { j.Done++; j.Failed++ })
-				continue
-			}
+			updates = append(updates, probePassedNodeUpdate(node, event.Result))
 			s.updateJob(jobID, func(j *TestJob) { j.Done++; j.Passed++ })
+		}
+		if len(poolNamesToDelete) > 0 {
+			s.deleteConfigNodes(poolNamesToDelete)
+		}
+		if len(updates) > 0 {
+			_ = s.store.UpsertNodes(updates)
 		}
 	}
 
@@ -566,6 +613,9 @@ func (s *Service) runBatchTestJob(jobID string, req BatchTestRequest) {
 			}
 		}
 		s.updateJob(jobID, func(j *TestJob) { j.Phase = "country"; j.Done = 0; j.Total = len(countryNodes) })
+		updates := make([]ManagedNode, 0, len(countryNodes))
+		configUpdates := make(map[string]config.NodeConfig)
+		usedNames := s.usedNodeNames()
 		for event := range s.tester.CountryBatch(ctx, countryNodes) {
 			node, ok := s.store.GetNode(event.NodeID)
 			if !ok {
@@ -575,35 +625,51 @@ func (s *Service) runBatchTestJob(jobID string, req BatchTestRequest) {
 			if event.Result.Error != nil {
 				node.LastError = event.Result.Error.Error()
 				node.UpdatedAt = time.Now()
-				_ = s.store.UpsertNode(node)
+				updates = append(updates, node)
 				s.updateJob(jobID, func(j *TestJob) { j.Done++; j.CountryBad++ })
 				continue
 			}
-			if err := s.markCountry(node, event.Result); err != nil {
-				s.updateJob(jobID, func(j *TestJob) { j.Done++; j.CountryBad++ })
-				continue
+			updated, oldName, needsConfigUpdate := s.countryNodeUpdateWithNames(node, event.Result, usedNames)
+			if needsConfigUpdate {
+				configUpdates[oldName] = updated.ToConfigNode()
+				needReload = true
 			}
+			updates = append(updates, updated)
 			changed = true
 			s.updateJob(jobID, func(j *TestJob) { j.Done++; j.CountryOK++ })
+		}
+		if len(configUpdates) > 0 {
+			if normalized, err := s.updateConfigNodes(configUpdates); err == nil {
+				for i := range updates {
+					if cn, ok := normalized[updates[i].Name]; ok {
+						updates[i].Port = cn.Port
+					}
+				}
+			} else {
+				s.updateJob(jobID, func(j *TestJob) {
+					j.Status = TestJobFailed
+					j.Error = err.Error()
+				})
+				return
+			}
+		}
+		if len(updates) > 0 {
+			_ = s.store.UpsertNodes(updates)
 		}
 	}
 
 	// --- Phase: promote ---
 	if req.PromotePassed {
 		s.updateJob(jobID, func(j *TestJob) { j.Phase = "promote" })
-		for _, id := range req.NodeIDs {
-			n, ok := s.store.GetNode(id)
-			if !ok || n.State != StatePassed || n.InPool {
-				continue
-			}
-			if promoted, err := s.Promote(id, false); err == nil && (promoted.InPool || promoted.State == StateInPool) {
-				changed = true
-				s.updateJob(jobID, func(j *TestJob) { j.Promoted++ })
-			}
+		promoted, err := s.PromoteMany(req.NodeIDs, false)
+		if err == nil && len(promoted) > 0 {
+			changed = true
+			needReload = true
+			s.updateJob(jobID, func(j *TestJob) { j.Promoted += len(promoted) })
 		}
 	}
 
-	if changed && (req.AutoReload || req.PromotePassed) {
+	if needReload || (changed && (req.AutoReload || req.PromotePassed)) {
 		_ = s.nodeMgr.TriggerReload(ctx)
 	}
 
@@ -611,50 +677,16 @@ func (s *Service) runBatchTestJob(jobID string, req BatchTestRequest) {
 }
 
 func (s *Service) markProbePassed(node ManagedNode, result TestResult) error {
-	node.LatencyMs = result.LatencyMs
-	if node.InPool || node.State == StateInPool {
-		node.State = StateInPool
-	} else {
-		node.State = StatePassed
-		node.InPool = false
-		node.Port = 0
-	}
-	node.Enabled = true
-	node.LastError = ""
-	node.LastTestAt = time.Now()
-	return s.store.UpsertNode(node)
+	return s.store.UpsertNode(probePassedNodeUpdate(node, result))
 }
 
 func (s *Service) markPassed(node ManagedNode, result TestResult) error {
-	node.LatencyMs = result.LatencyMs
-	node.CountryCode = result.CountryCode
-	node.CountryName = result.CountryName
-	if node.CountryCode != "" {
-		node.Name = s.nextCountryName(node.ID, node.TagPrefix, node.CountryCode)
-	}
-	if node.InPool || node.State == StateInPool {
-		node.State = StateInPool
-	} else {
-		node.State = StatePassed
-		node.InPool = false
-		node.Port = 0
-	}
-	node.Enabled = true
-	node.LastError = ""
-	node.LastTestAt = time.Now()
-	return s.store.UpsertNode(node)
+	return s.store.UpsertNode(s.passedNodeUpdateWithNames(node, result, s.usedNodeNames()))
 }
 
 func (s *Service) markCountry(node ManagedNode, result TestResult) error {
-	oldName := node.Name
-	node.CountryCode = result.CountryCode
-	node.CountryName = result.CountryName
-	if node.CountryCode != "" {
-		node.Name = s.nextCountryName(node.ID, node.TagPrefix, node.CountryCode)
-	}
-	node.LastError = ""
-	node.LastTestAt = time.Now()
-	if (node.InPool || node.State == StateInPool) && oldName != "" && node.Name != oldName {
+	node, oldName, needsConfigUpdate := s.countryNodeUpdateWithNames(node, result, s.usedNodeNames())
+	if needsConfigUpdate {
 		updater, ok := s.nodeMgr.(NodeUpdater)
 		if !ok {
 			return s.store.UpsertNode(node)
@@ -670,8 +702,66 @@ func (s *Service) markCountry(node ManagedNode, result TestResult) error {
 }
 
 func (s *Service) markFailed(node ManagedNode, lastErr string) error {
-	wasInPool := node.InPool || node.State == StateInPool
+	node, oldName := failedNodeUpdate(node, lastErr)
+	if err := s.store.UpsertNode(node); err != nil {
+		return err
+	}
+	if oldName != "" {
+		s.deleteConfigNodes([]string{oldName})
+		_ = s.nodeMgr.TriggerReload(context.Background())
+	}
+	return nil
+}
+
+func probePassedNodeUpdate(node ManagedNode, result TestResult) ManagedNode {
+	node.LatencyMs = result.LatencyMs
+	if node.InPool || node.State == StateInPool {
+		node.State = StateInPool
+	} else {
+		node.State = StatePassed
+		node.InPool = false
+		node.Port = 0
+	}
+	node.Enabled = true
+	node.LastError = ""
+	node.LastTestAt = time.Now()
+	return node
+}
+
+func (s *Service) passedNodeUpdateWithNames(node ManagedNode, result TestResult, usedNames map[string]struct{}) ManagedNode {
+	node = probePassedNodeUpdate(node, result)
+	node.CountryCode = result.CountryCode
+	node.CountryName = result.CountryName
+	if node.CountryCode != "" {
+		if usedNames != nil && node.Name != "" {
+			delete(usedNames, node.Name)
+		}
+		node.Name = nextCountryNameWithNames(node.TagPrefix, node.CountryCode, usedNames)
+	}
+	return node
+}
+
+func (s *Service) countryNodeUpdateWithNames(node ManagedNode, result TestResult, usedNames map[string]struct{}) (ManagedNode, string, bool) {
 	oldName := node.Name
+	node.CountryCode = result.CountryCode
+	node.CountryName = result.CountryName
+	if node.CountryCode != "" {
+		if usedNames != nil && oldName != "" {
+			delete(usedNames, oldName)
+		}
+		node.Name = nextCountryNameWithNames(node.TagPrefix, node.CountryCode, usedNames)
+	}
+	node.LastError = ""
+	node.LastTestAt = time.Now()
+	needsConfigUpdate := (node.InPool || node.State == StateInPool) && oldName != "" && node.Name != oldName
+	return node, oldName, needsConfigUpdate
+}
+
+func failedNodeUpdate(node ManagedNode, lastErr string) (ManagedNode, string) {
+	oldName := ""
+	if node.InPool || node.State == StateInPool {
+		oldName = node.Name
+	}
 	node.State = StateFailed
 	node.InPool = false
 	node.Port = 0
@@ -681,16 +771,7 @@ func (s *Service) markFailed(node ManagedNode, lastErr string) error {
 	node.Name = taggedOriginalName(node.TagPrefix, node.OriginalName)
 	node.LastError = lastErr
 	node.LastTestAt = time.Now()
-	if err := s.store.UpsertNode(node); err != nil {
-		return err
-	}
-	if wasInPool {
-		if remover, ok := s.nodeMgr.(NodeRemover); ok && oldName != "" {
-			_ = remover.DeleteNode(context.Background(), oldName)
-		}
-		_ = s.nodeMgr.TriggerReload(context.Background())
-	}
-	return nil
+	return node, oldName
 }
 
 func (s *Service) Promote(nodeID string, autoReload bool) (ManagedNode, error) {
@@ -722,6 +803,61 @@ func (s *Service) Promote(nodeID string, autoReload bool) (ManagedNode, error) {
 	return n, nil
 }
 
+func (s *Service) PromoteMany(nodeIDs []string, autoReload bool) ([]ManagedNode, error) {
+	if len(nodeIDs) == 0 {
+		return nil, fmt.Errorf("请选择要加入节点池的节点")
+	}
+	nodes := make([]ManagedNode, 0, len(nodeIDs))
+	for _, id := range nodeIDs {
+		node, ok := s.store.GetNode(id)
+		if !ok || node.InPool || node.State == StateInPool || node.State != StatePassed {
+			continue
+		}
+		nodes = append(nodes, node)
+	}
+	if len(nodes) == 0 {
+		return nil, nil
+	}
+
+	configNodes := make([]config.NodeConfig, 0, len(nodes))
+	for _, node := range nodes {
+		configNodes = append(configNodes, node.ToConfigNode())
+	}
+
+	created := make([]config.NodeConfig, 0, len(configNodes))
+	if creator, ok := s.nodeMgr.(NodeBatchCreator); ok {
+		var err error
+		created, err = creator.CreateNodes(context.Background(), configNodes)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		for _, cn := range configNodes {
+			createdNode, err := s.nodeMgr.CreateNode(context.Background(), cn)
+			if err != nil {
+				return nil, err
+			}
+			created = append(created, createdNode)
+		}
+	}
+
+	ports := make(map[string]uint16, len(created))
+	for i, cn := range created {
+		if i >= len(nodes) {
+			break
+		}
+		ports[nodes[i].ID] = cn.Port
+	}
+	updated, err := s.store.MarkInPoolMany(ports)
+	if err != nil {
+		return nil, fmt.Errorf("mark in pool: %w", err)
+	}
+	if autoReload && len(updated) > 0 {
+		_ = s.nodeMgr.TriggerReload(context.Background())
+	}
+	return updated, nil
+}
+
 func (s *Service) Exclude(nodeID string) (ManagedNode, error) {
 	node, ok := s.store.GetNode(nodeID)
 	if !ok {
@@ -742,12 +878,51 @@ func (s *Service) Delete(nodeID string) error {
 		return fmt.Errorf("节点 %s 不存在", nodeID)
 	}
 	if node.InPool || node.State == StateInPool {
-		if remover, ok := s.nodeMgr.(NodeRemover); ok && node.Name != "" {
-			_ = remover.DeleteNode(context.Background(), node.Name)
-		}
+		s.deleteConfigNodes([]string{node.Name})
 		_ = s.nodeMgr.TriggerReload(context.Background())
 	}
 	return s.store.DeleteNode(nodeID)
+}
+
+func (s *Service) DeleteMany(nodeIDs []string) (int, error) {
+	if len(nodeIDs) == 0 {
+		return 0, fmt.Errorf("请选择要删除的节点")
+	}
+	want := make(map[string]struct{}, len(nodeIDs))
+	for _, id := range nodeIDs {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			want[id] = struct{}{}
+		}
+	}
+	if len(want) == 0 {
+		return 0, fmt.Errorf("请选择要删除的节点")
+	}
+
+	all := s.store.ListNodes()
+	storeIDs := make([]string, 0, len(want))
+	poolNames := make([]string, 0)
+	for _, n := range all {
+		if _, ok := want[n.ID]; !ok {
+			continue
+		}
+		storeIDs = append(storeIDs, n.ID)
+		if (n.InPool || n.State == StateInPool) && strings.TrimSpace(n.Name) != "" {
+			poolNames = append(poolNames, n.Name)
+		}
+	}
+	if len(storeIDs) == 0 {
+		return 0, fmt.Errorf("没有找到可删除的节点")
+	}
+
+	if len(poolNames) > 0 {
+		s.deleteConfigNodes(poolNames)
+		_ = s.nodeMgr.TriggerReload(context.Background())
+	}
+	if err := s.store.DeleteNodes(storeIDs); err != nil {
+		return 0, err
+	}
+	return len(storeIDs), nil
 }
 
 // DeleteBySubscription deletes every ManagedNode whose ImportSource matches the
@@ -760,26 +935,76 @@ func (s *Service) DeleteBySubscription(url string) (int, error) {
 		return 0, fmt.Errorf("订阅 URL 不能为空")
 	}
 	all := s.store.ListNodes()
-	remover, _ := s.nodeMgr.(NodeRemover)
-	touchedPool := false
-	deleted := 0
+	ids := make([]string, 0)
+	poolNames := make([]string, 0)
 	for _, n := range all {
 		if n.ImportSource != url {
 			continue
 		}
-		if (n.InPool || n.State == StateInPool) && remover != nil && n.Name != "" {
-			_ = remover.DeleteNode(context.Background(), n.Name)
-			touchedPool = true
+		ids = append(ids, n.ID)
+		if (n.InPool || n.State == StateInPool) && strings.TrimSpace(n.Name) != "" {
+			poolNames = append(poolNames, n.Name)
 		}
-		if err := s.store.DeleteNode(n.ID); err != nil {
-			return deleted, fmt.Errorf("删除节点 %s: %w", n.ID, err)
-		}
-		deleted++
 	}
-	if touchedPool {
+	if len(poolNames) > 0 {
+		s.deleteConfigNodes(poolNames)
 		_ = s.nodeMgr.TriggerReload(context.Background())
 	}
-	return deleted, nil
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	if err := s.store.DeleteNodes(ids); err != nil {
+		return 0, err
+	}
+	return len(ids), nil
+}
+
+func (s *Service) deleteConfigNodes(names []string) {
+	clean := make([]string, 0, len(names))
+	seen := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		clean = append(clean, name)
+	}
+	if len(clean) == 0 {
+		return
+	}
+	if remover, ok := s.nodeMgr.(NodeBatchRemover); ok {
+		_ = remover.DeleteNodes(context.Background(), clean)
+		return
+	}
+	if remover, ok := s.nodeMgr.(NodeRemover); ok {
+		for _, name := range clean {
+			_ = remover.DeleteNode(context.Background(), name)
+		}
+	}
+}
+
+func (s *Service) updateConfigNodes(nodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
+	if len(nodes) == 0 {
+		return nil, nil
+	}
+	if updater, ok := s.nodeMgr.(NodeBatchUpdater); ok {
+		return updater.UpdateNodes(context.Background(), nodes)
+	}
+	updated := make(map[string]config.NodeConfig, len(nodes))
+	if updater, ok := s.nodeMgr.(NodeUpdater); ok {
+		for oldName, node := range nodes {
+			cn, err := updater.UpdateNode(context.Background(), oldName, node)
+			if err != nil {
+				return updated, err
+			}
+			updated[cn.Name] = cn
+		}
+	}
+	return updated, nil
 }
 
 func (s *Service) ListAll() ([]ManagedNode, error) {
@@ -858,6 +1083,30 @@ func (s *Service) syncRuntimeNodes(nodes []ManagedNode) []ManagedNode {
 }
 
 func (s *Service) nextCountryName(currentID, tagPrefix, countryCode string) string {
+	used := s.usedNodeNames()
+	if currentID != "" {
+		for _, n := range s.store.ListNodes() {
+			if n.ID == currentID {
+				delete(used, n.Name)
+				break
+			}
+		}
+	}
+	return nextCountryNameWithNames(tagPrefix, countryCode, used)
+}
+
+func (s *Service) usedNodeNames() map[string]struct{} {
+	nodes := s.store.ListNodes()
+	used := make(map[string]struct{}, len(nodes))
+	for _, n := range nodes {
+		if n.Name != "" {
+			used[n.Name] = struct{}{}
+		}
+	}
+	return used
+}
+
+func nextCountryNameWithNames(tagPrefix, countryCode string, used map[string]struct{}) string {
 	tagPrefix = strings.TrimSpace(tagPrefix)
 	if tagPrefix == "" {
 		tagPrefix = "local"
@@ -866,18 +1115,17 @@ func (s *Service) nextCountryName(currentID, tagPrefix, countryCode string) stri
 	if countryCode == "" {
 		return tagPrefix
 	}
-	country := countryDisplayName(countryCode)
-	prefix := tagPrefix + "-" + country
-	next := 1
-	for _, n := range s.store.ListNodes() {
-		if n.ID == currentID {
-			continue
+	prefix := tagPrefix + "-" + countryDisplayName(countryCode)
+	for next := 1; ; next++ {
+		name := fmt.Sprintf("%s%d", prefix, next)
+		if used == nil {
+			return name
 		}
-		if strings.HasPrefix(n.Name, prefix) {
-			next++
+		if _, exists := used[name]; !exists {
+			used[name] = struct{}{}
+			return name
 		}
 	}
-	return fmt.Sprintf("%s%d", prefix, next)
 }
 
 func countryDisplayName(code string) string {

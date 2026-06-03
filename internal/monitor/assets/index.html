@@ -233,6 +233,7 @@ const S={
   importKind:'uri',
   importText:'',
   tagPrefix:'local',
+  importAutoPromote:localStorage.getItem('easy_proxies_import_auto_promote')!=='0',
   importSummary:null,
   nodes:[],
   viewNodes:[],
@@ -961,8 +962,9 @@ function renderImport(){
           <div style="flex:1"><strong>${esc(importKindLabel())}</strong><span>${esc(importKindHelp())}</span></div>
           <button class="btn green format-main" onclick="directImport()">导入并测试</button>
         </div>
-        <div class="meta"><span class="pill green">${esc(importKindLabel())}</span><span class="pill">成功节点进入候选池</span><span class="pill red">失败节点保留待重测</span></div>
+        <div class="meta"><span class="pill green">${esc(importKindLabel())}</span><span class="pill">${S.importAutoPromote?'成功节点自动加入节点池':'成功节点进入候选池'}</span><span class="pill red">失败节点保留待重测</span></div>
         <div class="field"><label>Tag 前缀</label><input id="tagPrefix" value="local" oninput="S.tagPrefix=this.value"></div>
+        <label class="row"><input id="importAutoPromote" type="checkbox" ${S.importAutoPromote?'checked':''} style="width:auto" onchange="setImportAutoPromote(this.checked)"> 测速成功后自动加入节点池 <span class="muted">默认开启；关闭后成功节点进入候选节点。</span></label>
         <div class="field"><label>${esc(importInputLabel())}</label><textarea id="importContent" placeholder="${esc(importPlaceholder())}" oninput="S.importText=this.value"></textarea></div>
         <div class="progress"><div id="jobBar"></div></div>
         <p class="status" id="importStatus"></p>
@@ -972,6 +974,11 @@ function renderImport(){
   </div>`;
   qs('#tagPrefix').value=S.tagPrefix||'local';
   qs('#importContent').value=S.importText||'';
+}
+function setImportAutoPromote(v){
+  S.importAutoPromote=!!v;
+  localStorage.setItem('easy_proxies_import_auto_promote',S.importAutoPromote?'1':'0');
+  renderImport();
 }
 function openImportTypeModal(){qs('#importTypeModal').classList.add('show')}
 function closeImportTypeModal(){qs('#importTypeModal').classList.remove('show')}
@@ -1024,10 +1031,10 @@ async function importOne(body,label){
   const parsed=await api('/api/import/parse',{method:'POST',body:JSON.stringify(body)});
   const nodes=Array.isArray(parsed.nodes)?parsed.nodes:[];
   if(!nodes.length)throw new Error('未解析到任何节点');
-  S.importSummary={status:'running',title:`已解析 ${nodes.length} 个节点`,detail:`来源 ${label}，格式 ${parsed.format || 'unknown'}，正在测试；成功节点会进入候选池`};
+  S.importSummary={status:'running',title:`已解析 ${nodes.length} 个节点`,detail:`来源 ${label}，格式 ${parsed.format || 'unknown'}，正在测试；成功节点${S.importAutoPromote?'会自动加入节点池':'会进入候选池'}`};
   renderImport();
   const ids=nodes.map(n=>n.id).filter(Boolean);
-  const res=await api('/api/import/'+parsed.import_id+'/commit',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true})});
+  const res=await api('/api/import/'+parsed.import_id+'/commit',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true,promote_passed:S.importAutoPromote})});
   S.lastJob=res.job_id;
   await pollJob(res.job_id);
 }
@@ -1044,8 +1051,8 @@ async function pollJob(id){
     const done=(j.passed||0)+(j.failed||0);
     const pct=j.total?Math.round(done*100/j.total):0;
     if(bar)bar.style.width=pct+'%';
-    if(status)status.textContent=`${j.status}: ${done}/${j.total}，候选 ${j.passed||0}，失败 ${j.failed||0}`;
-    S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`进度 ${done}/${j.total}，候选 ${j.passed||0}，失败 ${j.failed||0}${j.error?'，错误: '+j.error:''}`};
+    if(status)status.textContent=`${j.status}: ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
+    S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`进度 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
     if(j.status==='completed'||j.status==='failed'){toast('导入任务结束');await loadManaged();renderNav();renderImport();break}
     await new Promise(r=>setTimeout(r,1000));
   }
@@ -1158,7 +1165,7 @@ function bulkScopeIds(scopes){
   return [...ids];
 }
 function renderBulk(){
-  const sel=S.bulkSel=S.bulkSel||{candidate:true,pool:false,failed:false,retest:true,country:false,promote:false};
+  const sel=S.bulkSel=S.bulkSel||{candidate:true,pool:true,failed:true,retest:true,country:false,promote:true};
   const nodes=S.nodes||[];
   const counts={
     candidate:nodes.filter(n=>!inPool(n)&&n.state==='passed').length,

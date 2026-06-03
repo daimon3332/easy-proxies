@@ -39,17 +39,17 @@ type NodeTester struct {
 type TesterOption func(*NodeTester)
 
 func NewNodeTester(buildFn OutboundBuilder, opts ...TesterOption) *NodeTester {
-	concurrency := runtime.NumCPU() * 8
-	if concurrency > 64 {
-		concurrency = 64
+	concurrency := runtime.NumCPU() * 2
+	if concurrency > 16 {
+		concurrency = 16
 	}
-	if concurrency < 8 {
-		concurrency = 8
+	if concurrency < 4 {
+		concurrency = 4
 	}
 	t := &NodeTester{
 		probeTarget:   "www.gstatic.com/generate_204",
 		ipinfoURL:     "https://ipinfo.io/json",
-		timeout:       5 * time.Second,
+		timeout:       10 * time.Second,
 		concurrency:   concurrency,
 		buildOutbound: buildFn,
 	}
@@ -81,9 +81,6 @@ func WithIPInfoURL(u string) TesterOption {
 func WithTesterTimeout(d time.Duration) TesterOption {
 	return func(t *NodeTester) {
 		if d > 0 {
-			if d > 5*time.Second {
-				d = 5 * time.Second
-			}
 			t.timeout = d
 		}
 	}
@@ -112,43 +109,15 @@ func (t *NodeTester) Test(ctx context.Context, node ManagedNode) (result TestRes
 	}
 	defer closeClient()
 
-	// Probe and country lookup share the same proxy client and run in parallel
-	// to halve the per-node wall time. Probe is authoritative for pass/fail;
-	// country is best-effort and a country failure on an otherwise-passing
-	// node returns latency + Error (matches legacy semantics).
-	var (
-		wg                       sync.WaitGroup
-		latency                  int64
-		probeErr, countryErr     error
-		countryCode, countryName string
-	)
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		start := time.Now()
-		if err := t.probe(ctx, client); err != nil {
-			probeErr = err
-			return
-		}
-		latency = time.Since(start).Milliseconds()
-	}()
-	go func() {
-		defer wg.Done()
-		code, name, err := t.lookupCountry(ctx, client)
-		if err != nil {
-			countryErr = err
-			return
-		}
-		countryCode, countryName = code, name
-	}()
-	wg.Wait()
+	start := time.Now()
+	if err := t.probe(ctx, client); err != nil {
+		return TestResult{Error: err}
+	}
+	latency := time.Since(start).Milliseconds()
 
-	if probeErr != nil {
-		return TestResult{Error: probeErr}
-	}
-	if countryErr != nil {
-		return TestResult{LatencyMs: latency, Error: countryErr}
-	}
+	countryCtx, cancel := context.WithTimeout(ctx, minDuration(t.timeout/3, 5*time.Second))
+	defer cancel()
+	countryCode, countryName, _ := t.lookupCountry(countryCtx, client)
 	return TestResult{
 		LatencyMs:   latency,
 		CountryCode: strings.ToUpper(countryCode),
@@ -483,4 +452,11 @@ func safeTagPart(s string) string {
 
 func netipAddr127() netip.Addr {
 	return netip.AddrFrom4([4]byte{127, 0, 0, 1})
+}
+
+func minDuration(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
 }

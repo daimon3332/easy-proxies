@@ -14,6 +14,7 @@ type batchNodeManagerStub struct {
 	deletedBatches [][]string
 	reloadCount    int
 	nextPort       uint16
+	configNodes    []config.NodeConfig
 }
 
 func (m *batchNodeManagerStub) CreateNode(ctx context.Context, node config.NodeConfig) (config.NodeConfig, error) {
@@ -35,7 +36,15 @@ func (m *batchNodeManagerStub) CreateNodes(ctx context.Context, nodes []config.N
 		node.Port = m.nextPort
 		m.nextPort++
 		out[i] = node
+		m.configNodes = append(m.configNodes, node)
 	}
+	return out, nil
+}
+
+func (m *batchNodeManagerStub) ListConfigNodes(ctx context.Context) ([]config.NodeConfig, error) {
+	_ = ctx
+	out := make([]config.NodeConfig, len(m.configNodes))
+	copy(out, m.configNodes)
 	return out, nil
 }
 
@@ -94,6 +103,68 @@ func TestPromoteManyUsesSingleConfigBatchAndReload(t *testing.T) {
 		if !ok || !node.InPool || node.State != StateInPool || node.Port == 0 {
 			t.Fatalf("node %s not marked in pool correctly: %#v found=%v", id, node, ok)
 		}
+	}
+}
+
+func TestPromoteManyDeletesExistingCandidatesAndContinues(t *testing.T) {
+	mgr := &batchNodeManagerStub{
+		nextPort: 25000,
+		configNodes: []config.NodeConfig{
+			{Name: "tag-US1", URI: "vmess://one", Port: 24000},
+		},
+	}
+	svc, store := newBatchServiceForTest(t, mgr)
+
+	nodes := []ManagedNode{
+		{ID: "existing", Name: "tag-US1", URI: "vmess://one", State: StatePassed, Enabled: true},
+		{ID: "new", Name: "tag-JP1", URI: "vmess://two", State: StatePassed, Enabled: true},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	promoted, err := svc.PromoteMany([]string{"existing", "new"}, true)
+	if err != nil {
+		t.Fatalf("PromoteMany() error = %v", err)
+	}
+	if len(promoted) != 1 || promoted[0].ID != "new" {
+		t.Fatalf("PromoteMany() promoted %#v, want only new", promoted)
+	}
+	if _, ok := store.GetNode("existing"); ok {
+		t.Fatal("existing candidate should be deleted from store")
+	}
+	newNode, ok := store.GetNode("new")
+	if !ok || !newNode.InPool || newNode.State != StateInPool {
+		t.Fatalf("new node not promoted correctly: %#v found=%v", newNode, ok)
+	}
+}
+
+func TestPromoteManyRenamesDuplicateCandidateNames(t *testing.T) {
+	mgr := &batchNodeManagerStub{nextPort: 25000}
+	svc, store := newBatchServiceForTest(t, mgr)
+
+	nodes := []ManagedNode{
+		{ID: "n1", Name: "free1-node", URI: "vmess://one", State: StatePassed, Enabled: true},
+		{ID: "n2", Name: "free1-node", URI: "vmess://two", State: StatePassed, Enabled: true},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	promoted, err := svc.PromoteMany([]string{"n1", "n2"}, true)
+	if err != nil {
+		t.Fatalf("PromoteMany() error = %v", err)
+	}
+	if len(promoted) != 2 {
+		t.Fatalf("PromoteMany() promoted %d nodes, want 2", len(promoted))
+	}
+	n1, _ := store.GetNode("n1")
+	n2, _ := store.GetNode("n2")
+	if n1.Name != "free1-node" || n2.Name != "free1-node-2" {
+		t.Fatalf("names = %q, %q; want free1-node, free1-node-2", n1.Name, n2.Name)
+	}
+	if !n1.InPool || !n2.InPool {
+		t.Fatalf("nodes should both be in pool: %#v %#v", n1, n2)
 	}
 }
 

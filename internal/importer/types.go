@@ -64,6 +64,7 @@ type ImportJob struct {
 	Total     int          `json:"total"`
 	Passed    int          `json:"passed"`
 	Failed    int          `json:"failed"`
+	Promoted  int          `json:"promoted"`
 	Error     string       `json:"error,omitempty"`
 	NodeIDs   []string     `json:"node_ids"`
 	CreatedAt time.Time    `json:"created_at"`
@@ -84,8 +85,9 @@ type ParseResponse struct {
 }
 
 type CommitRequest struct {
-	NodeIDs    []string `json:"node_ids,omitempty"`
-	AutoReload bool     `json:"auto_reload"`
+	NodeIDs       []string `json:"node_ids,omitempty"`
+	AutoReload    bool     `json:"auto_reload"`
+	PromotePassed bool     `json:"promote_passed"`
 }
 
 type CommitResponse struct {

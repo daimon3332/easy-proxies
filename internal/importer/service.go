@@ -239,22 +239,23 @@ func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, er
 		return CommitResponse{}, err
 	}
 
-	go s.runPipeline(jobID, nodes)
+	go s.runPipeline(jobID, nodes, req.PromotePassed)
 
 	return CommitResponse{JobID: jobID}, nil
 }
 
-func (s *Service) runPipeline(jobID string, nodes []ManagedNode) {
+func (s *Service) runPipeline(jobID string, nodes []ManagedNode, promotePassed bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	total := len(nodes)
 	passed := 0
 	failed := 0
+	promoted := 0
 	updates := make([]ManagedNode, 0, len(nodes))
-	usedNames := s.usedNodeNames()
+	passedIDs := make([]string, 0, len(nodes))
 
-	for event := range s.tester.TestBatch(ctx, nodes) {
+	for event := range s.tester.ProbeBatch(ctx, nodes) {
 		node, ok := s.store.GetNode(event.NodeID)
 		if !ok {
 			continue
@@ -264,12 +265,23 @@ func (s *Service) runPipeline(jobID string, nodes []ManagedNode) {
 			updates = append(updates, updated)
 			failed++
 		} else {
-			updates = append(updates, s.passedNodeUpdateWithNames(node, event.Result, usedNames))
+			updates = append(updates, probePassedNodeUpdate(node, event.Result))
+			passedIDs = append(passedIDs, node.ID)
 			passed++
 		}
 	}
 	if len(updates) > 0 {
 		_ = s.store.UpsertNodes(updates)
+	}
+	if promotePassed && len(passedIDs) > 0 {
+		if promotedNodes, err := s.PromoteMany(passedIDs, true); err == nil {
+			promoted = len(promotedNodes)
+		} else {
+			s.store.UpdateJob(jobID, func(j *ImportJob) {
+				j.Error = err.Error()
+				j.UpdatedAt = time.Now()
+			})
+		}
 	}
 
 	status := ImportStatusCompleted
@@ -280,11 +292,12 @@ func (s *Service) runPipeline(jobID string, nodes []ManagedNode) {
 		j.Status = status
 		j.Passed = passed
 		j.Failed = failed
+		j.Promoted = promoted
 		j.UpdatedAt = time.Now()
 	})
 
-	// Successful imports become candidates first. They are only written into the
-	// runtime proxy pool when the user explicitly promotes them.
+	// Initial import is a pure generate_204 probe. Depending on the UI option,
+	// passed nodes either remain candidates or are promoted into the runtime pool.
 }
 
 func (s *Service) Retest(nodeID string) (ManagedNode, error) {
@@ -808,15 +821,45 @@ func (s *Service) PromoteMany(nodeIDs []string, autoReload bool) ([]ManagedNode,
 		return nil, fmt.Errorf("请选择要加入节点池的节点")
 	}
 	nodes := make([]ManagedNode, 0, len(nodeIDs))
+	duplicateIDs := make([]string, 0)
+	existingNames, existingURIs := s.existingConfigNodeKeys()
+	usedNames := make(map[string]struct{}, len(existingNames)+len(nodeIDs))
+	for name := range existingNames {
+		usedNames[name] = struct{}{}
+	}
+	seenURIs := make(map[string]struct{}, len(nodeIDs))
 	for _, id := range nodeIDs {
 		node, ok := s.store.GetNode(id)
 		if !ok || node.InPool || node.State == StateInPool || node.State != StatePassed {
 			continue
 		}
+		name := strings.TrimSpace(node.Name)
+		uri := strings.TrimSpace(node.URI)
+		if uri != "" {
+			if _, ok := existingURIs[uri]; ok {
+				duplicateIDs = append(duplicateIDs, node.ID)
+				continue
+			}
+			if _, ok := seenURIs[uri]; ok {
+				duplicateIDs = append(duplicateIDs, node.ID)
+				continue
+			}
+			seenURIs[uri] = struct{}{}
+		}
+		if name == "" {
+			name = taggedOriginalName(node.TagPrefix, node.OriginalName)
+		}
+		node.Name = nextUniqueName(name, usedNames)
 		nodes = append(nodes, node)
+	}
+	if len(duplicateIDs) > 0 {
+		_ = s.store.DeleteNodes(duplicateIDs)
 	}
 	if len(nodes) == 0 {
 		return nil, nil
+	}
+	if err := s.store.UpsertNodes(nodes); err != nil {
+		return nil, err
 	}
 
 	configNodes := make([]config.NodeConfig, 0, len(nodes))
@@ -825,28 +868,55 @@ func (s *Service) PromoteMany(nodeIDs []string, autoReload bool) ([]ManagedNode,
 	}
 
 	created := make([]config.NodeConfig, 0, len(configNodes))
+	createdIDs := make([]string, 0, len(configNodes))
 	if creator, ok := s.nodeMgr.(NodeBatchCreator); ok {
 		var err error
 		created, err = creator.CreateNodes(context.Background(), configNodes)
 		if err != nil {
-			return nil, err
+			created = created[:0]
+			createdIDs = createdIDs[:0]
+			for i, cn := range configNodes {
+				createdNode, createErr := s.nodeMgr.CreateNode(context.Background(), cn)
+				if createErr != nil {
+					if isNodeConflict(createErr) {
+						_ = s.store.DeleteNode(nodes[i].ID)
+						continue
+					}
+					return nil, createErr
+				}
+				created = append(created, createdNode)
+				createdIDs = append(createdIDs, nodes[i].ID)
+			}
 		}
 	} else {
-		for _, cn := range configNodes {
+		for i, cn := range configNodes {
 			createdNode, err := s.nodeMgr.CreateNode(context.Background(), cn)
 			if err != nil {
+				if isNodeConflict(err) {
+					_ = s.store.DeleteNode(nodes[i].ID)
+					continue
+				}
 				return nil, err
 			}
 			created = append(created, createdNode)
+			createdIDs = append(createdIDs, nodes[i].ID)
+		}
+	}
+	if len(createdIDs) == 0 && len(created) > 0 {
+		for i := range created {
+			if i >= len(nodes) {
+				break
+			}
+			createdIDs = append(createdIDs, nodes[i].ID)
 		}
 	}
 
 	ports := make(map[string]uint16, len(created))
 	for i, cn := range created {
-		if i >= len(nodes) {
+		if i >= len(createdIDs) {
 			break
 		}
-		ports[nodes[i].ID] = cn.Port
+		ports[createdIDs[i]] = cn.Port
 	}
 	updated, err := s.store.MarkInPoolMany(ports)
 	if err != nil {
@@ -856,6 +926,60 @@ func (s *Service) PromoteMany(nodeIDs []string, autoReload bool) ([]ManagedNode,
 		_ = s.nodeMgr.TriggerReload(context.Background())
 	}
 	return updated, nil
+}
+
+func (s *Service) existingConfigNodeKeys() (map[string]struct{}, map[string]struct{}) {
+	names := make(map[string]struct{})
+	uris := make(map[string]struct{})
+	lister, ok := s.nodeMgr.(NodeLister)
+	if !ok {
+		return names, uris
+	}
+	configNodes, err := lister.ListConfigNodes(context.Background())
+	if err != nil {
+		return names, uris
+	}
+	for _, cn := range configNodes {
+		if name := strings.TrimSpace(cn.Name); name != "" {
+			names[name] = struct{}{}
+		}
+		if uri := strings.TrimSpace(cn.URI); uri != "" {
+			uris[uri] = struct{}{}
+		}
+	}
+	return names, uris
+}
+
+func isNodeConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "节点名称或端口已存在") ||
+		strings.Contains(msg, "节点已存在") ||
+		strings.Contains(msg, "已存在") ||
+		strings.Contains(strings.ToLower(msg), "already exists")
+}
+
+func nextUniqueName(base string, used map[string]struct{}) string {
+	base = strings.TrimSpace(base)
+	if base == "" {
+		base = "node"
+	}
+	if used == nil {
+		return base
+	}
+	if _, exists := used[base]; !exists {
+		used[base] = struct{}{}
+		return base
+	}
+	for next := 2; ; next++ {
+		name := fmt.Sprintf("%s-%d", base, next)
+		if _, exists := used[name]; !exists {
+			used[name] = struct{}{}
+			return name
+		}
+	}
 }
 
 func (s *Service) Exclude(nodeID string) (ManagedNode, error) {

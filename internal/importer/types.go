@@ -62,10 +62,15 @@ const (
 type ImportJob struct {
 	ID        string       `json:"id"`
 	Status    ImportStatus `json:"status"`
+	Mode      string       `json:"mode,omitempty"`
+	Format    string       `json:"format,omitempty"`
+	TagPrefix string       `json:"tag_prefix,omitempty"`
+	Source    string       `json:"source,omitempty"`
 	Total     int          `json:"total"`
 	Passed    int          `json:"passed"`
 	Failed    int          `json:"failed"`
 	Promoted  int          `json:"promoted"`
+	Detail    string       `json:"detail,omitempty"`
 	Error     string       `json:"error,omitempty"`
 	NodeIDs   []string     `json:"node_ids"`
 	CreatedAt time.Time    `json:"created_at"`

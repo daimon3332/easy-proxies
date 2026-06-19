@@ -215,7 +215,7 @@ pre.log-view{height:100%;max-height:none}
     <h2>选择导入格式</h2>
     <div class="format-grid">
       <button class="format-choice" onclick="chooseImportKind('sub_url')"><strong>订阅链接格式</strong><span>http/https 开头；可每行一个订阅链接，内容可为 Clash、Base64 或 URI。</span></button>
-      <button class="format-choice" onclick="chooseImportKind('uri')"><strong>URI 格式</strong><span>每行一个 ss://、trojan://、vmess://、vless:// 等节点。</span></button>
+      <button class="format-choice" onclick="chooseImportKind('uri')"><strong>URI 格式</strong><span>每行一个 ss://、trojan://、vmess://、vless://、http://、https://、socks5://、socks4:// 等节点。</span></button>
       <button class="format-choice" onclick="chooseImportKind('base64')"><strong>Base64 格式</strong><span>粘贴 Base64 编码后的节点列表。</span></button>
       <button class="format-choice" onclick="chooseImportKind('clash')"><strong>Clash YAML 格式</strong><span>粘贴包含 proxies: 的 Clash 配置；只提取节点。</span></button>
     </div>
@@ -1029,7 +1029,7 @@ function renderImport(){
         <div class="meta"><span class="pill green">${esc(importKindLabel())}</span><span class="pill">${S.importAutoPromote?'成功节点自动加入节点池':'成功节点进入候选池'}</span><span class="pill red">失败节点保留待重测</span></div>
         <div class="field"><label>Tag 前缀</label><input id="tagPrefix" value="local" oninput="S.tagPrefix=this.value"></div>
         <label class="row"><input id="importAutoPromote" type="checkbox" ${S.importAutoPromote?'checked':''} style="width:auto" onchange="setImportAutoPromote(this.checked)"> 测速成功后自动加入节点池 <span class="muted">默认开启；关闭后成功节点进入候选节点。</span></label>
-        <div class="field"><label>${esc(importInputLabel())}</label><textarea id="importContent" placeholder="${esc(importPlaceholder())}" oninput="S.importText=this.value"></textarea></div>
+        ${importFields()}
         <div class="progress"><div id="jobBar"></div></div>
         <div class="row" style="justify-content:space-between;align-items:center">
           <p class="status" id="importStatus"></p>
@@ -1040,7 +1040,7 @@ function renderImport(){
     </div>
   </div>`;
   qs('#tagPrefix').value=S.tagPrefix||'local';
-  qs('#importContent').value=S.importText||'';
+  if(qs('#importContent'))qs('#importContent').value=S.importText||'';
 }
 function setImportAutoPromote(v){
   S.importAutoPromote=!!v;
@@ -1056,13 +1056,16 @@ function chooseImportKind(kind){
   renderImport();
 }
 function importKindLabel(){return {sub_url:'订阅链接格式',uri:'URI 格式',base64:'Base64 格式',clash:'Clash YAML 格式'}[S.importKind]||'URI 格式'}
-function importKindHelp(){return {sub_url:'每行一个 http/https 订阅链接，链接内容会自动识别。',uri:'每行一个节点 URI。',base64:'粘贴 Base64 编码后的节点列表。',clash:'粘贴 Clash YAML，只提取 proxies 节点。'}[S.importKind]||'每行一个节点 URI。'}
+function importKindHelp(){return {sub_url:'每行一个 http/https 订阅链接，链接内容会自动识别。',uri:'每行一个节点 URI，支持 ss / trojan / vmess / vless / http / https / socks5 / socks4 等协议。',base64:'粘贴 Base64 编码后的节点列表。',clash:'粘贴 Clash YAML，只提取 proxies 节点。'}[S.importKind]||'每行一个节点 URI。'}
 function importInputLabel(){return S.importKind==='sub_url'?'订阅链接（每行一个）':S.importKind==='uri'?'URI 节点（每行一个）':S.importKind==='base64'?'Base64 内容':'Clash YAML 内容'}
 function importPlaceholder(){
   if(S.importKind==='sub_url')return 'https://example.com/sub1\nhttps://example.com/sub2';
-  if(S.importKind==='uri')return 'ss://...\ntrojan://...\nvmess://...';
+  if(S.importKind==='uri')return 'ss://...\ntrojan://...\nvmess://...\nhttp://1.2.3.4:8080\nsocks5://1.2.3.4:1080\nsocks4://1.2.3.4:1080';
   if(S.importKind==='base64')return '粘贴 Base64 编码后的节点列表';
   return 'proxies:\n  - name: ...';
+}
+function importFields(){
+  return `<div class="field"><label>${esc(importInputLabel())}</label><textarea id="importContent" placeholder="${esc(importPlaceholder())}" oninput="S.importText=this.value"></textarea></div>`;
 }
 function importPayload(){
   S.tagPrefix=qs('#tagPrefix')?.value||'local';
@@ -1124,9 +1127,10 @@ async function pollJob(id){
       const j=await api('/api/import/jobs/'+id);
       last=j;
       const done=(j.passed||0)+(j.failed||0);
-      const pct=j.total?Math.round(done*100/j.total):0;
+      const pct=j.total?Math.min(100,Math.round(done*100/j.total)):0;
+      const line=`${j.status}: ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
       if(bar)bar.style.width=pct+'%';
-      if(status)status.textContent=`${j.status}: ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
+      if(status)status.textContent=line;
       S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`进度 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
       if(j.status==='completed'||j.status==='failed'||j.status==='canceled'){
         toast(j.status==='canceled'?'导入任务已终止':'导入任务结束');

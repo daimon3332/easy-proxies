@@ -161,7 +161,13 @@ trojan://...
 ss://...
 hysteria2://...
 tuic://...
+http://1.2.3.4:8080
+https://1.2.3.4:8443
+socks5://1.2.3.4:1080
+socks4://1.2.3.4:1080
 ```
+
+其中 `http://`、`https://`、`socks5://`、`socks4://` 会作为普通代理节点导入，后续同样需要经过本地测速、测试国家、候选节点和节点池流程。
 
 如果不填写标签前缀，默认使用 `local`。
 
@@ -774,8 +780,11 @@ go build -tags "with_clash_api with_utls with_quic" -o easy_proxies ./cmd/easy_p
 - TUIC
 - AnyTLS
 - SOCKS5
+- SOCKS4
 - HTTP
 - HTTPS
+
+HTTP / HTTPS / SOCKS5 / SOCKS4 支持通过 URI、Base64、订阅链接和 Clash YAML 中的 `proxies` 节点导入。项目不再内置第三方公共代理池拉取入口；如果需要使用公共代理，请先整理为上述 URI 或 YAML 节点格式后再导入。
 
 ## 持久化文件
 

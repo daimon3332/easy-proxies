@@ -1,18 +1,24 @@
-# Plan: subscription snapshot replacement
+# 实施计划：移除公共代理池导入
 
-1. Treat imported subscription URLs as a tag-prefix snapshot, not a union.
-   - Same prefix + same URL: replace previous nodes with the latest parsed result.
-   - Same prefix + different URL(s): delete previous nodes under that prefix and keep only the latest URL set.
-   - Multi-line subscription import is one snapshot for the prefix.
-2. Add backend support for multi-line URL import in one Parse call.
-   - Fetch and parse all URLs first.
-   - Only after all fetch/parse work succeeds, remove old nodes for the tag prefix from store and runtime config.
-   - Save the new parsed nodes as one import job and let existing commit/test flow continue.
-3. Preserve failure safety.
-   - If the new subscription fetch or parse fails, do not delete existing pool/candidate/failed nodes.
-4. Update WebUI.
-   - Submit multi-line subscriptions as one import operation.
-   - Register subscription config by replacing previous URLs for the same prefix, not merging forever.
-   - Add visible manual refresh controls for current import sources where possible.
-5. Update README with the current replacement strategy and subscription behavior.
-6. Verify with tests/build and real import scenarios.
+## 目标
+
+移除 `proxy.scdn.io` 公共代理池拉取入口和后端专用任务代码，避免继续依赖质量不稳定的第三方公共代理源。
+
+## 保留能力
+
+普通节点导入继续支持以下 URI 协议：
+
+- `http://`
+- `https://`
+- `socks5://`
+- `socks4://`
+
+这些协议可以通过 URI、Base64、订阅链接、Clash YAML 等现有入口导入，并继续走统一的测速、测试国家、候选节点、节点池流程。
+
+## 改动范围
+
+1. 删除公共代理池导入模式。
+2. 删除 `proxy.scdn.io` 拉取代码和测试。
+3. 移除 WebUI 的“公共代理池”按钮和相关表单。
+4. 保留并验证 HTTP / HTTPS / SOCKS5 / SOCKS4 URI 构建支持。
+5. 更新 README 中的协议支持说明。

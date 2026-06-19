@@ -439,7 +439,7 @@ func buildNodeOutbound(tag, rawURI string, skipCertVerify bool) (option.Outbound
 			return option.Outbound{}, err
 		}
 		return option.Outbound{Type: C.TypeVMess, Tag: tag, Options: &opts}, nil
-	case "socks5", "socks":
+	case "socks4", "socks5", "socks":
 		opts, err := buildSOCKSOptions(parsed)
 		if err != nil {
 			return option.Outbound{}, err
@@ -1279,6 +1279,9 @@ func buildSOCKSOptions(u *url.URL) (option.SOCKSOutboundOptions, error) {
 		ServerOptions: option.ServerOptions{Server: server, ServerPort: uint16(port)},
 		Version:       "5",
 		Network:       option.NetworkList(""),
+	}
+	if strings.ToLower(u.Scheme) == "socks4" {
+		opts.Version = "4"
 	}
 	if u.User != nil {
 		opts.Username = u.User.Username()

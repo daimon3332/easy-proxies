@@ -1,354 +1,842 @@
 # Easy Proxies
 
-基于 [sing-box](https://github.com/SagerNet/sing-box) 的代理池与节点生命周期管理器。导入大批订阅、自动测速、保留失败节点便于重试，将可用节点通过统一池入口或独立端口对外暴露。WebUI 是主要工作流。
+Easy Proxies 是一个基于 [sing-box](https://github.com/SagerNet/sing-box) 的代理节点导入、测速、筛选、节点池与多端口管理工具。项目的核心目标是把各种来源的节点统一导入 WebUI，自动测速，保留失败节点，筛选可用节点，并将节点池中的节点映射为本机可用的 HTTP/SOCKS5 代理端口。
 
-> 致谢：本项目脱胎于 [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies)，在其基础上进行了大量重构与功能扩展（节点池过滤、端口对齐、批量异步测试、订阅删除、Multi-Port 凭证 WebUI 编辑等）。
-
----
+本项目基于 [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies) 二次开发，重点扩展了 WebUI、导入格式兼容、节点生命周期、端口一致性、批量测试、失败节点重试、订阅来源管理和运行状态可视化。
 
 ## 目录
 
-- [如何使用](#如何使用)
-- [运行模式](#运行模式)
-- [WebUI 详解](#webui-详解)
+- [核心特性](#核心特性)
+- [快速开始](#快速开始)
+- [WebUI 工作流](#webui-工作流)
+- [导入节点](#导入节点)
 - [节点生命周期](#节点生命周期)
+- [节点池与端口](#节点池与端口)
+- [测速与国家检测](#测速与国家检测)
+- [订阅与导入来源管理](#订阅与导入来源管理)
+- [设置页](#设置页)
+- [运行日志](#运行日志)
 - [配置文件](#配置文件)
 - [REST API](#rest-api)
-- [从源码编译](#从源码编译)
-- [支持的协议](#支持的协议)
-- [文件与持久化](#文件与持久化)
+- [从源码构建](#从源码构建)
+- [支持格式与协议](#支持格式与协议)
+- [持久化文件](#持久化文件)
 - [常见问题](#常见问题)
+- [License](#license)
 
----
+## 核心特性
 
-## 如何使用
+- WebUI 优先：导入、测试、入池、删除、端口扫描、订阅刷新、日志查看都可以通过浏览器完成。
+- 支持多种导入格式：订阅链接、URI 列表、Base64 编码内容、Clash/Mihomo YAML。
+- 订阅链接自动识别内容类型：HTTP/HTTPS 订阅返回 Clash YAML、Base64、URI 列表都可以解析。
+- 订阅导入采用“标签快照”策略：同一标签再次导入会先成功解析最新内容，再替换旧的节点池、候选、失败节点。
+- 只提取 Clash YAML 中的 `proxies` 节点，忽略 `proxy-groups`、`rules` 等规则配置。
+- 导入任务支持动态进度：导入测速时会持续刷新 `进度 x/y，成功 x，失败 x，入池 x`。
+- 节点分为候选节点、节点池、失败节点，失败节点不会丢失，可以后续重测。
+- 支持批量测速、批量测试国家、测速成功后自动加入节点池。
+- 支持候选节点、节点池、失败节点各自配置自动测速。
+- 失败节点测速成功后可以进入候选节点，也可以按开关直接加入节点池。
+- 测试国家与测速分离，国家检测不会隐式执行测速。
+- 节点池端口和实际 sing-box 监听端口保持一致。
+- Multi-Port 模式支持每个节点一个独立端口。
+- Pool 模式支持一个统一代理入口。
+- 端口扫描会显示节点池占用端口、外部进程占用端口和空闲端口。
+- 设置页显示所有导入来源，包括订阅、URI、Base64、Clash YAML。
+- 支持删除单个导入来源。
+- 支持一键删除全部导入来源，同时清空订阅列表。
+- 支持空节点启动。没有任何节点时 WebUI 仍然可以启动，用于首次导入。
+- 支持日志查看和清空日志。
+- 支持 WebUI 修改运行模式、监听地址、Multi-Port 起始端口、认证信息、刷新间隔等配置。
 
-### 1. 启动
+## 快速开始
 
-确保当前目录有 `easy_proxies.exe`、`config.yaml`、`GeoLite2-Country.mmdb` 三个文件，然后运行：
+### 1. 准备文件
+
+运行目录通常包含：
+
+```text
+easy_proxies.exe
+config.yaml
+GeoLite2-Country.mmdb
+```
+
+`GeoLite2-Country.mmdb` 用于 GeoIP 国家检测和国家路由。如果只使用基础导入和测速，缺失 GeoIP 数据库时仍可运行部分功能，但国家检测和 GeoIP 路由会受影响。
+
+### 2. 启动
 
 ```powershell
 .\easy_proxies.exe -config config.yaml
 ```
 
-或者直接双击 `easy_proxies.exe`（默认会找同目录下的 `config.yaml`）。
+不传 `-config` 时默认读取当前目录的 `config.yaml`：
 
-启动后会看到：
-
-```
-✅ Monitor server started on http://127.0.0.1:9091
-🔌 Multi-Port Entry Points (197 nodes):
-   [24000] node-A    HTTP/SOCKS5: 127.0.0.1:24000
-   [24001] node-B    HTTP/SOCKS5: 127.0.0.1:24001
-   ...
+```powershell
+.\easy_proxies.exe
 ```
 
-### 2. 打开 WebUI
+程序启动后会先启动管理端 WebUI，默认地址：
 
-浏览器访问 [http://127.0.0.1:9091](http://127.0.0.1:9091)。
+```text
+http://127.0.0.1:9091
+```
 
-### 3. 导入订阅
+如果 `config.yaml` 中没有任何节点，程序不会因为 `nodes` 为空而退出。此时 WebUI 仍然可用，可以在浏览器中导入节点。
 
-进入 **导入节点** 页面：
+### 3. 打开 WebUI
 
-- **订阅链接格式**：粘贴 `http://...` / `https://...`，每行一个，自动识别 Clash YAML / Base64 / URI 格式
-- **URI 格式**：粘贴 `vless://`、`vmess://`、`trojan://` 等节点 URI，每行一个
-- **Base64 格式**：粘贴 Base64 编码的节点列表
-- **Clash YAML 格式**：粘贴 Clash 配置中的 `proxies:` 部分
+浏览器访问：
 
-填写 **标签前缀**（默认 `local`），用于生成节点名（`local-JP1`、`local-HK2` 这样）。
+```text
+http://127.0.0.1:9091
+```
 
-点击 **解析** → **提交** 完成导入。
+如果配置了 `management.password`，WebUI 会要求登录。
 
-### 4. 测速 + 测国家 + 加入节点池
+## WebUI 工作流
 
-新导入的节点处于 **候选节点** 页面。两种方式处理：
+典型使用流程：
 
-**方式 A：批量测试子页面（推荐）**
+```text
+导入节点
+  -> 自动解析
+  -> generate_204 测速
+  -> 成功节点进入候选或自动入池
+  -> 失败节点保留
+  -> 可选测试国家
+  -> 节点池分配端口
+  -> 使用 127.0.0.1:端口 访问代理
+```
 
-进入 **批量测试** 页面：
+WebUI 页面说明：
 
-1. 勾选 **测试范围**（多选）：候选节点 / 节点池 / 失败节点
-2. 勾选 **操作**（多选）：测速 / 测试国家
-3. 可选勾选 **测速成功后自动加入节点池**
-4. 点击 **开始** → 弹出实时进度条（阶段、完成数、成功/失败计数）
+| 页面 | 作用 |
+| --- | --- |
+| 导入节点 | 导入订阅链接、URI、Base64、Clash YAML，并执行导入测速 |
+| 候选节点 | 显示测速成功但未加入节点池的节点 |
+| 节点池 | 显示当前真实参与代理服务的节点和端口 |
+| 失败节点 | 显示测速失败节点，支持后续重测 |
+| 批量测试 | 跨候选、节点池、失败节点执行批量测速和国家检测 |
+| 端口状态 | 查看从起始端口开始的端口分配和占用情况 |
+| 日志 | 查看和清空运行日志 |
+| 设置 | 修改运行参数、订阅刷新、导入来源管理 |
 
-**方式 B：单独操作**
+## 导入节点
 
-- **候选节点** 页：勾选若干节点 → 点 `测速`、`测试国家`、`加入节点池`
-- **失败节点** 页：勾选若干节点 → 点 `一键测速`（自动补测国家）
-- **节点池** 页：勾选若干节点 → 点 `测速` / `测试国家`，失败的会自动降级到失败节点
+进入 WebUI 的 `导入节点` 页面，点击 `选择导入格式`，可以选择四种格式。
 
-> **速度优化**：测速使用 64 并发 + 5 秒超时 + probe/国家并发请求；197 节点全量测速约 30 秒。
+### 订阅链接格式
 
-### 5. 使用代理
+用于导入 HTTP/HTTPS 订阅链接，每行一个：
 
-**Multi-Port 模式**（默认）：每个池中节点一个端口，从 `multi_port.base_port`（默认 24000）开始连续编号。
+```text
+https://example.com/api/v1/client/subscribe?token=xxx
+https://another.example/sub
+```
+
+订阅链接本质是先下载内容，再自动识别内容格式。返回内容可以是：
+
+- Clash/Mihomo YAML
+- Base64 编码节点列表
+- URI 列表
+- 混合的普通文本节点列表
+
+导入订阅链接后，WebUI 会把订阅 URL 记录到设置页。订阅链接支持一次粘贴多个 URL，每行一个；这些 URL 会作为同一个标签的一次快照导入。
+
+当前策略是“以最新导入为准”，不是并集：
+
+- 同一个标签再次导入同一个 URL：重新拉取并解析，成功后替换该标签下的旧节点。
+- 同一个标签导入不同 URL：旧 URL 对应的节点会被删除，只保留这次输入的 URL 解析结果。
+- 同一个标签先导入 5 个 URL，之后只导入 1 个 URL：最终只保留这 1 个 URL 的节点。
+- 替换前会先完成新内容的拉取与解析；如果新订阅拉取或解析失败，旧节点不会被删除。
+- 旧节点无论在节点池、候选节点还是失败节点中，都会被该标签的新快照替换。
+
+### URI 格式
+
+每行一个节点 URI：
+
+```text
+vless://...
+vmess://...
+trojan://...
+ss://...
+hysteria2://...
+tuic://...
+```
+
+如果不填写标签前缀，默认使用 `local`。
+
+### Base64 格式
+
+用于导入 Base64 编码后的节点列表。解码后的内容通常是一行一个 URI。
+
+示例：
+
+```text
+dmxlc3M6Ly8...
+```
+
+### Clash YAML 格式
+
+用于导入 Clash/Mihomo 配置。只需要包含 `proxies:` 即可：
+
+```yaml
+proxies:
+  - name: example
+    type: vless
+    server: example.com
+    port: 443
+    uuid: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    tls: true
+```
+
+程序只会提取 `proxies` 下的节点，`proxy-groups`、`rules`、`dns`、`tun` 等配置不会进入节点池。
+
+### 标签前缀
+
+标签前缀会放到节点名称前面，用于后续筛选和识别来源。
+
+示例：
+
+```text
+标签前缀: Liangxinyun
+节点原名: 日本高速01
+最终名称: Liangxinyun-日本高速01
+```
+
+重复导入同一个订阅 URL 时，如果该 URL 已存在，系统会继续使用原来的标签前缀；导入成功后按该标签替换旧快照。
+
+### 自动加入节点池
+
+导入页默认开启 `测速成功后自动加入节点池`。
+
+开启时：
+
+```text
+导入 -> 测速成功 -> 自动加入节点池 -> 分配端口
+```
+
+关闭时：
+
+```text
+导入 -> 测速成功 -> 进入候选节点
+```
+
+失败节点会保留在失败节点列表，不会丢失。
+
+### 动态导入进度
+
+导入测速时，WebUI 会轮询导入任务状态并显示：
+
+```text
+进度 49/49，成功 35，失败 14，入池 35
+```
+
+后端会按批写入进度，小导入基本逐个更新，大导入最多每 10 个节点更新一次。前端每 500ms 轮询一次，所以节点数量多或测速耗时较长时可以看到中间进度，而不是只看到 `0` 和最终完成。
+
+## 节点生命周期
+
+节点在 WebUI 中主要有三种用户可见状态：
+
+| 状态 | 页面 | 含义 |
+| --- | --- | --- |
+| 候选节点 | 候选节点 | 测速成功，但还没有加入节点池 |
+| 节点池 | 节点池 | 当前实际参与代理服务，已经分配端口 |
+| 失败节点 | 失败节点 | 最近一次测速失败，保留等待重试 |
+
+内部状态大致如下：
+
+```text
+parsed
+  -> testing
+  -> passed
+  -> in_pool
+  -> failed
+```
+
+常见流转：
+
+```text
+导入成功 -> parsed
+开始测速 -> testing
+测速成功 -> passed
+加入节点池 -> in_pool
+测速失败 -> failed
+失败节点重测成功 -> passed 或 in_pool
+```
+
+失败节点不会被自动删除。后续网络恢复或节点可用时，可以重新测速。
+
+## 节点池与端口
+
+节点池是当前实际可用的代理节点集合。只有节点池中的节点才会占用本机代理端口。
+
+### Multi-Port 模式
+
+每个节点一个独立端口：
+
+```text
+127.0.0.1:24000 -> 节点 1
+127.0.0.1:24001 -> 节点 2
+127.0.0.1:24002 -> 节点 3
+```
+
+使用示例：
 
 ```bash
-# 不需要认证（config.yaml 默认 username/password 为空）
 curl -x http://127.0.0.1:24000 https://ipinfo.io
-
-# 启用认证后（在 设置 → Multi 用户名/密码 中配置）
-curl -x http://mpuser:mppass@127.0.0.1:24000 https://ipinfo.io
 ```
 
-**Pool 模式**：单一统一入口（默认 `127.0.0.1:2323`），sing-box 内部路由到池中可用节点。
+如果配置了 Multi-Port 用户名和密码：
+
+```bash
+curl -x http://user:pass@127.0.0.1:24000 https://ipinfo.io
+```
+
+### Pool 模式
+
+所有节点共用一个入口：
+
+```text
+127.0.0.1:2323
+```
+
+使用示例：
 
 ```bash
 curl -x http://127.0.0.1:2323 https://ipinfo.io
 ```
 
-### 6. 管理节点
+### Hybrid 模式
 
-- **节点池** 页：查看所有在用节点 + 端口；可按国家/标签筛选；支持 `删除选中`
-- **候选节点** 页：测速成功但未入池的节点；同样支持筛选 + 删除
-- **失败节点** 页：测速失败的节点；可重试，也可批量删除
-- **端口状态** 页：扫描本机端口占用情况，节点池占用 / 外部进程占用 / 空闲分别统计
+同时启用 Pool 入口和 Multi-Port 入口。
 
-### 7. 订阅管理
+### 端口一致性
 
-进入 **设置** 页：
+项目保证以下三者对齐：
 
-- **订阅自动刷新**：开关 + 间隔（天/小时/分钟），保存后立即触发一次刷新
-- **当前订阅**：显示已记录的所有订阅 `名称：URL`，每条带 `删除` 按钮
-  - 删除会同时：① 从 `config.yaml` 移除 URL；② 删除该订阅导入的所有节点（候选+失败+池中）；③ 自动重写 `nodes.txt`
-
-### 8. 关闭
-
-`Ctrl+C` 优雅退出，会等待已有连接 drain 完。
-
----
-
-## 运行模式
-
-| 模式 | 说明 | 适用场景 |
-|------|------|----------|
-| `multi-port` | 每个池中节点一个独立端口（24000、24001、...） | 需要每个出口绑定固定端口（比如 IP 业务隔离） |
-| `pool` | 一个统一入口（默认 2323），内部按池策略路由 | 普通代理使用，无需关心具体节点 |
-| `hybrid` | 同时启用以上两种 | 兼顾灵活性与统一入口 |
-
-在 `config.yaml` 中：
-
-```yaml
-mode: multi-port   # 或 pool / hybrid
+```text
+WebUI 节点池数量
+= config.yaml 中节点池节点数量
+= sing-box 实际监听端口数量
 ```
 
-也可在 WebUI **设置** 页热修改并自动 reload。
+节点池变化后，端口会根据 `multi_port.base_port` 重新分配。WebUI 的端口状态页会显示：
 
----
+- 从哪个起始端口开始寻找端口
+- 为多少个节点找到了端口
+- 最后使用到哪个端口
+- 哪些端口不可用
+- 每个可用端口对应哪个节点
 
-## WebUI 详解
+如果某些端口被外部程序占用，会自动跳过并继续向后查找可用端口。
 
-| 页面 | 功能 |
-|------|------|
-| **导入节点** | 四种格式导入（订阅链接 / URI / Base64 / Clash） |
-| **候选节点** | 测速成功但未入池；按国家/标签下拉筛选；批量测速 / 测国家 / 加入池 / 删除 |
-| **节点池** | 当前在用节点；显示分配端口；按国家/标签筛选；测速 / 测国家 / 删除 |
-| **失败节点** | 测速失败节点；批量重测（成功后自动测国家），可设置成功自动入池 |
-| **批量测试** | 范围多选 + 操作多选 + 自动入池开关，弹出实时进度 |
-| **端口状态** | 扫描 base_port 起 200 个端口，区分节点池占用 / 其他进程 / 空闲 |
-| **日志** | 浏览运行时日志 |
-| **设置** | 运行模式 / 监听 / Multi-Port 凭证 / 池策略 / 管理端 / GeoIP / 订阅刷新 / 当前订阅 |
+## 测速与国家检测
 
-WebUI 修改后会自动持久化到 `config.yaml`，必要时触发 sing-box reload，不需要手动重启。
+### 测速
 
----
+测速目标默认是：
 
-## 节点生命周期
-
-```
-导入(parsed) ──测速──► passed ──手动入池──► in_pool ──健康检查失败──► failed
-                       │                       ▲                       │
-                       └─ 测国家 ──┐           │  ┌──测速成功──────────┘
-                                   │           │  │
-                                   └────► 测国家成功 (可入池)
+```text
+https://www.google.com/generate_204
 ```
 
-- 新导入：`state=parsed`
-- 测速成功：`state=passed`（加入"候选节点"）
-- 加入节点池：`state=in_pool`、`InPool=true`、分配端口
-- 健康检查失败：从池移除，`state=failed`
-- 失败节点重测成功：回到 `passed`；若选择"自动入池"则自动补测国家并入池
+可以在设置页修改探测目标。
 
-> **重要不变量**：sing-box 实际监听端口数 == WebUI 节点池数 == `config.yaml` 中 pool 节点数。运行期间 pool 增减时，端口会从 `base_port` 重新连续编排。
+测速成功会记录延迟，测速失败会记录失败原因。失败原因会显示在失败节点列表中。
 
----
+### 测试国家
+
+测试国家用于确认代理出口的真实国家或地区。国家检测不会自动包含测速。
+
+推荐流程：
+
+```text
+先测速
+  -> 测速成功
+  -> 再测试国家
+  -> 根据国家重命名或筛选
+```
+
+### 批量测试
+
+批量测试页面支持选择范围：
+
+- 候选节点
+- 节点池
+- 失败节点
+
+支持选择操作：
+
+- 测速
+- 测试国家
+- 测速成功后自动加入节点池
+
+异步批量测试会显示实时进度，包括当前阶段、完成数量、成功数量、失败数量、国家检测结果和入池数量。
+
+### 自动测速
+
+候选节点、节点池、失败节点可以分别开启自动测速。
+
+行为说明：
+
+- 失败节点：测速成功后会自动测试国家，然后按开关进入候选节点或直接加入节点池。
+- 候选节点：测速失败会进入失败节点。
+- 节点池：测速失败会从节点池移除并进入失败节点。
+
+## 订阅与导入来源管理
+
+设置页包含两个相关概念：
+
+```text
+订阅自动刷新
+当前导入来源
+```
+
+### 订阅自动刷新
+
+订阅自动刷新只对订阅链接生效，不对手动粘贴的 URI、Base64、Clash YAML 内容生效。
+
+刷新间隔由三个输入框配置：
+
+- 天
+- 小时
+- 分钟
+
+默认是 1 天。
+
+点击 `保存自动刷新设置` 只会保存自动刷新开关和间隔，不会改动当前节点。
+
+点击 `手动刷新全部订阅来源` 或某个来源旁边的 `手动刷新` 会进入完整刷新流程：
+
+1. 弹出阻塞式进度窗口，任务完成前窗口不会自动关闭。
+2. 按导入来源逐个刷新；每个来源都会显示标签和订阅组序号。
+3. 每个订阅 URL 单独显示一行，即使当前来源只有 1 个订阅链接也会展示。
+4. 先拉取订阅并解析最新节点。
+5. 解析成功后按“标签快照”替换旧节点。
+6. 自动执行 `generate_204` 测速。
+7. 测速成功的节点自动加入节点池。
+8. 测速失败的节点进入失败节点列表。
+9. 弹窗实时刷新 `节点 / 进度 / 成功 / 失败 / 入池` 数量。
+10. 全部完成后刷新设置列表、左侧导航数量和节点池状态。
+
+手动刷新不会把新旧订阅结果做并集，而是以本次成功解析和测速后的最新结果为准。
+
+### 当前导入来源
+
+当前导入来源会显示所有通过 WebUI 导入过的来源。订阅链接会按标签聚合显示，同一个标签下可以包含一个或多个 URL：
+
+- 订阅链接
+- URI 内容导入
+- Base64 内容导入
+- Clash YAML 内容导入
+
+每个来源会显示：
+
+- 类型
+- 标签前缀
+- 总节点数
+- 池内数量
+- 候选数量
+- 失败数量
+- 来源 URL 或内容类型
+- 更新时间
+
+### 删除单个导入来源
+
+每个来源右侧有 `删除` 按钮。
+
+删除订阅链接来源时，会同时：
+
+- 从 `config.yaml` 的 `subscriptions` 中移除 URL
+- 删除该来源导入的全部 managed 节点
+- 从节点池移除池内节点
+- 触发一次 reload
+
+删除 URI、Base64、Clash YAML 内容来源时，会删除该来源导入的全部 managed 节点。
+
+### 一键删除全部导入
+
+设置页提供 `一键删除全部导入`。
+
+该操作会：
+
+- 删除所有导入来源
+- 删除所有 managed 导入节点
+- 从节点池移除所有导入节点
+- 清空 `config.yaml` 中的 `subscriptions`
+- 保留自动刷新开关和刷新间隔
+- 保留手动配置节点
+
+这是清空 WebUI 导入数据的最快方式。
+
+## 设置页
+
+设置页可以修改运行参数。
+
+| 配置项 | 说明 |
+| --- | --- |
+| 运行模式 | `pool`、`multi-port`、`hybrid` |
+| 探测目标 | 测速使用的 URL |
+| 外部 IP | 导出入口时使用的外部地址 |
+| 管理监听 | WebUI 和 REST API 监听地址 |
+| Pool 监听地址 | Pool 模式监听地址 |
+| Pool 端口 | Pool 模式监听端口 |
+| Multi 地址 | Multi-Port 模式监听地址 |
+| Multi 起始端口 | Multi-Port 模式分配端口的起点 |
+| Multi 用户名 | Multi-Port 代理认证用户名 |
+| Multi 密码 | Multi-Port 代理认证密码 |
+| 池模式 | 节点池选择策略 |
+| 失败阈值 | 连续失败多少次后视为失败 |
+| 跳过证书验证 | 是否跳过 TLS 证书校验 |
+
+保存运行设置后，配置会写入 `config.yaml`，并触发 reload。
+
+## 运行日志
+
+日志页面支持：
+
+- 查看最近运行日志
+- 刷新日志
+- 清空日志
+
+清空日志只影响 WebUI 中的日志缓冲和配置的日志文件，不会删除节点。
 
 ## 配置文件
 
-`config.yaml` 主要字段：
+`config.yaml` 示例：
 
 ```yaml
-mode: multi-port          # pool / multi-port / hybrid
+mode: multi-port
 
-listener:                  # pool 模式的统一入口
+listener:
   address: 127.0.0.1
   port: 2323
-  username: ""             # 空 = 无需认证
+  username: ""
   password: ""
 
-multi_port:                # multi-port / hybrid 模式
+multi_port:
   address: 127.0.0.1
-  base_port: 24000         # 起始端口；池里第 N 个节点的端口 = base_port + N
-  username: ""             # 空 = 无需认证；可在 WebUI 设置页修改
+  base_port: 24000
+  username: ""
   password: ""
 
-pool:                      # 池路由策略
-  mode: sequential         # sequential / random
-  failure_threshold: 3     # 节点连续失败几次进入黑名单
+pool:
+  mode: sequential
+  failure_threshold: 3
   blacklist_duration: 24h
 
-management:                # WebUI + REST API 服务
+management:
   enabled: true
   listen: 127.0.0.1:9091
-  probe_target: http://cp.cloudflare.com/generate_204
-  password: ""             # 设置后 WebUI 需要登录
+  probe_target: https://www.google.com/generate_204
+  password: ""
 
 subscription_refresh:
   enabled: true
-  interval: 24h            # 自动刷新间隔（最小 5 分钟）
+  interval: 24h
   timeout: 30s
+  health_check_timeout: 1m
+  drain_timeout: 30s
   min_available_nodes: 1
 
-geoip:                     # 可选：按国家路由
+geoip:
   enabled: true
   database_path: ./GeoLite2-Country.mmdb
-  listen: ""               # 空 = 不开启分国家路由入口
+  listen: ""
   port: 0
   auto_update_enabled: true
   auto_update_interval: 24h
 
 log:
-  output: stdout           # stdout / file / both
+  output: stdout
   file: logs/easy_proxies.log
-  max_size: 50             # MB
+  max_size: 50
   max_backups: 3
-  max_age: 7               # 天
+  max_age: 7
   compress: false
 
-subscriptions:             # 订阅链接列表（WebUI 可增删）
-  - https://example.com/sub?token=xxx
-  - https://another.com/api/v1/client/subscribe?token=yyy
-
-skip_cert_verify: false    # 跳过上游 TLS 校验（不推荐）
+subscriptions: []
+nodes: []
+skip_cert_verify: false
 ```
 
----
+### 重要字段说明
+
+| 字段 | 说明 |
+| --- | --- |
+| `mode` | 运行模式，支持 `pool`、`multi-port`、`hybrid` |
+| `listener` | Pool 模式入口配置 |
+| `multi_port` | Multi-Port 模式入口配置 |
+| `multi_port.base_port` | 节点池端口分配起始值 |
+| `management.listen` | WebUI/API 地址 |
+| `management.password` | WebUI 登录密码，空表示不启用登录 |
+| `management.probe_target` | 测速目标 |
+| `subscription_refresh.enabled` | 是否启用订阅自动刷新 |
+| `subscription_refresh.interval` | 自动刷新间隔 |
+| `subscriptions` | 订阅 URL 列表 |
+| `nodes` | 当前节点池中的节点配置 |
+| `skip_cert_verify` | 是否跳过上游 TLS 校验 |
 
 ## REST API
 
-WebUI 背后的全部接口（base URL `http://127.0.0.1:9091`）：
+WebUI 使用 REST API 与后端通信。默认 base URL：
+
+```text
+http://127.0.0.1:9091
+```
+
+如果启用了管理密码，需要携带 Bearer Token。
+
+### 认证
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/settings` | 读取运行设置 |
-| `PUT` | `/api/settings` | 修改运行设置（含 multi_port 凭证） |
-| `GET` | `/api/subscription/config` | 订阅列表 + 名称映射 + 自动刷新设置 |
-| `PUT` | `/api/subscription/config` | 更新订阅列表 / 自动刷新 |
-| `POST` | `/api/subscription/delete` | 删除某条订阅及其全部节点 `{url}` |
-| `POST` | `/api/subscription/refresh` | 立即刷新 |
-| `POST` | `/api/import/parse` | 解析订阅 / URI / Base64 / Clash |
-| `POST` | `/api/import/{job}/commit` | 确认导入 |
-| `GET` | `/api/nodes/all` / `/api/nodes/pool` / `/api/nodes/failed` | 列出节点 |
-| `POST` | `/api/managed-nodes/{id}/{retest\|country\|promote\|exclude\|delete}` | 单节点操作 |
-| `POST` | `/api/managed-nodes/batch-test` | 同步批量测试（旧） |
-| `POST` | `/api/managed-nodes/batch-test/start` | **异步批量测试，返回 `job_id`** |
-| `GET` | `/api/managed-nodes/batch-test/status?id=` | **轮询测试进度** |
-| `GET` | `/api/ports/status?from=&to=` | 扫描端口占用 |
-| `POST` | `/api/reload` | 手动 reload sing-box |
-| `GET` | `/api/logs` | 拉取最近日志 |
+| --- | --- | --- |
+| `POST` | `/api/auth` | 登录，返回 token |
 
-异步批量测试响应 schema：
+### 设置
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/settings` | 获取运行设置 |
+| `PUT` | `/api/settings` | 保存运行设置 |
+| `POST` | `/api/reload` | 手动 reload 核心 |
+
+### 订阅
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/subscription/status` | 获取订阅刷新状态 |
+| `POST` | `/api/subscription/refresh` | 立即刷新订阅 |
+| `GET` | `/api/subscription/config` | 获取订阅配置 |
+| `PUT` | `/api/subscription/config` | 保存订阅配置 |
+| `POST` | `/api/subscription/delete` | 删除某个订阅 URL 和它导入的节点 |
+
+删除订阅请求：
 
 ```json
 {
-  "id": "abcdef123456",
-  "status": "running",
-  "phase": "probe",
-  "total": 197,
-  "done": 87,
-  "passed": 65,
-  "failed": 22,
-  "country_ok": 0,
-  "country_bad": 0,
-  "promoted": 0
+  "url": "https://example.com/sub"
 }
 ```
 
----
+### 导入
 
-## 从源码编译
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/import/parse` | 解析导入内容 |
+| `POST` | `/api/import/{import_id}/commit` | 提交导入并开始测速 |
+| `GET` | `/api/import/jobs/{job_id}` | 查询导入任务进度 |
+| `GET` | `/api/import/sources` | 获取所有导入来源 |
+| `POST` | `/api/import/sources` | 删除单个来源或全部来源 |
 
-需要 Go 1.24+：
+解析订阅链接：
 
-```bash
+```json
+{
+  "mode": "url",
+  "url": "https://example.com/sub",
+  "tag_prefix": "local"
+}
+```
+
+解析内容：
+
+```json
+{
+  "mode": "content",
+  "content": "vless://...\ntrojan://...",
+  "tag_prefix": "local"
+}
+```
+
+提交导入：
+
+```json
+{
+  "node_ids": ["node-id-1", "node-id-2"],
+  "auto_reload": true,
+  "promote_passed": true
+}
+```
+
+导入任务进度响应示例：
+
+```json
+{
+  "id": "job-id",
+  "status": "running",
+  "total": 49,
+  "passed": 35,
+  "failed": 14,
+  "promoted": 35,
+  "node_ids": []
+}
+```
+
+删除单个导入来源：
+
+```json
+{
+  "key": "url:https://example.com/sub"
+}
+```
+
+删除全部导入来源：
+
+```json
+{
+  "all": true
+}
+```
+
+### Managed Nodes
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/nodes/all` | 所有 managed 节点 |
+| `GET` | `/api/nodes/pool` | 节点池节点 |
+| `GET` | `/api/nodes/failed` | 失败节点 |
+| `PUT` | `/api/nodes/order` | 调整节点顺序 |
+| `POST` | `/api/managed-nodes/{id}/retest` | 单节点测速 |
+| `POST` | `/api/managed-nodes/{id}/country` | 单节点测试国家 |
+| `POST` | `/api/managed-nodes/{id}/promote` | 加入节点池 |
+| `POST` | `/api/managed-nodes/{id}/exclude` | 排除节点 |
+| `POST` | `/api/managed-nodes/{id}/delete` | 删除节点 |
+| `POST` | `/api/managed-nodes/batch-test/start` | 异步批量测试 |
+| `GET` | `/api/managed-nodes/batch-test/status?id=` | 查询批量测试进度 |
+| `POST` | `/api/managed-nodes/batch-promote` | 批量加入节点池 |
+| `POST` | `/api/managed-nodes/batch-delete` | 批量删除节点 |
+
+### 手动节点
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/nodes/config` | 获取手动配置节点 |
+| `POST` | `/api/nodes/config` | 新增手动配置节点 |
+| `PUT` | `/api/nodes/config/{name}` | 更新手动配置节点 |
+| `DELETE` | `/api/nodes/config/{name}` | 删除手动配置节点 |
+
+### 端口与日志
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/ports/status` | 查看端口状态 |
+| `GET` | `/api/logs` | 获取日志 |
+| `POST` | `/api/logs/clear` | 清空日志 |
+| `GET` | `/api/export` | 导出入口信息 |
+
+## 从源码构建
+
+需要 Go 1.24 或更高版本。
+
+Windows：
+
+```powershell
 go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/easy_proxies
 ```
 
-Linux：
+Linux/macOS：
 
 ```bash
 go build -tags "with_clash_api with_utls with_quic" -o easy_proxies ./cmd/easy_proxies
 ```
 
-构建标签说明：
+构建标签：
 
-| Tag | 作用 |
-|-----|------|
-| `with_clash_api` | sing-box 流量统计 / Clash 兼容 API（管理端需要） |
-| `with_utls` | uTLS 指纹伪装（部分协议需要） |
-| `with_quic` | QUIC / Hysteria2 / TUIC 支持 |
+| 标签 | 说明 |
+| --- | --- |
+| `with_clash_api` | 启用 sing-box Clash API 相关能力 |
+| `with_utls` | 启用 uTLS 指纹能力 |
+| `with_quic` | 启用 QUIC 相关协议支持 |
 
----
+## 支持格式与协议
 
-## 支持的协议
+### 导入格式
 
-VLESS / VMess / Trojan / Shadowsocks / Hysteria2（含端口跳跃）/ TUIC / AnyTLS / SOCKS5 / HTTP / HTTPS
+| 格式 | 说明 |
+| --- | --- |
+| 订阅链接 | HTTP/HTTPS URL，内容自动识别 |
+| URI 列表 | 每行一个代理 URI |
+| Base64 | Base64 编码后的 URI 列表 |
+| Clash YAML | 提取 `proxies` 下的节点 |
 
-URI 格式遵循 v2rayN URI scheme。
+### 协议
 
----
+支持协议取决于 sing-box 和当前构建标签，常见包括：
 
-## 文件与持久化
+- VLESS
+- VMess
+- Trojan
+- Shadowsocks
+- ShadowsocksR
+- Hysteria
+- Hysteria2
+- TUIC
+- AnyTLS
+- SOCKS5
+- HTTP
+- HTTPS
 
-| 文件 | 内容 | 是否需要手动管理 |
-|------|------|------------------|
-| `config.yaml` | 全部配置 | 通常通过 WebUI 修改 |
-| `nodes.txt` | 订阅刷新拉到的全部节点 URI | 自动生成，候选库 |
-| `managed_nodes.json` | 池中 / 候选 / 失败节点完整状态 | 自动管理，不要手改 |
-| `GeoLite2-Country.mmdb` | MaxMind GeoIP 数据库 | 自动定期更新 |
-| `logs/easy_proxies.log` | 运行日志（如启用 file output） | 按 max_size/max_backups 滚动 |
+## 持久化文件
 
-**设计原则**：sing-box 只为节点池中的节点开监听。订阅自动刷新只更新 `nodes.txt`（候选库），不会注入 sing-box。只有手动 / 自动 Promote 才会让节点真正占用端口。
+| 文件 | 说明 |
+| --- | --- |
+| `config.yaml` | 主配置文件，保存运行模式、端口、订阅、节点池等 |
+| `managed_nodes.json` | WebUI managed 节点状态，包含候选、节点池、失败节点 |
+| `nodes.txt` | 订阅刷新拉取到的 URI 缓存 |
+| `GeoLite2-Country.mmdb` | GeoIP 国家数据库 |
+| `logs/easy_proxies.log` | 文件日志 |
 
----
+不要手动编辑 `managed_nodes.json`。它由 WebUI 和后端自动维护。
 
 ## 常见问题
 
-**Q: WebUI 显示的端口数 / netstat 看到的监听端口数 / config.yaml 节点数 不一致？**
-A: 不应该发生。本项目核心不变量就是三者相等。如果你看到不一致，请重启进程，并提 issue。
+### 为什么没有节点也能启动？
 
-**Q: 启动时报 "Port 24000 is in use, trying next port"？**
-A: 24000 被其他程序占用了，会自动顺延到下一个可用端口。WebUI **端口状态** 页会标出哪些端口被外部进程占了。
+首次使用时通常没有节点。程序会先启动 WebUI，允许用户在浏览器中导入节点。只有节点池中有节点时，sing-box 才需要为节点分配监听端口。
 
-**Q: 重复导入同一个订阅会怎样？**
-A: 同 URI 的节点会被覆盖（按 sha256(URI) 主键），**状态会被重置为 parsed**。原本在池里的节点会被降级到候选。
+### 重复导入同一个订阅会发生什么？
 
-**Q: 测速很慢？**
-A: 检查你的网络。默认 probe target 是 `www.gstatic.com/generate_204`（5 秒超时，64 并发）。197 节点全量约 30s。如果远超这个时间，多半是上游订阅给的节点本身大量超时。
+重复导入同一个订阅 URL 时，会重新拉取内容并解析。如果该 URL 之前已经导入过，会继续使用原来的标签前缀。新内容解析成功后，系统会删除该标签下旧的节点池、候选、失败节点，再写入这次解析出的最新节点。也就是说，订阅导入不是旧节点与新节点的并集，而是以本次导入结果为准。
 
-**Q: 失败节点测速成功后会自动入池吗？**
-A: 默认不会，需要在 **失败节点** 页打开"自动加入到节点池"开关，或在 **批量测试** 页勾选"测速成功后自动加入节点池"。失败节点入池前会自动补测国家。
+### 为什么订阅自动刷新没有直接改变节点池？
 
-**Q: 怎么完全删除一条订阅？**
-A: **设置 → 当前订阅 → 删除** 按钮。会原子地从 `config.yaml` 移除 URL + 删除所有 `ImportSource` 匹配的节点（候选 + 失败 + 池中）+ 重写 `nodes.txt`。
+订阅刷新会重新拉取记录的订阅内容。WebUI 的手动刷新按“标签快照”执行：成功解析最新内容后替换旧节点，并立即执行 `generate_204` 测速；测速成功的节点会自动加入节点池，失败节点进入失败列表。刷新窗口会展示每个订阅链接的实时进度，例如：
 
-**Q: 想给管理端加密码？**
-A: 编辑 `config.yaml` 里 `management.password`，重启。访问 WebUI 时浏览器会提示 Bearer Token 输入。
+```text
+节点 44 · 进度 44/44 · 成功 33 · 失败 11 · 入池 33
+```
 
----
+如果某次刷新后出现 `总数 x / 池内 0 / 候选 0 / 失败 0`，说明只完成了解析但没有完成测速入库流程；当前 WebUI 的手动刷新已经改为强制执行测速和成功入池。
+
+### 什么是一键删除全部导入？
+
+设置页的 `一键删除全部导入` 会删除所有通过 WebUI 导入的来源和节点，并清空订阅 URL 列表。它不会删除手动配置节点。
+
+### 端口为什么会跳号？
+
+如果某些端口被其他程序占用，程序会跳过这些端口，继续向后查找可用端口。端口状态页会显示不可用端口列表。
+
+### WebUI 显示的端口和实际监听端口应该一致吗？
+
+应该一致。节点池中的每个节点都会对应实际监听端口。如果不一致，优先查看端口状态页和日志。
+
+### 失败节点会被删除吗？
+
+不会。失败节点会保留下来，可以后续重新测速。测速成功后可以进入候选节点，也可以按设置直接进入节点池。
+
+### 测试国家为什么没有自动测速？
+
+测速和测试国家是两个动作。测试国家默认假设节点已经可用。如果节点当前失败，需要先测速成功。
+
+### 如何完全清空项目导入数据？
+
+进入设置页，点击 `一键删除全部导入`。该操作会清空所有导入来源、managed 节点和订阅 URL。
+
+### 如何清空日志？
+
+进入日志页，点击 `清空日志`。
 
 ## License
 
-继承自上游项目 [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies) 的许可证。
+本项目继承上游项目 [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies) 的许可证。

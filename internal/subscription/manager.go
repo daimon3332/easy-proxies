@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,8 +15,11 @@ import (
 	"time"
 
 	"easy_proxies/internal/boxmgr"
+	"easy_proxies/internal/builder"
 	"easy_proxies/internal/config"
+	"easy_proxies/internal/importer"
 	"easy_proxies/internal/monitor"
+	"easy_proxies/internal/subfetch"
 )
 
 // Logger defines logging interface.
@@ -39,10 +41,9 @@ func WithLogger(l Logger) Option {
 type Manager struct {
 	mu sync.RWMutex
 
-	baseCfg    *config.Config
-	boxMgr     *boxmgr.Manager
-	logger     Logger
-	httpClient *http.Client // Custom HTTP client with connection pooling
+	baseCfg *config.Config
+	boxMgr  *boxmgr.Manager
+	logger  Logger
 
 	status        monitor.SubscriptionStatus
 	ctx           context.Context
@@ -59,34 +60,12 @@ type Manager struct {
 func New(cfg *config.Config, boxMgr *boxmgr.Manager, opts ...Option) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Create optimized HTTP client with connection pooling
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   10,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		ResponseHeaderTimeout: 10 * time.Second,
-	}
-
-	httpClient := &http.Client{
-		Transport: transport,
-		Timeout:   60 * time.Second, // Overall timeout
-	}
-
 	m := &Manager{
 		baseCfg:       cfg,
 		boxMgr:        boxMgr,
 		ctx:           ctx,
 		cancel:        cancel,
 		manualRefresh: make(chan struct{}, 1),
-		httpClient:    httpClient,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -120,10 +99,6 @@ func (m *Manager) Stop() {
 		m.cancel()
 	}
 
-	// Close idle connections
-	if m.httpClient != nil {
-		m.httpClient.CloseIdleConnections()
-	}
 }
 
 // UpdateConfig hot-reloads subscription URLs and refresh settings without restart.
@@ -508,35 +483,71 @@ func (m *Manager) fetchSubscription(subURL string, timeout time.Duration) ([]con
 	ctx, cancel := context.WithTimeout(m.ctx, timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", subURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("User-Agent", "clash-verge/v2.2.3")
-	req.Header.Set("Accept", "*/*")
-
-	// Use custom HTTP client with connection pooling
-	resp, err := m.httpClient.Do(req)
+	body, err := subfetch.Fetch(ctx, subURL, subfetch.Options{
+		Timeout:       timeout,
+		SkipTLSVerify: m.baseCfg.SkipCertVerify,
+		ProxyFallback: func(ctx context.Context, rawURL string, headers http.Header) ([]byte, error) {
+			return m.fetchSubscriptionViaPool(ctx, rawURL, headers, timeout)
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status %d", resp.StatusCode)
-	}
-
-	// Limit read size to prevent memory exhaustion
-	const maxBodySize = 10 * 1024 * 1024 // 10MB
-	limitedReader := io.LimitReader(resp.Body, maxBodySize)
-
-	body, err := io.ReadAll(limitedReader)
-	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
-	}
-
 	return config.ParseSubscriptionContent(string(body))
+}
+
+func (m *Manager) fetchSubscriptionViaPool(ctx context.Context, rawURL string, headers http.Header, timeout time.Duration) ([]byte, error) {
+	if m.boxMgr == nil {
+		return nil, fmt.Errorf("box manager unavailable")
+	}
+	nodes, err := m.boxMgr.ListConfigNodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("当前没有池内节点可用于拉取订阅")
+	}
+	var errs []string
+	for _, node := range nodes {
+		if strings.TrimSpace(node.URI) == "" {
+			continue
+		}
+		client, closeClient, clientErr := importer.NewHTTPClientForURI(ctx, builder.BuildSingleNodeOutbound, node.Name, node.URI, timeout, m.baseCfg.SkipCertVerify)
+		if clientErr != nil {
+			errs = append(errs, node.Name+": "+clientErr.Error())
+			continue
+		}
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if reqErr != nil {
+			closeClient()
+			return nil, reqErr
+		}
+		req.Header = headers.Clone()
+		resp, doErr := client.Do(req)
+		if doErr != nil {
+			closeClient()
+			errs = append(errs, node.Name+": "+doErr.Error())
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			resp.Body.Close()
+			closeClient()
+			errs = append(errs, node.Name+": HTTP "+resp.Status)
+			continue
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+		resp.Body.Close()
+		closeClient()
+		if readErr != nil {
+			errs = append(errs, node.Name+": "+readErr.Error())
+			continue
+		}
+		return body, nil
+	}
+	if len(errs) == 0 {
+		return nil, fmt.Errorf("没有可用于拉取订阅的池内节点")
+	}
+	return nil, fmt.Errorf("%s", strings.Join(errs, " | "))
 }
 
 type defaultLogger struct{}

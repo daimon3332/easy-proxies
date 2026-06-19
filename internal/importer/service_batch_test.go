@@ -2,8 +2,11 @@ package importer
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 
 	"easy_proxies/internal/config"
@@ -232,5 +235,154 @@ func TestDeleteBySubscriptionBatchesStoreAndConfigRemoval(t *testing.T) {
 	}
 	if _, ok := store.GetNode("other"); !ok {
 		t.Fatal("node from another source should remain")
+	}
+}
+
+func TestImportProgressBatchSize(t *testing.T) {
+	cases := []struct {
+		total int
+		want  int
+	}{
+		{0, 1},
+		{1, 1},
+		{19, 1},
+		{40, 2},
+		{200, 10},
+		{1000, 10},
+	}
+	for _, tc := range cases {
+		if got := importProgressBatchSize(tc.total); got != tc.want {
+			t.Fatalf("importProgressBatchSize(%d) = %d, want %d", tc.total, got, tc.want)
+		}
+	}
+}
+
+func TestParseDuplicateURLReplacesPrefixSnapshot(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	svc, store := newBatchServiceForTest(t, mgr)
+	const uri = "trojan://pass@example.com:443#Alpha"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(uri + "\n"))
+	}))
+	defer ts.Close()
+
+	existing := ManagedNode{
+		ID:           nodeID(uri),
+		URI:          uri,
+		OriginalName: "Alpha",
+		Name:         "old-Alpha",
+		TagPrefix:    "old",
+		ImportMode:   "url",
+		ImportSource: ts.URL,
+		ImportFormat: "uri_list",
+		State:        StateInPool,
+		Enabled:      true,
+		InPool:       true,
+		Port:         24000,
+		LatencyMs:    88,
+		CountryCode:  "JP",
+	}
+	if err := store.UpsertNode(existing); err != nil {
+		t.Fatalf("UpsertNode() error = %v", err)
+	}
+
+	parsed, err := svc.Parse(ParseRequest{Mode: "url", URL: ts.URL, TagPrefix: "new"})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(parsed.Nodes) != 1 {
+		t.Fatalf("Parse() nodes = %d, want 1", len(parsed.Nodes))
+	}
+	node := parsed.Nodes[0]
+	if node.TagPrefix != "old" || node.Name != "old-Alpha" || node.State != StateParsed || node.InPool || node.Port != 0 || node.LatencyMs != 0 || node.CountryCode != "" {
+		t.Fatalf("duplicate node was not replaced as latest snapshot: %#v", node)
+	}
+
+	stored, ok := store.GetNode(node.ID)
+	if !ok || stored.State != StateParsed || stored.InPool {
+		t.Fatalf("stored node = %#v found=%v, want latest parsed snapshot", stored, ok)
+	}
+}
+
+func TestListAndDeleteImportSources(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	svc, store := newBatchServiceForTest(t, mgr)
+	nodes := []ManagedNode{
+		{ID: "url-1", Name: "sub-US1", URI: "trojan://one", State: StateInPool, InPool: true, ImportMode: "url", ImportSource: "https://example.test/sub", ImportFormat: "uri_list", TagPrefix: "sub"},
+		{ID: "url-2", Name: "sub-JP1", URI: "trojan://two", State: StateFailed, ImportMode: "url", ImportSource: "https://example.test/sub", ImportFormat: "uri_list", TagPrefix: "sub"},
+		{ID: "content-1", Name: "local-SG1", URI: "trojan://three", State: StatePassed, ImportID: "imp-1", ImportMode: "content", ImportSource: "content", ImportFormat: "base64", TagPrefix: "local"},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	sources, err := svc.ListImportSources()
+	if err != nil {
+		t.Fatalf("ListImportSources() error = %v", err)
+	}
+	if len(sources) != 2 {
+		t.Fatalf("ListImportSources() = %#v, want 2 groups", sources)
+	}
+	byKey := map[string]ImportSourceSummary{}
+	for _, source := range sources {
+		byKey[source.Key] = source
+	}
+	urlGroup := byKey["tag:sub"]
+	if !urlGroup.Refreshable || urlGroup.Total != 2 || urlGroup.Pool != 1 || urlGroup.Failed != 1 || urlGroup.TagPrefix != "sub" {
+		t.Fatalf("url group = %#v", urlGroup)
+	}
+	contentGroup := byKey["import:imp-1"]
+	if contentGroup.Format != "base64" || contentGroup.Candidate != 1 || contentGroup.TagPrefix != "local" {
+		t.Fatalf("content group = %#v", contentGroup)
+	}
+
+	deleted, err := svc.DeleteImportSource("import:imp-1")
+	if err != nil {
+		t.Fatalf("DeleteImportSource() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("DeleteImportSource() deleted %d, want 1", deleted)
+	}
+	if _, ok := store.GetNode("content-1"); ok {
+		t.Fatal("content source node should be deleted")
+	}
+	if _, ok := store.GetNode("url-1"); !ok {
+		t.Fatal("url source node should remain")
+	}
+}
+
+func TestDeleteAllImportSourcesBatchesStoreAndConfigRemoval(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	svc, store := newBatchServiceForTest(t, mgr)
+	nodes := []ManagedNode{
+		{ID: "pool-url", Name: "sub-US1", URI: "trojan://one", State: StateInPool, InPool: true, ImportMode: "url", ImportSource: "https://example.test/sub", TagPrefix: "sub"},
+		{ID: "pool-content", Name: "local-SG1", URI: "trojan://two", State: StateInPool, InPool: true, ImportID: "imp-1", ImportMode: "content", ImportSource: "content", TagPrefix: "local"},
+		{ID: "failed", Name: "bad", URI: "trojan://three", State: StateFailed, ImportID: "imp-2", ImportMode: "content", ImportSource: "content"},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	deleted, err := svc.DeleteAllImportSources()
+	if err != nil {
+		t.Fatalf("DeleteAllImportSources() error = %v", err)
+	}
+	if deleted != 3 {
+		t.Fatalf("DeleteAllImportSources() deleted %d, want 3", deleted)
+	}
+	if remaining := store.ListNodes(); len(remaining) != 0 {
+		t.Fatalf("remaining nodes = %#v, want none", remaining)
+	}
+	if len(mgr.deletedBatches) != 1 {
+		t.Fatalf("DeleteNodes batch count = %d, want 1", len(mgr.deletedBatches))
+	}
+	wantDeleted := []string{"sub-US1", "local-SG1"}
+	sort.Strings(wantDeleted)
+	sort.Strings(mgr.deletedBatches[0])
+	if !reflect.DeepEqual(mgr.deletedBatches[0], wantDeleted) {
+		t.Fatalf("DeleteNodes names = %#v, want %#v", mgr.deletedBatches[0], wantDeleted)
+	}
+	if mgr.reloadCount != 1 {
+		t.Fatalf("reloadCount = %d, want 1", mgr.reloadCount)
 	}
 }

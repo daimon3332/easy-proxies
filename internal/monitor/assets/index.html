@@ -65,6 +65,7 @@ button{cursor:pointer}
 .card-body{padding:20px}
 .stack{display:grid;gap:14px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.source-row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;border:1px solid var(--line);border-radius:14px;padding:12px;background:#fbfdff}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
 .filters.compact{display:flex;gap:10px;flex-wrap:wrap}
@@ -227,6 +228,8 @@ pre.log-view{height:100%;max-height:none}
 <div class="toast-wrap" id="toasts"></div>
 
 <script>
+const ACTIVE_IMPORT_JOB_KEY='easy_proxies_active_import_job';
+const ACTIVE_BATCH_JOB_KEY='easy_proxies_active_batch_job';
 const S={
   token:localStorage.getItem('easy_proxies_token')||'',
   page:'import',
@@ -242,8 +245,13 @@ const S={
   ports:null,
   settings:null,
   subConfig:null,
+  importSources:[],
   logs:'',
   lastJob:null,
+  activeImportJob:localStorage.getItem(ACTIVE_IMPORT_JOB_KEY)||'',
+  activeBatchJob:localStorage.getItem(ACTIVE_BATCH_JOB_KEY)||'',
+  importPollingJob:'',
+  batchPollingJob:'',
   selected:new Set(),
   poolOrderMode:'country',
   poolSortMode:'port',
@@ -301,7 +309,7 @@ async function api(path,opt={}){
   if(typeof data==='string'&&data.trim().startsWith('{')){try{data=JSON.parse(data)}catch(e){}}
   const message=typeof data==='string'?data:(data&&data.error);
   if(res.status===401){qs('#authModal').classList.add('show');throw new Error(message||'未授权')}
-  if(!res.ok || message) throw new Error(message||res.statusText);
+  if(!res.ok) throw new Error(message||res.statusText);
   return data;
 }
 async function login(e){
@@ -345,7 +353,7 @@ async function refresh(){
       await loadLogs();
       renderLogs();
     }else if(S.page==='settings'){
-      await Promise.all([loadSettings(),loadSubscriptionConfig()]);
+      await Promise.all([loadSettings(),loadSubscriptionConfig(),loadImportSources()]);
       renderSettings();
 	}else if(S.page==='bulk'){
 	  await loadManaged('nodes');
@@ -355,6 +363,7 @@ async function refresh(){
 	  renderImport();
 	}
     renderNav();
+    restoreActiveJobs();
   }catch(err){toast(err.message,'err')}
 }
 async function loadManaged(kind=S.page){
@@ -388,6 +397,26 @@ function openDialog(title, html){
   dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div><div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn primary" onclick="closeDialog()">确定</button></div>`;
   modal.classList.add('show');
 }
+function openBlockingDialog(title, html){
+  let modal=qs('#resultModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.className='modal';
+    modal.id='resultModal';
+    modal.innerHTML='<div class="dialog" id="resultDialog"></div>';
+    document.body.appendChild(modal);
+  }
+  const dialog=qs('#resultDialog')||modal.firstElementChild;
+  dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div>`;
+  modal.classList.add('show');
+}
+function updateBlockingDialog(title, html, done=false){
+  const modal=qs('#resultModal');
+  if(!modal)return openBlockingDialog(title,html);
+  const dialog=qs('#resultDialog')||modal.firstElementChild;
+  dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div>${done?'<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn primary" onclick="closeDialog()">确定</button></div>':''}`;
+  modal.classList.add('show');
+}
 function closeDialog(){qs('#resultModal')?.classList.remove('show')}
 async function loadLogs(){
   const data=await api('/api/logs');
@@ -402,6 +431,10 @@ async function loadSubscriptionConfig(){
   if(!sub.subscriptions.length && (!sub.interval || sub.interval==='1h0m0s' || sub.interval==='1h'))sub.interval='24h';
   if(sub.enabled===undefined || !sub.subscriptions.length)sub.enabled=true;
   S.subConfig=sub;
+}
+async function loadImportSources(){
+  const sources=await api('/api/import/sources').catch(()=>[]);
+  S.importSources=Array.isArray(sources)?sources:[];
 }
 function renderManaged(kind){
   const preset=kind==='pool'?'pool':kind==='failed'?'failed':'candidate';
@@ -639,18 +672,37 @@ async function runAsyncBatchTest(opts){
   const start=await api('/api/managed-nodes/batch-test/start',{method:'POST',body:JSON.stringify(body)});
   const jobId=start.job_id;
   if(!jobId)throw new Error('启动测试失败');
-  openProgress(opts.label||'正在测试');
+  S.activeBatchJob=jobId;
+  localStorage.setItem(ACTIVE_BATCH_JOB_KEY,jobId);
+  return await pollBatchJob(jobId,opts.label||'正在测试');
+}
+async function pollBatchJob(jobId,label){
+  if(S.batchPollingJob===jobId)return null;
+  S.batchPollingJob=jobId;
+  S.activeBatchJob=jobId;
+  localStorage.setItem(ACTIVE_BATCH_JOB_KEY,jobId);
+  openProgress(label||'正在测试');
   let last=null;
-  while(true){
-    try{
+  try{
+    while(true){
       last=await api('/api/managed-nodes/batch-test/status?id='+encodeURIComponent(jobId));
-    }catch(e){closeProgress();throw e}
-    updateProgress(last,opts.label||'正在测试');
-    if(last.status!=='running')break;
-    await new Promise(r=>setTimeout(r,500));
+      updateProgress(last,label||'正在测试');
+      if(last.status!=='running')break;
+      await new Promise(r=>setTimeout(r,500));
+    }
+    if(last?.status==='canceled')toast('测速已终止');
+    setTimeout(closeProgress,400);
+    return last;
+  }catch(e){
+    closeProgress();
+    throw e;
+  }finally{
+    S.batchPollingJob='';
+    if(last && last.status!=='running'){
+      S.activeBatchJob='';
+      localStorage.removeItem(ACTIVE_BATCH_JOB_KEY);
+    }
   }
-  setTimeout(closeProgress,400);
-  return last;
 }
 function openProgress(title){
   let host=qs('#progressHost');
@@ -660,12 +712,21 @@ function openProgress(title){
     <div id="progressBody" class="stack"><div class="muted">等待启动...</div></div>
   </div></div>`;
 }
+async function cancelActiveBatchTest(){
+  const id=S.activeBatchJob||localStorage.getItem(ACTIVE_BATCH_JOB_KEY);
+  if(!id){toast('没有正在运行的测速任务','err');return}
+  try{
+    const job=await api('/api/managed-nodes/batch-test/cancel?id='+encodeURIComponent(id),{method:'POST'});
+    updateProgress(job,'正在终止');
+    toast('已发送终止请求');
+  }catch(err){toast(err.message,'err')}
+}
 function updateProgress(job,title){
   const t=qs('#progressTitle');if(t)t.textContent=title;
   const body=qs('#progressBody');if(!body)return;
   const total=job.total||0,done=job.done||0;
   const pct=total>0?Math.min(100,Math.round(done/total*100)):0;
-  const phaseLabel={probe:'测速中',country:'测试国家',promote:'入池',done:'完成',queued:'排队中',empty:'空'}[job.phase]||job.phase||'';
+  const phaseLabel={probe:'测速中',country:'测试国家',promote:'入池',done:'完成',queued:'排队中',empty:'空',canceling:'正在终止',canceled:'已终止'}[job.phase]||job.phase||'';
   const stats=[];
   if(job.passed!=null)stats.push(`成功 ${job.passed}`);
   if(job.failed!=null)stats.push(`失败 ${job.failed}`);
@@ -676,7 +737,9 @@ function updateProgress(job,title){
     <div><strong>${esc(phaseLabel)}</strong> · ${esc(done)}/${esc(total)} (${pct}%)</div>
     <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
     <div class="muted">${stats.map(esc).join(' · ')||'-'}</div>
-    ${job.status==='running'?'':`<div class="row" style="justify-content:flex-end"><button class="btn" onclick="closeProgress()">关闭</button></div>`}
+    <div class="row" style="justify-content:flex-end">
+      ${job.status==='running'?(job.phase==='canceling'?'<button class="btn danger" disabled>正在终止</button>':'<button class="btn danger" onclick="cancelActiveBatchTest()">终止</button>'):'<button class="btn" onclick="closeProgress()">关闭</button>'}
+    </div>
   `;
 }
 function closeProgress(){const host=qs('#progressHost');if(host)host.innerHTML=''}
@@ -954,6 +1017,7 @@ async function probeAll(){
 }
 function renderImport(){
   const summary=S.importSummary;
+  const importCanceling=summary?.status==='running' && String(summary?.detail||'').includes('正在终止');
   qs('#view').innerHTML=`<div class="grid">
     <div class="card"><div class="card-head"><h2>导入节点</h2></div>
       <div class="card-body stack">
@@ -967,7 +1031,10 @@ function renderImport(){
         <label class="row"><input id="importAutoPromote" type="checkbox" ${S.importAutoPromote?'checked':''} style="width:auto" onchange="setImportAutoPromote(this.checked)"> 测速成功后自动加入节点池 <span class="muted">默认开启；关闭后成功节点进入候选节点。</span></label>
         <div class="field"><label>${esc(importInputLabel())}</label><textarea id="importContent" placeholder="${esc(importPlaceholder())}" oninput="S.importText=this.value"></textarea></div>
         <div class="progress"><div id="jobBar"></div></div>
-        <p class="status" id="importStatus"></p>
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <p class="status" id="importStatus"></p>
+          ${summary?.status==='running'?(importCanceling?'<button class="btn danger small" disabled>正在终止</button>':'<button class="btn danger small" onclick="cancelImportJob()">终止</button>'):''}
+        </div>
         ${summary?`<div class="node"><div class="node-main"><div><div class="node-name">${esc(summary.title)}</div><div class="node-uri">${esc(summary.detail)}</div></div>${statePill(summary.status)}</div></div>`:''}
       </div>
     </div>
@@ -1017,12 +1084,8 @@ async function importSubscriptionURLs(body){
   if(!urls.length){toast('订阅链接不能为空','err');return}
   const invalid=urls.find(u=>!/^https?:\/\//i.test(u));
   if(invalid){toast('订阅链接必须以 http:// 或 https:// 开头: '+invalid,'err');return}
-  let done=0;
-  for(const url of urls){
-    done++;
-    await importOne({mode:'url',url,tag_prefix:body.tag_prefix},`订阅 ${done}/${urls.length}`);
-  }
-  await registerSubscriptionURLs(urls);
+  await importOne({mode:'url',url:urls.join('\n'),tag_prefix:body.tag_prefix},`订阅 ${urls.length} 个`);
+  await registerSubscriptionURLs(urls,body.tag_prefix);
 }
 async function importOne(body,label){
   S.importSummary={status:'running',title:'正在解析 '+label,detail:'正在解析并准备测试节点'};
@@ -1036,25 +1099,85 @@ async function importOne(body,label){
   const ids=nodes.map(n=>n.id).filter(Boolean);
   const res=await api('/api/import/'+parsed.import_id+'/commit',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true,promote_passed:S.importAutoPromote})});
   S.lastJob=res.job_id;
+  S.activeImportJob=res.job_id;
+  localStorage.setItem(ACTIVE_IMPORT_JOB_KEY,res.job_id);
   await pollJob(res.job_id);
 }
-async function registerSubscriptionURLs(urls){
+async function registerSubscriptionURLs(urls,tagPrefix){
   await loadSubscriptionConfig();
-  const merged=[...new Set([...(S.subConfig?.subscriptions||[]),...urls])];
-  S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify({enabled:S.subConfig?.enabled!==false,interval:S.subConfig?.interval||'24h',subscriptions:merged,refresh:false})});
-  toast(`已记录 ${urls.length} 个订阅链接，设置页可统一自动刷新`);
+  const names=S.subConfig?.names||{};
+  const oldUrls=S.subConfig?.subscriptions||[];
+  const kept=oldUrls.filter(u=>names[u]!==tagPrefix && !urls.includes(u));
+  const next=[...new Set([...kept,...urls])];
+  S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify({enabled:S.subConfig?.enabled!==false,interval:S.subConfig?.interval||'24h',subscriptions:next,refresh:false})});
+  toast(`已记录 ${urls.length} 个订阅链接；${tagPrefix} 采用最新快照`);
 }
 async function pollJob(id){
-  while(true){
-    const bar=qs('#jobBar'),status=qs('#importStatus');
-    const j=await api('/api/import/jobs/'+id);
+  if(!id || S.importPollingJob===id)return;
+  S.importPollingJob=id;
+  S.activeImportJob=id;
+  localStorage.setItem(ACTIVE_IMPORT_JOB_KEY,id);
+  let last=null;
+  try{
+    while(true){
+      const bar=qs('#jobBar'),status=qs('#importStatus');
+      const j=await api('/api/import/jobs/'+id);
+      last=j;
+      const done=(j.passed||0)+(j.failed||0);
+      const pct=j.total?Math.round(done*100/j.total):0;
+      if(bar)bar.style.width=pct+'%';
+      if(status)status.textContent=`${j.status}: ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
+      S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`进度 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
+      if(j.status==='completed'||j.status==='failed'||j.status==='canceled'){
+        toast(j.status==='canceled'?'导入任务已终止':'导入任务结束');
+        await loadManaged();
+        renderNav();
+        if(S.page==='import')renderImport();
+        break;
+      }
+      await new Promise(r=>setTimeout(r,500));
+    }
+  }finally{
+    S.importPollingJob='';
+    if(last && last.status!=='running'){
+      S.activeImportJob='';
+      localStorage.removeItem(ACTIVE_IMPORT_JOB_KEY);
+    }
+  }
+}
+async function cancelImportJob(){
+  const id=S.activeImportJob||S.lastJob||localStorage.getItem(ACTIVE_IMPORT_JOB_KEY);
+  if(!id){toast('没有正在运行的导入任务','err');return}
+  try{
+    const j=await api('/api/import/jobs/'+encodeURIComponent(id)+'/cancel',{method:'POST'});
     const done=(j.passed||0)+(j.failed||0);
-    const pct=j.total?Math.round(done*100/j.total):0;
-    if(bar)bar.style.width=pct+'%';
-    if(status)status.textContent=`${j.status}: ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
     S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`进度 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
-    if(j.status==='completed'||j.status==='failed'){toast('导入任务结束');await loadManaged();renderNav();renderImport();break}
-    await new Promise(r=>setTimeout(r,1000));
+    renderImport();
+    toast('已发送终止请求');
+  }catch(err){toast(err.message,'err')}
+}
+function restoreActiveJobs(){
+  const importId=localStorage.getItem(ACTIVE_IMPORT_JOB_KEY);
+  if(importId && !S.importPollingJob){
+    S.activeImportJob=importId;
+    if(S.page==='import' && !S.importSummary){
+      S.importSummary={status:'running',title:'恢复导入任务',detail:'正在读取后端进度'};
+      renderImport();
+    }
+    pollJob(importId).catch(err=>{
+      S.activeImportJob='';
+      localStorage.removeItem(ACTIVE_IMPORT_JOB_KEY);
+      toast(err.message,'err');
+    });
+  }
+  const batchId=localStorage.getItem(ACTIVE_BATCH_JOB_KEY);
+  if(batchId && !S.batchPollingJob){
+    S.activeBatchJob=batchId;
+    pollBatchJob(batchId,'恢复测速进度').catch(err=>{
+      S.activeBatchJob='';
+      localStorage.removeItem(ACTIVE_BATCH_JOB_KEY);
+      toast(err.message,'err');
+    });
   }
 }
 function renderConfig(){
@@ -1211,10 +1334,32 @@ async function runBulkTest(){
   toast('批量测试完成：'+parts.join(' · '));
   await refresh();
 }
+function importSourceType(s){
+  if(s?.mode==='url')return '订阅链接';
+  const f=String(s?.format||'');
+  if(f.includes('base64'))return 'Base64';
+  if(f.includes('clash'))return 'Clash YAML';
+  if(f.includes('uri'))return 'URI';
+  return s?.mode==='content'?'内容导入':'导入来源';
+}
+function importSourceText(s){
+  if(s?.mode==='url')return s.source||'';
+  const f=String(s?.format||'');
+  if(f.includes('base64'))return 'Base64 内容导入';
+  if(f.includes('clash'))return 'Clash YAML 内容导入';
+  if(f.includes('uri'))return 'URI 列表内容导入';
+  return s?.source&&s.source!=='content'?s.source:'内容导入';
+}
+function fmtDate(v){
+  if(!v)return '-';
+  const d=new Date(v);
+  return Number.isNaN(d.getTime())?'-':d.toLocaleString();
+}
 function renderSettings(){
   const s=S.settings||{};
   const listener=s.listener||{},multi=s.multi_port||{},pool=s.pool||{},management=s.management||{};
   const sub=S.subConfig||{subscriptions:[],enabled:true,interval:'24h'};
+  const sources=S.importSources||[];
   const interval=durationParts(sub.interval||'24h');
   qs('#view').innerHTML=`<div class="grid">
     <div class="card"><div class="card-head"><h2>运行设置</h2></div><div class="card-body stack">
@@ -1234,12 +1379,24 @@ function renderSettings(){
         <div class="field"><label>小时</label><input id="subHours" type="number" min="0" max="23" value="${interval.hours}"></div>
         <div class="field"><label>分钟</label><input id="subMinutes" type="number" min="0" max="59" value="${interval.minutes}"></div>
       </div>
-      <div class="row"><button class="btn green" onclick="saveAutoRefresh()">保存并刷新订阅</button></div>
-      <p class="muted">自动刷新对“导入节点”中导入过的所有订阅链接生效；这里不再单独编辑 URL。</p>
+      <div class="row"><button class="btn" onclick="saveAutoRefresh()">保存自动刷新设置</button><button class="btn green" onclick="refreshAllImportSources()">手动刷新全部订阅来源</button></div>
+      <p class="muted">自动刷新只保存定时策略；日常建议使用下方“手动刷新”，它会按标签快照替换旧节点。</p>
     </div></div>
-    <div class="card"><div class="card-head"><h2>当前订阅</h2><span class="muted">${esc((sub.subscriptions||[]).length)} 个</span></div><div class="card-body stack">
-      ${(sub.subscriptions||[]).length?`<div class="stack">${(sub.subscriptions||[]).map((u,i)=>`<div class="row" style="gap:8px;align-items:center"><div style="flex:1;word-break:break-all"><strong>${esc((sub.names&&sub.names[u])||u)}</strong>：<code class="muted">${esc(u)}</code></div><button class="btn small danger" onclick="deleteSubscription(${i})">删除</button></div>`).join('')}</div>`:`<div class="empty">还没有订阅</div>`}
-      <p class="muted">删除将同时移除 config.yaml 中的订阅链接，以及由该订阅导入的全部节点（节点池/失败/候选）。</p>
+    <div class="card"><div class="card-head"><h2>当前导入来源</h2><div class="row"><span class="muted">${esc(sources.length)} 个</span><button class="btn small danger" onclick="deleteAllImportSources()" ${sources.length?'':'disabled'}>一键删除全部导入</button></div></div><div class="card-body stack">
+      ${sources.length?`<div class="stack">${sources.map((src,i)=>`<div class="source-row">
+        <div style="flex:1;min-width:0">
+          <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
+            <strong>${esc(importSourceType(src))}</strong>
+            <span class="pill green">${esc(src.tag_prefix||'local')}</span>
+            <span class="muted">总数 ${esc(src.total||0)} / 池内 ${esc(src.pool||0)} / 候选 ${esc(src.candidate||0)} / 失败 ${esc(src.failed||0)}</span>
+          </div>
+          <div style="word-break:break-all;margin-top:6px"><code class="muted">${esc(importSourceText(src))}</code></div>
+          <div class="muted" style="margin-top:6px">更新：${esc(fmtDate(src.updated_at))}</div>
+        </div>
+        ${src.mode==='url'&&src.source?`<button class="btn small green" onclick="refreshImportSource(${i})">手动刷新</button>`:''}
+        <button class="btn small danger" onclick="deleteImportSource(${i})">删除</button>
+      </div>`).join('')}</div>`:`<div class="empty">还没有导入来源</div>`}
+      <p class="muted">订阅来源按标签作为快照管理：同一标签再次导入或手动刷新时，会先成功解析最新内容，再替换旧的节点池/候选/失败节点。</p>
     </div></div>
   </div>`;
   qs('#setMode').value=s.mode||'pool';
@@ -1290,8 +1447,27 @@ function subscriptionInterval(){
   return `${hh}h${mm}m`;
 }
 async function saveAutoRefresh(){
-  const body={enabled:qs('#subEnabled').checked,interval:subscriptionInterval(),subscriptions:S.subConfig?.subscriptions||[],refresh:true};
-  try{S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify(body)});toast('订阅自动刷新已保存并执行刷新');renderSettings()}catch(err){toast(err.message,'err')}
+  const body={enabled:qs('#subEnabled').checked,interval:subscriptionInterval(),subscriptions:S.subConfig?.subscriptions||[],refresh:false};
+  try{S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify(body)});toast('订阅自动刷新设置已保存');renderSettings()}catch(err){toast(err.message,'err')}
+}
+async function refreshAllImportSources(){
+  const sources=(S.importSources||[]).filter(s=>s.mode==='url'&&s.source);
+  if(!sources.length){toast('没有可刷新的订阅来源','err');return}
+  let ok=0,fail=0,errors=[];
+  for(let i=0;i<sources.length;i++){
+    const src=sources[i];
+    try{
+      const job=await refreshSubscriptionSource(src,{index:i+1,total:sources.length});
+      if(job?.status==='completed'||job?.status==='finished')ok++;else fail++;
+    }catch(err){
+      fail++;
+      errors.push(`${src.tag_prefix||'local'}: ${err.message}`);
+    }
+  }
+  await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
+  renderNav();
+  renderSettings();
+  updateBlockingDialog('刷新完成',`<p>成功 ${esc(ok)} 个，失败 ${esc(fail)} 个。</p>${errors.length?`<pre class="log-view">${esc(errors.join('\n'))}</pre>`:''}`,true);
 }
 async function deleteSubscription(idx){
   const urls=S.subConfig?.subscriptions||[];
@@ -1302,6 +1478,104 @@ async function deleteSubscription(idx){
     const res=await api('/api/subscription/delete',{method:'POST',body:JSON.stringify({url})});
     toast(`已删除订阅，移除节点 ${res.deleted_nodes||0} 个`);
     S.subConfig=await api('/api/subscription/config');
+    renderSettings();
+  }catch(err){toast(err.message,'err')}
+}
+async function deleteImportSource(idx){
+  const src=(S.importSources||[])[idx];
+  if(!src){toast('导入来源不存在','err');return}
+  const label=importSourceText(src);
+  if(!confirm(`确认删除导入来源？\n${label}\n\n该来源导入的节点都会被删除。`))return;
+  try{
+    const res=await api('/api/import/sources',{method:'POST',body:JSON.stringify({key:src.key})});
+    if(src.mode==='url'&&src.source)await removeSubscriptionURLs(src.source.split(/\r?\n/).map(x=>x.trim()).filter(Boolean));
+    toast(`已删除导入来源，移除节点 ${res.deleted_nodes||0} 个`);
+    await Promise.all([loadSubscriptionConfig(),loadImportSources()]);
+    renderSettings();
+  }catch(err){toast(err.message,'err')}
+}
+async function refreshImportSource(idx){
+  const src=(S.importSources||[])[idx];
+  const urls=(src?.source||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(!src||src.mode!=='url'||!urls.length){toast('该来源不能刷新','err');return}
+  try{
+    const job=await refreshSubscriptionSource(src,{index:1,total:1});
+    await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
+    renderNav();
+    updateBlockingDialog('刷新完成',`<p>订阅 <b>${esc(src.tag_prefix||'local')}</b> 已按最新内容替换。</p><p>进度 ${esc(job?.total||0)}/${esc(job?.total||0)}，成功 ${esc(job?.passed||0)}，失败 ${esc(job?.failed||0)}，入池 ${esc(job?.promoted||0)}</p>`,true);
+    renderSettings();
+  }catch(err){
+    updateBlockingDialog('刷新失败',`<p>${esc(err.message)}</p><p class="muted">旧节点未被删除。</p>`,true);
+  }
+}
+async function refreshSubscriptionSource(src,ctx){
+  const urls=(src?.source||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const tag=src?.tag_prefix||'local';
+  const rows=urls.map((u,i)=>({url:u,status:i===0?'等待':'等待',nodes:0,done:0,total:0,passed:0,failed:0,promoted:0}));
+  const render=(title,done=false,extra='')=>{
+    const list=rows.map((r,i)=>`<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>订阅 ${i+1}/${rows.length}</strong><span class="pill ${r.status.includes('完成')?'green':r.status.includes('失败')?'red':'amber'}">${esc(r.status)}</span></div><div style="word-break:break-all"><code class="muted">${esc(r.url)}</code></div><div class="muted">节点 ${esc(r.nodes||0)} · 进度 ${esc(r.done||0)}/${esc(r.total||0)} · 成功 ${esc(r.passed||0)} · 失败 ${esc(r.failed||0)} · 入池 ${esc(r.promoted||0)}</div></div></div>`).join('');
+    updateBlockingDialog(title,`<p>标签 <b>${esc(tag)}</b>，订阅组 ${esc(ctx.index)}/${esc(ctx.total)}。刷新会自动测速，成功节点自动加入节点池。</p>${list}${extra}`,done);
+  };
+  render('正在刷新订阅');
+  rows.forEach(r=>r.status='拉取/解析中');
+  render('正在刷新订阅');
+  const parsed=await api('/api/import/parse',{method:'POST',body:JSON.stringify({mode:'url',url:urls.join('\n'),tag_prefix:tag})});
+  const nodes=Array.isArray(parsed.nodes)?parsed.nodes:[];
+  if(!nodes.length)throw new Error('未解析到任何节点');
+  const byURL={};
+  for(const n of nodes){const u=n.import_source||'';byURL[u]=(byURL[u]||0)+1}
+  rows.forEach(r=>{r.nodes=byURL[r.url]||0;r.status='已解析，等待测速';r.total=r.nodes});
+  render('正在刷新订阅');
+  let total=0,done=0,passed=0,failed=0,promoted=0,last={status:'completed',total:0,passed:0,failed:0,promoted:0};
+  for(let i=0;i<rows.length;i++){
+    const row=rows[i];
+    const ids=nodes.filter(n=>(n.import_source||'')===row.url).map(n=>n.id).filter(Boolean);
+    row.total=ids.length;
+    total+=ids.length;
+    if(!ids.length){row.status='完成';continue}
+    row.status='测速/入池中';
+    render('正在刷新订阅');
+    const res=await api('/api/import/'+parsed.import_id+'/commit',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true,promote_passed:true})});
+    while(true){
+      const j=await api('/api/import/jobs/'+res.job_id);
+      last=j;
+      row.done=(j.passed||0)+(j.failed||0);
+      row.passed=j.passed||0;
+      row.failed=j.failed||0;
+      row.promoted=j.promoted||0;
+      render('正在刷新订阅');
+      if(j.status==='completed'||j.status==='failed'||j.status==='canceled'){
+        row.status=j.status==='completed'?'完成':j.status==='canceled'?'已终止':'失败';
+        done+=row.done;passed+=row.passed;failed+=row.failed;promoted+=row.promoted;
+        if(j.status!=='completed')last.status=j.status;
+        render('正在刷新订阅');
+        break;
+      }
+      await new Promise(r=>setTimeout(r,500));
+    }
+  }
+  await registerSubscriptionURLs(urls,tag);
+  last.total=total;last.passed=passed;last.failed=failed;last.promoted=promoted;
+  render('刷新完成',true,`<p>总进度 ${esc(done)}/${esc(total)}，成功 ${esc(passed)}，失败 ${esc(failed)}，入池 ${esc(promoted)}。</p>`);
+  return last;
+}
+async function removeSubscriptionURLs(urls){
+  if(!urls.length)return;
+  await loadSubscriptionConfig();
+  const remove=new Set(urls);
+  const next=(S.subConfig?.subscriptions||[]).filter(u=>!remove.has(u));
+  S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify({enabled:S.subConfig?.enabled!==false,interval:S.subConfig?.interval||'24h',subscriptions:next,refresh:false})});
+}
+async function deleteAllImportSources(){
+  const sources=S.importSources||[];
+  if(!sources.length){toast('没有可删除的导入来源','err');return}
+  const total=sources.reduce((sum,src)=>sum+(Number(src.total)||0),0);
+  if(!confirm(`确认删除全部导入？\n\n将删除 ${sources.length} 个导入来源、${total} 个节点，并清空所有订阅链接。此操作不会删除手动配置节点。`))return;
+  try{
+    const res=await api('/api/import/sources',{method:'POST',body:JSON.stringify({all:true})});
+    toast(`已删除全部导入，移除节点 ${res.deleted_nodes||0} 个`);
+    await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
+    renderNav();
     renderSettings();
   }catch(err){toast(err.message,'err')}
 }

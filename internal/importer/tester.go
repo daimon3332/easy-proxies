@@ -47,7 +47,7 @@ func NewNodeTester(buildFn OutboundBuilder, opts ...TesterOption) *NodeTester {
 		concurrency = 4
 	}
 	t := &NodeTester{
-		probeTarget:   "www.gstatic.com/generate_204",
+		probeTarget:   "https://www.google.com/generate_204",
 		ipinfoURL:     "https://ipinfo.io/json",
 		timeout:       10 * time.Second,
 		concurrency:   concurrency,
@@ -173,7 +173,7 @@ func (t *NodeTester) clientForNode(ctx context.Context, node ManagedNode) (*http
 		return nil, nil, fmt.Errorf("build outbound: %w", err)
 	}
 
-	instance, port, err := t.startBox(ctx, tag, outbound)
+	instance, port, err := startProxyBox(ctx, tag, outbound)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -246,7 +246,7 @@ func safeTestResult(fn func() TestResult) (result TestResult) {
 	return fn()
 }
 
-func (t *NodeTester) startBox(ctx context.Context, outboundTag string, outbound option.Outbound) (*box.Box, uint16, error) {
+func startProxyBox(ctx context.Context, outboundTag string, outbound option.Outbound) (*box.Box, uint16, error) {
 	addr := badoption.Addr(netipAddr127())
 	inboundTag := "test-in-" + safeTagPart(outboundTag)
 	opts := option.Options{
@@ -306,7 +306,7 @@ func (t *NodeTester) probe(ctx context.Context, client *http.Client) error {
 func normalizeProbeURL(target string) (string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
-		target = "www.apple.com:80"
+		target = "https://www.google.com/generate_204"
 	}
 
 	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {

@@ -1059,6 +1059,7 @@ func (m *Manager) TriggerReload(ctx context.Context) error {
 
 	m.mu.RLock()
 	cfgCopy := m.copyConfigLocked()
+	notStarted := m.currentBox == nil
 	m.mu.RUnlock()
 
 	if cfgCopy == nil {
@@ -1073,6 +1074,15 @@ func (m *Manager) TriggerReload(ctx context.Context) error {
 				return fmt.Errorf("save rebuilt config: %w", err)
 			}
 		}
+	}
+	if notStarted {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		m.mu.Lock()
+		m.cfg = cfgCopy
+		m.mu.Unlock()
+		return m.Start(ctx)
 	}
 	return m.Reload(cfgCopy)
 }

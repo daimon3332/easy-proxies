@@ -56,6 +56,7 @@ const (
 	ImportStatusRunning   ImportStatus = "running"
 	ImportStatusCompleted ImportStatus = "completed"
 	ImportStatusFailed    ImportStatus = "failed"
+	ImportStatusCanceled  ImportStatus = "canceled"
 )
 
 type ImportJob struct {
@@ -82,6 +83,22 @@ type ParseResponse struct {
 	ImportID string        `json:"import_id"`
 	Format   string        `json:"format"`
 	Nodes    []ManagedNode `json:"nodes"`
+}
+
+type ImportSourceSummary struct {
+	Key         string    `json:"key"`
+	ImportID    string    `json:"import_id,omitempty"`
+	Mode        string    `json:"mode"`
+	Format      string    `json:"format"`
+	TagPrefix   string    `json:"tag_prefix"`
+	Source      string    `json:"source"`
+	Total       int       `json:"total"`
+	Pool        int       `json:"pool"`
+	Candidate   int       `json:"candidate"`
+	Failed      int       `json:"failed"`
+	Refreshable bool      `json:"refreshable"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type CommitRequest struct {
@@ -132,6 +149,7 @@ const (
 	TestJobRunning  TestJobStatus = "running"
 	TestJobFinished TestJobStatus = "finished"
 	TestJobFailed   TestJobStatus = "failed"
+	TestJobCanceled TestJobStatus = "canceled"
 )
 
 // TestJob is a snapshot of an async batch test exposed over the WebUI polling

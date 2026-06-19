@@ -119,13 +119,19 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		server.SetImportService(importSvc)
 	}
 
-	if err := boxMgr.Start(ctx); err != nil {
-		return fmt.Errorf("start box manager: %w", err)
+	coreStarted := false
+	if len(cfg.Nodes) == 0 {
+		fmt.Println("No pool nodes configured; WebUI is available for importing nodes.")
+	} else {
+		if err := boxMgr.Start(ctx); err != nil {
+			return fmt.Errorf("start box manager: %w", err)
+		}
+		coreStarted = true
 	}
 	defer boxMgr.Close()
 
 	// Start refresh loop only after the initial sing-box instance is ready.
-	if cfg.SubscriptionRefresh.Enabled && len(cfg.Subscriptions) > 0 {
+	if coreStarted && cfg.SubscriptionRefresh.Enabled && len(cfg.Subscriptions) > 0 {
 		subMgr.Start()
 	}
 

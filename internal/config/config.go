@@ -1,14 +1,13 @@
 package config
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"easy_proxies/internal/subfetch"
 
 	"gopkg.in/yaml.v3"
 )
@@ -269,7 +270,7 @@ func (c *Config) normalize() error {
 		c.Management.Listen = "127.0.0.1:9091"
 	}
 	if c.Management.ProbeTarget == "" {
-		c.Management.ProbeTarget = "www.apple.com:80"
+		c.Management.ProbeTarget = "https://www.google.com/generate_204"
 	}
 	if c.Management.Enabled == nil {
 		defaultEnabled := true
@@ -352,9 +353,6 @@ func (c *Config) normalize() error {
 		}
 	}
 
-	if len(c.Nodes) == 0 {
-		return errors.New("config.nodes cannot be empty (configure nodes in config or use nodes_file)")
-	}
 	usedPorts := make(map[uint16]bool)
 	if c.Mode == "hybrid" {
 		usedPorts[c.Listener.Port] = true
@@ -474,7 +472,7 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 		c.Management.Listen = "127.0.0.1:9091"
 	}
 	if c.Management.ProbeTarget == "" {
-		c.Management.ProbeTarget = "www.apple.com:80"
+		c.Management.ProbeTarget = "https://www.google.com/generate_204"
 	}
 	if c.Management.Enabled == nil {
 		defaultEnabled := true
@@ -494,10 +492,6 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 	}
 	if c.SubscriptionRefresh.MinAvailableNodes <= 0 {
 		c.SubscriptionRefresh.MinAvailableNodes = 1
-	}
-
-	if len(c.Nodes) == 0 {
-		return errors.New("config.nodes cannot be empty")
 	}
 
 	// Build set of ports already assigned so we never duplicate ports in one config.
@@ -636,36 +630,12 @@ func loadNodesFromSubscription(subURL string, timeout time.Duration) ([]NodeConf
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
-	client := &http.Client{
+	body, err := subfetch.Fetch(context.Background(), subURL, subfetch.Options{
 		Timeout: timeout,
-	}
-
-	req, err := http.NewRequest("GET", subURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	// Use clash-compatible User-Agent to get Clash YAML format from subscription servers
-	// This ensures we receive structured YAML with all proxy types (AnyTLS, TUIC, etc.)
-	// instead of base64-encoded content that may only contain basic SS nodes
-	req.Header.Set("User-Agent", "clash-verge/v2.2.3")
-	req.Header.Set("Accept", "*/*")
-
-	resp, err := client.Do(req)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("fetch subscription: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("subscription returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-
 	content := string(body)
 
 	// Try to detect and parse different formats

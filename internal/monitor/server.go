@@ -140,6 +140,7 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	mux.HandleFunc("/api/logs", s.withAuth(s.handleLogs))
 	mux.HandleFunc("/api/logs/clear", s.withAuth(s.handleLogsClear))
 	mux.HandleFunc("/api/import/parse", s.withAuth(s.handleImportParse))
+	mux.HandleFunc("/api/import/sources", s.withAuth(s.handleImportSources))
 	mux.HandleFunc("/api/import/", s.withAuth(s.handleImportAction))
 	mux.HandleFunc("/api/nodes/all", s.withAuth(s.handleManagedNodesAll))
 	mux.HandleFunc("/api/nodes/pool", s.withAuth(s.handleManagedNodesPool))

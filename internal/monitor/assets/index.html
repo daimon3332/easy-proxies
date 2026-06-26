@@ -1454,24 +1454,44 @@ async function saveAutoRefresh(){
   const body={enabled:qs('#subEnabled').checked,interval:subscriptionInterval(),subscriptions:S.subConfig?.subscriptions||[],refresh:false};
   try{S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify(body)});toast('订阅自动刷新设置已保存');renderSettings()}catch(err){toast(err.message,'err')}
 }
+function renderRefreshSourceJobDialog(job,title,done){
+  const groups=Array.isArray(job?.groups)?job.groups:[];
+  const list=groups.map((g,groupIdx)=>{
+    const rows=(Array.isArray(g.urls)?g.urls:[]).map((r,urlIdx)=>{
+      const raw=String(r.status||'waiting').toLowerCase();
+      const cls=raw==='completed'?'green':raw==='failed'?'red':'amber';
+      const statusText=raw==='pulling'?'拉取节点中':raw==='testing'?'测速/入池中':raw==='completed'?'完成':raw==='failed'?'失败':'等待';
+      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>订阅 ${groupIdx+1}-${urlIdx+1}</strong><span class="pill ${cls}">${esc(statusText)}</span></div><div style="word-break:break-all"><code class="muted">${esc(r.url||'')}</code></div><div class="muted">节点 ${esc(r.nodes||0)} · 进度 ${esc(r.done||0)}/${esc(r.total||0)} · 成功 ${esc(r.passed||0)} · 失败 ${esc(r.failed||0)} · 入池 ${esc(r.promoted||0)}</div>${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
+    }).join('');
+    return `<div class="stack" style="gap:10px;margin-bottom:12px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">URL ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
+  }).join('');
+  updateBlockingDialog(title,`<p>订阅链接 ${esc(job?.done_urls||0)}/${esc(job?.total_urls||0)}，成功 ${esc(job?.successful||0)}，失败 ${esc(job?.failed||0)}，当前入池 ${esc(job?.pool_count||0)}。</p>${list}`,done);
+}
+async function waitRefreshSourceJob(jobId,title){
+  while(true){
+    const job=await api('/api/import/refresh/jobs/'+jobId);
+    renderRefreshSourceJobDialog(job,title||'正在刷新订阅',false);
+    if(job.status==='finished'||job.status==='failed'){
+      return job;
+    }
+    await new Promise(r=>setTimeout(r,500));
+  }
+}
 async function refreshAllImportSources(){
   const sources=(S.importSources||[]).filter(s=>s.mode==='url'&&s.source);
   if(!sources.length){toast('没有可刷新的订阅来源','err');return}
-  let ok=0,fail=0,errors=[];
-  for(let i=0;i<sources.length;i++){
-    const src=sources[i];
-    try{
-      const job=await refreshSubscriptionSource(src,{index:i+1,total:sources.length});
-      if(job?.status==='completed'||job?.status==='finished')ok++;else fail++;
-    }catch(err){
-      fail++;
-      errors.push(`${src.tag_prefix||'local'}: ${err.message}`);
-    }
+  let job;
+  try{
+    const started=await api('/api/import/refresh',{method:'POST',body:JSON.stringify({key:''})});
+    job=await waitRefreshSourceJob(started.job_id,'正在刷新订阅');
+  }catch(err){
+    updateBlockingDialog('刷新失败',`<p>${esc(err.message)}</p>`,true);
+    return;
   }
   await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
   renderNav();
   renderSettings();
-  updateBlockingDialog('刷新完成',`<p>成功 ${esc(ok)} 个，失败 ${esc(fail)} 个。</p>${errors.length?`<pre class="log-view">${esc(errors.join('\n'))}</pre>`:''}`,true);
+  renderRefreshSourceJobDialog(job,job?.status==='failed'?'刷新失败':'刷新完成',true);
 }
 async function deleteSubscription(idx){
   const urls=S.subConfig?.subscriptions||[];
@@ -1506,62 +1526,16 @@ async function refreshImportSource(idx){
     const job=await refreshSubscriptionSource(src,{index:1,total:1});
     await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
     renderNav();
-    updateBlockingDialog('刷新完成',`<p>订阅 <b>${esc(src.tag_prefix||'local')}</b> 已按最新内容替换。</p><p>进度 ${esc(job?.total||0)}/${esc(job?.total||0)}，成功 ${esc(job?.passed||0)}，失败 ${esc(job?.failed||0)}，入池 ${esc(job?.promoted||0)}</p>`,true);
+    renderRefreshSourceJobDialog(job,job?.status==='failed'?'刷新失败':'刷新完成',true);
     renderSettings();
   }catch(err){
-    updateBlockingDialog('刷新失败',`<p>${esc(err.message)}</p><p class="muted">旧节点未被删除。</p>`,true);
+    updateBlockingDialog('刷新失败',`<p>${esc(err.message)}</p>`,true);
   }
 }
 async function refreshSubscriptionSource(src,ctx){
-  const urls=(src?.source||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-  const tag=src?.tag_prefix||'local';
-  const rows=urls.map((u,i)=>({url:u,status:i===0?'等待':'等待',nodes:0,done:0,total:0,passed:0,failed:0,promoted:0}));
-  const render=(title,done=false,extra='')=>{
-    const list=rows.map((r,i)=>`<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>订阅 ${i+1}/${rows.length}</strong><span class="pill ${r.status.includes('完成')?'green':r.status.includes('失败')?'red':'amber'}">${esc(r.status)}</span></div><div style="word-break:break-all"><code class="muted">${esc(r.url)}</code></div><div class="muted">节点 ${esc(r.nodes||0)} · 进度 ${esc(r.done||0)}/${esc(r.total||0)} · 成功 ${esc(r.passed||0)} · 失败 ${esc(r.failed||0)} · 入池 ${esc(r.promoted||0)}</div></div></div>`).join('');
-    updateBlockingDialog(title,`<p>标签 <b>${esc(tag)}</b>，订阅组 ${esc(ctx.index)}/${esc(ctx.total)}。刷新会自动测速，成功节点自动加入节点池。</p>${list}${extra}`,done);
-  };
-  render('正在刷新订阅');
-  rows.forEach(r=>r.status='拉取/解析中');
-  render('正在刷新订阅');
-  const parsed=await api('/api/import/parse',{method:'POST',body:JSON.stringify({mode:'url',url:urls.join('\n'),tag_prefix:tag})});
-  const nodes=Array.isArray(parsed.nodes)?parsed.nodes:[];
-  if(!nodes.length)throw new Error('未解析到任何节点');
-  const byURL={};
-  for(const n of nodes){const u=n.import_source||'';byURL[u]=(byURL[u]||0)+1}
-  rows.forEach(r=>{r.nodes=byURL[r.url]||0;r.status='已解析，等待测速';r.total=r.nodes});
-  render('正在刷新订阅');
-  let total=0,done=0,passed=0,failed=0,promoted=0,last={status:'completed',total:0,passed:0,failed:0,promoted:0};
-  for(let i=0;i<rows.length;i++){
-    const row=rows[i];
-    const ids=nodes.filter(n=>(n.import_source||'')===row.url).map(n=>n.id).filter(Boolean);
-    row.total=ids.length;
-    total+=ids.length;
-    if(!ids.length){row.status='完成';continue}
-    row.status='测速/入池中';
-    render('正在刷新订阅');
-    const res=await api('/api/import/'+parsed.import_id+'/commit',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true,promote_passed:true})});
-    while(true){
-      const j=await api('/api/import/jobs/'+res.job_id);
-      last=j;
-      row.done=(j.passed||0)+(j.failed||0);
-      row.passed=j.passed||0;
-      row.failed=j.failed||0;
-      row.promoted=j.promoted||0;
-      render('正在刷新订阅');
-      if(j.status==='completed'||j.status==='failed'||j.status==='canceled'){
-        row.status=j.status==='completed'?'完成':j.status==='canceled'?'已终止':'失败';
-        done+=row.done;passed+=row.passed;failed+=row.failed;promoted+=row.promoted;
-        if(j.status!=='completed')last.status=j.status;
-        render('正在刷新订阅');
-        break;
-      }
-      await new Promise(r=>setTimeout(r,500));
-    }
-  }
-  await registerSubscriptionURLs(urls,tag);
-  last.total=total;last.passed=passed;last.failed=failed;last.promoted=promoted;
-  render('刷新完成',true,`<p>总进度 ${esc(done)}/${esc(total)}，成功 ${esc(passed)}，失败 ${esc(failed)}，入池 ${esc(promoted)}。</p>`);
-  return last;
+  if(!src||src.mode!=='url'||!src.key)throw new Error('该来源不能刷新');
+  const started=await api('/api/import/refresh',{method:'POST',body:JSON.stringify({key:src.key})});
+  return await waitRefreshSourceJob(started.job_id,'正在刷新订阅');
 }
 async function removeSubscriptionURLs(urls){
   if(!urls.length)return;

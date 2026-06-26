@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	"easy_proxies/internal/config"
 )
@@ -235,6 +236,130 @@ func TestDeleteBySubscriptionBatchesStoreAndConfigRemoval(t *testing.T) {
 	}
 	if _, ok := store.GetNode("other"); !ok {
 		t.Fatal("node from another source should remain")
+	}
+}
+
+func TestMarkSubscriptionFailedMovesNodesToFailedPool(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	svc, store := newBatchServiceForTest(t, mgr)
+	const subURL = "https://example.test/sub"
+
+	nodes := []ManagedNode{
+		{ID: "pool-1", Name: "tag-US1", OriginalName: "US1", URI: "vmess://one", State: StateInPool, InPool: true, Port: 24000, ImportSource: subURL, TagPrefix: "tag"},
+		{ID: "cand-1", Name: "tag-JP1", OriginalName: "JP1", URI: "vmess://two", State: StatePassed, ImportSource: subURL, TagPrefix: "tag"},
+		{ID: "fail-1", Name: "tag-HK1", OriginalName: "HK1", URI: "vmess://four", State: StateFailed, LastError: "old error", ImportSource: subURL, TagPrefix: "tag"},
+		{ID: "other", Name: "other-SG1", OriginalName: "SG1", URI: "vmess://three", State: StatePassed, ImportSource: "content", TagPrefix: "other"},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	moved, err := svc.MarkSubscriptionFailed(subURL, "refresh timeout")
+	if err != nil {
+		t.Fatalf("MarkSubscriptionFailed() error = %v", err)
+	}
+	if moved != 3 {
+		t.Fatalf("moved = %d, want 3", moved)
+	}
+	if mgr.reloadCount != 1 {
+		t.Fatalf("reloadCount = %d, want 1", mgr.reloadCount)
+	}
+	if len(mgr.deletedBatches) != 1 || !reflect.DeepEqual(mgr.deletedBatches[0], []string{"tag-US1"}) {
+		t.Fatalf("deletedBatches = %#v, want [[\"tag-US1\"]]", mgr.deletedBatches)
+	}
+	if len(mgr.createdBatches) != 0 {
+		t.Fatalf("createdBatches = %#v, want none", mgr.createdBatches)
+	}
+
+	poolNode, _ := store.GetNode("pool-1")
+	if poolNode.State != StateFailed || poolNode.InPool || poolNode.Port != 0 || poolNode.Name != "tag-US1" || poolNode.LastError != "refresh timeout" {
+		t.Fatalf("poolNode = %#v, want failed pool node", poolNode)
+	}
+	candNode, _ := store.GetNode("cand-1")
+	if candNode.State != StateFailed || candNode.InPool || candNode.Port != 0 || candNode.Name != "tag-JP1" || candNode.LastError != "refresh timeout" {
+		t.Fatalf("candNode = %#v, want failed candidate node", candNode)
+	}
+	failNode, _ := store.GetNode("fail-1")
+	if failNode.State != StateFailed || failNode.InPool || failNode.Port != 0 || failNode.Name != "tag-HK1" || failNode.LastError != "refresh timeout" {
+		t.Fatalf("failNode = %#v, want failed node retained in failed pool", failNode)
+	}
+	otherNode, _ := store.GetNode("other")
+	if otherNode.State != StatePassed {
+		t.Fatalf("otherNode = %#v, want unchanged node from another source", otherNode)
+	}
+}
+
+func TestFinalizeRefreshJobFailsWhenNoSuccessfulURLs(t *testing.T) {
+	svc, _ := newBatchServiceForTest(t, &batchNodeManagerStub{})
+	job := &SourceRefreshJob{TotalURLs: 1, Successful: 0, PoolCount: 5}
+	svc.finalizeRefreshJob(job)
+	if job.Status != SourceRefreshJobFailed {
+		t.Fatalf("job.Status = %q, want %q", job.Status, SourceRefreshJobFailed)
+	}
+	if job.Error != "全部订阅链接都未拉取到节点" {
+		t.Fatalf("job.Error = %q, want default failure message", job.Error)
+	}
+}
+
+func TestParseRefreshSubscriptionURLOnceReplacesSameSourceOnly(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	svc, store := newBatchServiceForTest(t, mgr)
+	const newURI = "trojan://pass@example.com:443#Alpha"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(newURI + "\n"))
+	}))
+	defer ts.Close()
+
+	old := ManagedNode{
+		ID:           "old",
+		Name:         "sub-OLD1",
+		OriginalName: "OLD1",
+		URI:          "trojan://old@example.com:443#OLD1",
+		State:        StateInPool,
+		InPool:       true,
+		Port:         24000,
+		ImportMode:   "url",
+		ImportSource: ts.URL,
+		ImportFormat: "uri_list",
+		TagPrefix:    "sub",
+	}
+	other := ManagedNode{
+		ID:           "other",
+		Name:         "sub-KEEP1",
+		OriginalName: "KEEP1",
+		URI:          "trojan://keep@example.com:443#KEEP1",
+		State:        StatePassed,
+		ImportMode:   "url",
+		ImportSource: "https://example.test/other",
+		ImportFormat: "uri_list",
+		TagPrefix:    "sub",
+	}
+	if err := store.UpsertNodes([]ManagedNode{old, other}); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	parsed, err := svc.parseRefreshSubscriptionURLOnce("sub", ts.URL, 5*time.Second)
+	if err != nil {
+		t.Fatalf("parseRefreshSubscriptionURLOnce() error = %v", err)
+	}
+	if parsed.ImportID == "" || len(parsed.Nodes) != 1 {
+		t.Fatalf("parsed = %#v, want one parsed node with import id", parsed)
+	}
+	if len(mgr.deletedBatches) != 1 || !reflect.DeepEqual(mgr.deletedBatches[0], []string{"sub-OLD1"}) {
+		t.Fatalf("deletedBatches = %#v, want [[\"sub-OLD1\"]]", mgr.deletedBatches)
+	}
+	if mgr.reloadCount != 1 {
+		t.Fatalf("reloadCount = %d, want 1", mgr.reloadCount)
+	}
+	if _, ok := store.GetNode("old"); ok {
+		t.Fatal("old source node should be replaced")
+	}
+	if _, ok := store.GetNode("other"); !ok {
+		t.Fatal("other source node should remain")
+	}
+	newNode, ok := store.GetNode(nodeID(newURI))
+	if !ok || newNode.State != StateParsed || newNode.ImportSource != ts.URL || newNode.TagPrefix != "sub" {
+		t.Fatalf("newNode = %#v found=%v, want parsed replacement node", newNode, ok)
 	}
 }
 

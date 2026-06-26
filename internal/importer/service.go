@@ -64,9 +64,18 @@ type Service struct {
 	testJobs        map[string]*TestJob
 	testCancelsMu   sync.Mutex
 	testCancels     map[string]context.CancelFunc
+	refreshJobsMu   sync.RWMutex
+	refreshJobs     map[string]*SourceRefreshJob
 }
 
 type Option func(*Service)
+
+const (
+	subscriptionSourceRefreshMaxWait = 3 * time.Minute
+	subscriptionSourceRetryInterval  = 3 * time.Second
+	refreshJobPollInterval           = 500 * time.Millisecond
+	refreshJobMaxWait                = 2 * time.Hour
+)
 
 func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...Option) *Service {
 	s := &Service{
@@ -79,6 +88,7 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 		importCancels: make(map[string]context.CancelFunc),
 		testJobs:      make(map[string]*TestJob),
 		testCancels:   make(map[string]context.CancelFunc),
+		refreshJobs:   make(map[string]*SourceRefreshJob),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -92,6 +102,450 @@ func WithHTTPClient(c *http.Client) Option {
 			s.httpClient = c
 		}
 	}
+}
+
+type sourceRefreshTarget struct {
+	Key       string
+	TagPrefix string
+	URLs      []string
+}
+
+func (s *Service) StartRefreshSources(key string) (string, error) {
+	targets, err := s.sourceRefreshTargets(key)
+	if err != nil {
+		return "", err
+	}
+	jobID := randomHex(12)
+	job := &SourceRefreshJob{
+		ID:        jobID,
+		Status:    SourceRefreshJobRunning,
+		StartedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Groups:    make([]SourceRefreshGroup, 0, len(targets)),
+	}
+	for _, target := range targets {
+		group := SourceRefreshGroup{
+			Key:       target.Key,
+			TagPrefix: target.TagPrefix,
+			URLs:      make([]SourceRefreshURL, 0, len(target.URLs)),
+		}
+		for _, rawURL := range target.URLs {
+			group.URLs = append(group.URLs, SourceRefreshURL{
+				URL:       rawURL,
+				Status:    "waiting",
+				UpdatedAt: time.Now(),
+			})
+		}
+		job.Groups = append(job.Groups, group)
+	}
+	s.recalculateRefreshJob(job)
+	s.refreshJobsMu.Lock()
+	s.refreshJobs[jobID] = job
+	for id, existing := range s.refreshJobs {
+		if existing.Status != SourceRefreshJobRunning && time.Since(existing.UpdatedAt) > 10*time.Minute {
+			delete(s.refreshJobs, id)
+		}
+	}
+	s.refreshJobsMu.Unlock()
+	go s.runRefreshJob(jobID, targets)
+	return jobID, nil
+}
+
+func (s *Service) GetRefreshJob(jobID string) (SourceRefreshJob, bool) {
+	s.refreshJobsMu.RLock()
+	defer s.refreshJobsMu.RUnlock()
+	job, ok := s.refreshJobs[jobID]
+	if !ok {
+		return SourceRefreshJob{}, false
+	}
+	copyJob := *job
+	copyJob.Groups = make([]SourceRefreshGroup, len(job.Groups))
+	for i, group := range job.Groups {
+		copyJob.Groups[i] = group
+		copyJob.Groups[i].URLs = append([]SourceRefreshURL(nil), group.URLs...)
+	}
+	return copyJob, true
+}
+
+func (s *Service) sourceRefreshTargets(key string) ([]sourceRefreshTarget, error) {
+	key = strings.TrimSpace(key)
+	sources, err := s.ListImportSources()
+	if err != nil {
+		return nil, err
+	}
+	targets := make([]sourceRefreshTarget, 0, len(sources))
+	for _, source := range sources {
+		if key != "" && source.Key != key {
+			continue
+		}
+		if !source.Refreshable {
+			continue
+		}
+		urls := splitSubscriptionURLs(source.Source)
+		if len(urls) == 0 {
+			continue
+		}
+		tagPrefix := strings.TrimSpace(source.TagPrefix)
+		if tagPrefix == "" {
+			tagPrefix = "local"
+		}
+		targets = append(targets, sourceRefreshTarget{
+			Key:       source.Key,
+			TagPrefix: tagPrefix,
+			URLs:      urls,
+		})
+	}
+	if len(targets) == 0 {
+		if key != "" {
+			return nil, fmt.Errorf("未找到可刷新的订阅来源")
+		}
+		return nil, fmt.Errorf("没有可刷新的订阅来源")
+	}
+	return targets, nil
+}
+
+func (s *Service) runRefreshJob(jobID string, targets []sourceRefreshTarget) {
+	for groupIdx, target := range targets {
+		for urlIdx, rawURL := range target.URLs {
+			s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+				if groupIdx >= len(job.Groups) || urlIdx >= len(job.Groups[groupIdx].URLs) {
+					return
+				}
+				row := &job.Groups[groupIdx].URLs[urlIdx]
+				row.Status = "pulling"
+				row.Error = ""
+				row.Nodes = 0
+				row.Done = 0
+				row.Total = 0
+				row.Passed = 0
+				row.Failed = 0
+				row.Promoted = 0
+				row.UpdatedAt = time.Now()
+			})
+
+			parsed, err := s.parseRefreshSubscriptionURL(target.TagPrefix, rawURL, subscriptionSourceRefreshMaxWait)
+			if err != nil {
+				moved, markErr := s.MarkSubscriptionFailed(rawURL, err.Error())
+				msg := err.Error()
+				if moved > 0 {
+					msg = fmt.Sprintf("%s；该订阅旧节点已转入失败节点池（%d 个）", msg, moved)
+				}
+				if markErr != nil {
+					msg = fmt.Sprintf("%s；写入失败节点失败: %v", msg, markErr)
+				}
+				s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+					if groupIdx >= len(job.Groups) || urlIdx >= len(job.Groups[groupIdx].URLs) {
+						return
+					}
+					row := &job.Groups[groupIdx].URLs[urlIdx]
+					row.Status = "failed"
+					row.Error = msg
+					if moved > row.Nodes {
+						row.Nodes = moved
+					}
+					row.Promoted = 0
+					row.UpdatedAt = time.Now()
+				})
+				continue
+			}
+
+			nodeIDs := make([]string, 0, len(parsed.Nodes))
+			for _, node := range parsed.Nodes {
+				nodeIDs = append(nodeIDs, node.ID)
+			}
+			s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+				if groupIdx >= len(job.Groups) || urlIdx >= len(job.Groups[groupIdx].URLs) {
+					return
+				}
+				row := &job.Groups[groupIdx].URLs[urlIdx]
+				row.Status = "testing"
+				row.Nodes = len(parsed.Nodes)
+				row.Total = len(parsed.Nodes)
+				row.UpdatedAt = time.Now()
+			})
+
+			commit, err := s.Commit(parsed.ImportID, CommitRequest{
+				NodeIDs:       nodeIDs,
+				AutoReload:    true,
+				PromotePassed: true,
+			})
+			if err != nil {
+				moved, markErr := s.MarkSubscriptionFailed(rawURL, "commit: "+err.Error())
+				msg := err.Error()
+				if moved > 0 {
+					msg = fmt.Sprintf("%s；该订阅旧节点已转入失败节点池（%d 个）", msg, moved)
+				}
+				if markErr != nil {
+					msg = fmt.Sprintf("%s；写入失败节点失败: %v", msg, markErr)
+				}
+				s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+					if groupIdx >= len(job.Groups) || urlIdx >= len(job.Groups[groupIdx].URLs) {
+						return
+					}
+					row := &job.Groups[groupIdx].URLs[urlIdx]
+					row.Status = "failed"
+					row.Error = msg
+					row.Nodes = len(parsed.Nodes)
+					row.Total = len(parsed.Nodes)
+					row.Promoted = 0
+					row.UpdatedAt = time.Now()
+				})
+				continue
+			}
+
+			importJob, waitErr := s.waitImportJob(commit.JobID)
+			if waitErr != nil || importJob.Status == ImportStatusCanceled {
+				msg := "刷新任务被终止"
+				if waitErr != nil {
+					msg = waitErr.Error()
+				} else if strings.TrimSpace(importJob.Error) != "" {
+					msg = importJob.Error
+				}
+				moved, markErr := s.MarkSubscriptionFailed(rawURL, msg)
+				if moved > 0 {
+					msg = fmt.Sprintf("%s；该订阅旧节点已转入失败节点池（%d 个）", msg, moved)
+				}
+				if markErr != nil {
+					msg = fmt.Sprintf("%s；写入失败节点失败: %v", msg, markErr)
+				}
+				s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+					if groupIdx >= len(job.Groups) || urlIdx >= len(job.Groups[groupIdx].URLs) {
+						return
+					}
+					row := &job.Groups[groupIdx].URLs[urlIdx]
+					row.Status = "failed"
+					row.Error = msg
+					row.Nodes = len(parsed.Nodes)
+					row.Total = importJob.Total
+					row.Done = importJob.Passed + importJob.Failed
+					row.Passed = importJob.Passed
+					row.Failed = importJob.Failed
+					row.Promoted = 0
+					row.UpdatedAt = time.Now()
+				})
+				continue
+			}
+
+			s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+				if groupIdx >= len(job.Groups) || urlIdx >= len(job.Groups[groupIdx].URLs) {
+					return
+				}
+				row := &job.Groups[groupIdx].URLs[urlIdx]
+				row.Status = "completed"
+				row.Error = strings.TrimSpace(importJob.Error)
+				row.Nodes = len(parsed.Nodes)
+				row.Total = importJob.Total
+				row.Done = importJob.Passed + importJob.Failed
+				row.Passed = importJob.Passed
+				row.Failed = importJob.Failed
+				row.Promoted = importJob.Promoted
+				row.UpdatedAt = time.Now()
+			})
+		}
+	}
+
+	s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+		s.finalizeRefreshJob(job)
+		job.UpdatedAt = time.Now()
+	})
+}
+
+func (s *Service) parseRefreshSubscriptionURL(tagPrefix, subURL string, maxWait time.Duration) (ParseResponse, error) {
+	tagPrefix = strings.TrimSpace(tagPrefix)
+	if tagPrefix == "" {
+		tagPrefix = s.tagPrefixForImportSource(subURL)
+	}
+	if tagPrefix == "" {
+		tagPrefix = "local"
+	}
+	deadline := time.Now().Add(maxWait)
+	var lastErr error
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		resp, err := s.parseRefreshSubscriptionURLOnce(tagPrefix, subURL, remaining)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		if time.Until(deadline) <= subscriptionSourceRetryInterval {
+			break
+		}
+		time.Sleep(subscriptionSourceRetryInterval)
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("3 分钟内未拉取到任何节点")
+	}
+	return ParseResponse{}, lastErr
+}
+
+func (s *Service) parseRefreshSubscriptionURLOnce(tagPrefix, subURL string, timeout time.Duration) (ParseResponse, error) {
+	subURL = strings.TrimSpace(subURL)
+	if subURL == "" {
+		return ParseResponse{}, fmt.Errorf("订阅 URL 不能为空")
+	}
+	if !strings.HasPrefix(subURL, "http://") && !strings.HasPrefix(subURL, "https://") {
+		return ParseResponse{}, fmt.Errorf("订阅 URL 必须以 http:// 或 https:// 开头")
+	}
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	body, err := subfetch.Fetch(ctx, subURL, subfetch.Options{
+		Timeout: timeout,
+		ProxyFallback: func(proxyCtx context.Context, rawURL string, headers http.Header) ([]byte, error) {
+			return s.fetchSubscriptionViaPool(proxyCtx, rawURL, headers, timeout)
+		},
+	})
+	if err != nil {
+		return ParseResponse{}, fmt.Errorf("获取订阅 %s: %w", subURL, err)
+	}
+	content := string(body)
+	configNodes, err := config.ParseSubscriptionContent(content)
+	if err != nil {
+		return ParseResponse{}, fmt.Errorf("解析订阅 %s: %w", subURL, err)
+	}
+	if len(configNodes) == 0 {
+		return ParseResponse{}, fmt.Errorf("订阅 %s 未拉取到任何节点", subURL)
+	}
+
+	importID := randomHex(12)
+	format := detectFormat(content)
+	now := time.Now()
+	seen := make(map[string]int, len(configNodes))
+	nodes := make([]ManagedNode, 0, len(configNodes))
+	nodeIDs := make([]string, 0, len(configNodes))
+	for _, cn := range configNodes {
+		id := nodeID(cn.URI)
+		name := cleanNodeName(cn.Name)
+		if name == "" {
+			name = cleanNodeName(extractNameFromURI(cn.URI))
+		}
+		mn := ManagedNode{
+			ID:           id,
+			URI:          cn.URI,
+			OriginalName: name,
+			Name:         tagPrefix + "-" + name,
+			TagPrefix:    tagPrefix,
+			ImportID:     importID,
+			ImportMode:   "url",
+			ImportSource: subURL,
+			ImportFormat: format,
+			State:        StateParsed,
+			Enabled:      true,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		if idx, ok := seen[id]; ok {
+			nodes[idx] = mn
+			continue
+		}
+		seen[id] = len(nodes)
+		nodes = append(nodes, mn)
+		nodeIDs = append(nodeIDs, mn.ID)
+	}
+	if _, err := s.DeleteBySubscription(subURL); err != nil {
+		return ParseResponse{}, fmt.Errorf("替换旧节点 %s: %w", subURL, err)
+	}
+	if err := s.store.UpsertNodes(nodes); err != nil {
+		return ParseResponse{}, fmt.Errorf("保存节点: %w", err)
+	}
+	if err := s.store.UpsertJob(ImportJob{
+		ID:        importID,
+		Status:    ImportStatusParsed,
+		Mode:      "url",
+		Format:    format,
+		TagPrefix: tagPrefix,
+		Source:    subURL,
+		Total:     len(nodes),
+		NodeIDs:   nodeIDs,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}); err != nil {
+		return ParseResponse{}, fmt.Errorf("保存导入任务: %w", err)
+	}
+	return ParseResponse{
+		ImportID: importID,
+		Format:   format,
+		Nodes:    nodes,
+	}, nil
+}
+
+func (s *Service) waitImportJob(jobID string) (ImportJob, error) {
+	deadline := time.Now().Add(refreshJobMaxWait)
+	for time.Now().Before(deadline) {
+		job, ok := s.store.GetJob(jobID)
+		if !ok {
+			return ImportJob{}, fmt.Errorf("导入任务 %s 不存在", jobID)
+		}
+		switch job.Status {
+		case ImportStatusCompleted, ImportStatusFailed, ImportStatusCanceled:
+			return job, nil
+		}
+		time.Sleep(refreshJobPollInterval)
+	}
+	return ImportJob{}, fmt.Errorf("等待导入任务 %s 超时", jobID)
+}
+
+func (s *Service) recalculateRefreshJob(job *SourceRefreshJob) {
+	if job == nil {
+		return
+	}
+	job.TotalURLs = 0
+	job.DoneURLs = 0
+	job.Successful = 0
+	job.Failed = 0
+	for gi := range job.Groups {
+		group := &job.Groups[gi]
+		group.Total = len(group.URLs)
+		group.Done = 0
+		group.Successful = 0
+		group.Failed = 0
+		for _, row := range group.URLs {
+			job.TotalURLs++
+			switch row.Status {
+			case "completed":
+				group.Done++
+				group.Successful++
+				job.DoneURLs++
+				job.Successful++
+			case "failed":
+				group.Done++
+				group.Failed++
+				job.DoneURLs++
+				job.Failed++
+			}
+		}
+	}
+	job.PoolCount = len(s.store.ListPoolNodes())
+	job.UpdatedAt = time.Now()
+}
+
+func (s *Service) updateRefreshJob(jobID string, fn func(*SourceRefreshJob)) {
+	s.refreshJobsMu.Lock()
+	defer s.refreshJobsMu.Unlock()
+	job, ok := s.refreshJobs[jobID]
+	if !ok {
+		return
+	}
+	fn(job)
+	s.recalculateRefreshJob(job)
+}
+
+func (s *Service) finalizeRefreshJob(job *SourceRefreshJob) {
+	if job == nil {
+		return
+	}
+	job.Status = SourceRefreshJobFinished
+	if job.TotalURLs > 0 && job.Successful == 0 {
+		job.Status = SourceRefreshJobFailed
+		job.Error = "全部订阅链接都未拉取到节点"
+		return
+	}
+	job.Error = ""
 }
 
 func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
@@ -1105,6 +1559,7 @@ func failedNodeUpdate(node ManagedNode, lastErr string) (ManagedNode, string) {
 	if node.InPool || node.State == StateInPool {
 		oldName = node.Name
 	}
+	now := time.Now()
 	node.State = StateFailed
 	node.InPool = false
 	node.Port = 0
@@ -1113,7 +1568,8 @@ func failedNodeUpdate(node ManagedNode, lastErr string) (ManagedNode, string) {
 	node.CountryName = ""
 	node.Name = taggedOriginalName(node.TagPrefix, node.OriginalName)
 	node.LastError = lastErr
-	node.LastTestAt = time.Now()
+	node.LastTestAt = now
+	node.UpdatedAt = now
 	return node, oldName
 }
 
@@ -1411,6 +1867,40 @@ func (s *Service) DeleteBySubscription(url string) (int, error) {
 		return 0, err
 	}
 	return len(ids), nil
+}
+
+func (s *Service) MarkSubscriptionFailed(url, lastErr string) (int, error) {
+	url = strings.TrimSpace(url)
+	if url == "" {
+		return 0, fmt.Errorf("订阅 URL 不能为空")
+	}
+	if strings.TrimSpace(lastErr) == "" {
+		lastErr = "订阅刷新失败"
+	}
+	all := s.store.ListNodes()
+	updates := make([]ManagedNode, 0)
+	poolNames := make([]string, 0)
+	for _, node := range all {
+		if strings.TrimSpace(node.ImportSource) != url {
+			continue
+		}
+		updated, poolName := failedNodeUpdate(node, lastErr)
+		updates = append(updates, updated)
+		if poolName != "" {
+			poolNames = append(poolNames, poolName)
+		}
+	}
+	if len(poolNames) > 0 {
+		s.deleteConfigNodes(poolNames)
+		_ = s.nodeMgr.TriggerReload(context.Background())
+	}
+	if len(updates) == 0 {
+		return 0, nil
+	}
+	if err := s.store.UpsertNodes(updates); err != nil {
+		return 0, err
+	}
+	return len(updates), nil
 }
 
 func (s *Service) DeleteImportSource(key string) (int, error) {

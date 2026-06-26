@@ -174,3 +174,48 @@ type TestJob struct {
 	StartedAt  time.Time     `json:"started_at"`
 	UpdatedAt  time.Time     `json:"updated_at"`
 }
+
+type SourceRefreshJobStatus string
+
+const (
+	SourceRefreshJobRunning  SourceRefreshJobStatus = "running"
+	SourceRefreshJobFinished SourceRefreshJobStatus = "finished"
+	SourceRefreshJobFailed   SourceRefreshJobStatus = "failed"
+)
+
+type SourceRefreshURL struct {
+	URL       string    `json:"url"`
+	Status    string    `json:"status"`
+	Nodes     int       `json:"nodes"`
+	Done      int       `json:"done"`
+	Total     int       `json:"total"`
+	Passed    int       `json:"passed"`
+	Failed    int       `json:"failed"`
+	Promoted  int       `json:"promoted"`
+	Error     string    `json:"error,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type SourceRefreshGroup struct {
+	Key        string             `json:"key"`
+	TagPrefix  string             `json:"tag_prefix"`
+	Done       int                `json:"done"`
+	Total      int                `json:"total"`
+	Successful int                `json:"successful"`
+	Failed     int                `json:"failed"`
+	URLs       []SourceRefreshURL `json:"urls"`
+}
+
+type SourceRefreshJob struct {
+	ID         string                 `json:"id"`
+	Status     SourceRefreshJobStatus `json:"status"`
+	TotalURLs  int                    `json:"total_urls"`
+	DoneURLs   int                    `json:"done_urls"`
+	Successful int                    `json:"successful"`
+	Failed     int                    `json:"failed"`
+	PoolCount  int                    `json:"pool_count"`
+	Groups     []SourceRefreshGroup   `json:"groups"`
+	Error      string                 `json:"error,omitempty"`
+	StartedAt  time.Time              `json:"started_at"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+}

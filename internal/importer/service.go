@@ -1075,9 +1075,11 @@ func (s *Service) TestCountry(nodeID string) (ManagedNode, error) {
 }
 
 func (s *Service) BatchTest(req BatchTestRequest) (BatchTestResponse, error) {
-	if len(req.NodeIDs) == 0 {
-		return BatchTestResponse{}, fmt.Errorf("请选择节点")
+	nodeIDs, err := s.resolveBatchTestNodeIDs(req)
+	if err != nil {
+		return BatchTestResponse{}, err
 	}
+	req.NodeIDs = nodeIDs
 	resp := BatchTestResponse{Total: len(req.NodeIDs)}
 	nodes := make([]ManagedNode, 0, len(req.NodeIDs))
 	for _, id := range req.NodeIDs {
@@ -1212,9 +1214,11 @@ func (s *Service) BatchTest(req BatchTestRequest) (BatchTestResponse, error) {
 // but lack a country are auto-country-tested before the promote pass so
 // failed-pool retries land in pool with country metadata populated.
 func (s *Service) StartBatchTest(req BatchTestRequest) (string, error) {
-	if len(req.NodeIDs) == 0 {
-		return "", fmt.Errorf("请选择节点")
+	nodeIDs, err := s.resolveBatchTestNodeIDs(req)
+	if err != nil {
+		return "", err
 	}
+	req.NodeIDs = nodeIDs
 	if !req.Retest && !req.Country {
 		return "", fmt.Errorf("至少选择一种操作（测速或测试国家）")
 	}

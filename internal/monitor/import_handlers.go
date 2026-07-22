@@ -3,6 +3,7 @@ package monitor
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,10 @@ type ImportService interface {
 	ListPool() ([]importer.ManagedNode, error)
 	ListFailed() ([]importer.ManagedNode, error)
 	Summary() (importer.DashboardSummary, error)
+	UISummary() (importer.UISummary, error)
+	ListUINodes(query importer.UINodeListQuery) (importer.UINodeListResponse, error)
+	UIPortPreview(limit int) ([]importer.UIPortPreviewItem, error)
+	ReorderPoolBy(mode string) error
 	Reorder(ids []string) error
 	Job(jobID string) (importer.ImportJob, bool)
 }
@@ -63,6 +68,121 @@ func (s *Server) handleImportSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, summary)
+}
+
+func (s *Server) handleUISummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 GET 请求"})
+		return
+	}
+	if !s.ensureImportService(w) {
+		return
+	}
+	summary, err := s.importSvc.UISummary()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, summary)
+}
+
+func (s *Server) handleUINodes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 GET 请求"})
+		return
+	}
+	if !s.ensureImportService(w) {
+		return
+	}
+	query := r.URL.Query()
+	page, err := parseUIQueryInt(query.Get("page"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "page 必须是整数"})
+		return
+	}
+	pageSize, err := parseUIQueryInt(query.Get("page_size"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "page_size 必须是整数"})
+		return
+	}
+	result, err := s.importSvc.ListUINodes(importer.UINodeListQuery{
+		Scope:    query.Get("scope"),
+		Country:  query.Get("country"),
+		Tag:      query.Get("tag"),
+		Query:    query.Get("q"),
+		Latency:  query.Get("latency"),
+		Sort:     query.Get("sort"),
+		Order:    query.Get("order"),
+		Page:     page,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, result)
+}
+
+func (s *Server) handleUIPorts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 GET 请求"})
+		return
+	}
+	if !s.ensureImportService(w) {
+		return
+	}
+	limit, err := parseUIQueryInt(r.URL.Query().Get("limit"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "limit 必须是整数"})
+		return
+	}
+	items, err := s.importSvc.UIPortPreview(limit)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, items)
+}
+
+func (s *Server) handleUIPoolOrder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 POST 请求"})
+		return
+	}
+	if !s.ensureImportService(w) {
+		return
+	}
+	var req struct {
+		Mode string `json:"mode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "请求格式错误"})
+		return
+	}
+	if err := s.importSvc.ReorderPoolBy(req.Mode); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+func parseUIQueryInt(raw string) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 0, nil
+	}
+	return strconv.Atoi(raw)
 }
 
 func (s *Server) handleImportParse(w http.ResponseWriter, r *http.Request) {

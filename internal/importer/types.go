@@ -119,6 +119,61 @@ type DashboardSummary struct {
 	UpdatedAt time.Time     `json:"updated_at"`
 }
 
+type UISummary struct {
+	Total     int       `json:"total"`
+	Parsed    int       `json:"parsed"`
+	Testing   int       `json:"testing"`
+	Passed    int       `json:"passed"`
+	Failed    int       `json:"failed"`
+	InPool    int       `json:"in_pool"`
+	Excluded  int       `json:"excluded"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type UINodeListQuery struct {
+	Scope    string
+	Country  string
+	Tag      string
+	Query    string
+	Latency  string
+	Sort     string
+	Order    string
+	Page     int
+	PageSize int
+}
+
+type UINodeListItem struct {
+	ID           string           `json:"id"`
+	OriginalName string           `json:"original_name,omitempty"`
+	Name         string           `json:"name"`
+	TagPrefix    string           `json:"tag_prefix,omitempty"`
+	CountryCode  string           `json:"country_code,omitempty"`
+	CountryName  string           `json:"country_name,omitempty"`
+	LatencyMs    int64            `json:"latency_ms,omitempty"`
+	Port         uint16           `json:"port,omitempty"`
+	State        ManagedNodeState `json:"state"`
+	InPool       bool             `json:"in_pool"`
+	Order        int              `json:"order"`
+	LastError    string           `json:"last_error,omitempty"`
+}
+
+type UINodeListResponse struct {
+	Items     []UINodeListItem `json:"items"`
+	Total     int              `json:"total"`
+	Page      int              `json:"page"`
+	PageSize  int              `json:"page_size"`
+	Countries []string         `json:"countries"`
+	Tags      []string         `json:"tags"`
+	UpdatedAt time.Time        `json:"updated_at"`
+}
+
+type UIPortPreviewItem struct {
+	Name        string `json:"name"`
+	TagPrefix   string `json:"tag_prefix,omitempty"`
+	CountryCode string `json:"country_code,omitempty"`
+	Port        uint16 `json:"port"`
+}
+
 type CommitRequest struct {
 	NodeIDs       []string `json:"node_ids,omitempty"`
 	AutoReload    bool     `json:"auto_reload"`
@@ -131,6 +186,7 @@ type CommitResponse struct {
 
 type BatchTestRequest struct {
 	NodeIDs       []string `json:"node_ids"`
+	Scopes        []string `json:"scopes,omitempty"`
 	Retest        bool     `json:"retest"`
 	Country       bool     `json:"country"`
 	PromotePassed bool     `json:"promote_passed"`

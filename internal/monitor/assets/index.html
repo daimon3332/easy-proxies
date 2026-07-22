@@ -286,9 +286,15 @@ const S={
   subConfig:null,
   importSources:[],
   summary:null,
+  portPreview:[],
+  nodePage:null,
   nodesLoadedAt:0,
   summaryLoadedAt:0,
-  pageSize:120,
+  pageSize:100,
+  managedPage:1,
+  pageRequest:0,
+  pageController:null,
+  filterTimer:null,
   logs:'',
   lastJob:null,
   activeImportJob:localStorage.getItem(ACTIVE_IMPORT_JOB_KEY)||'',
@@ -380,55 +386,95 @@ async function go(page){
   renderNav();
   await refresh();
 }
-function resetFilters(){S.filters={scope:'all',country:'',tag:'',source:'',latency:'',q:'',sort:'latency'};S.candSortDir='asc'}
+function resetFilters(){S.filters={scope:'all',country:'',tag:'',source:'',latency:'',q:'',sort:'latency'};S.candSortDir='asc';S.managedPage=1}
+function beginPageRequest(){
+  S.pageController?.abort();
+  const controller=new AbortController();
+  const request={id:++S.pageRequest,signal:controller.signal};
+  S.pageController=controller;
+  return request;
+}
+function isCurrentPageRequest(request){return !request||request.id===S.pageRequest}
+function isAbortError(err){return err?.name==='AbortError'}
 async function refresh(){
+  const request=beginPageRequest();
   try{
     if(['nodes','pool','failed'].includes(S.page)){
-      await loadManaged(S.page);
+      await Promise.all([loadManaged(S.page,request),loadImportSummary(request)]);
+      if(!isCurrentPageRequest(request))return;
       renderManaged(S.page);
     }else if(S.page==='config'){
-      await loadConfigNodes();
+      await loadConfigNodes(request);
+      if(!isCurrentPageRequest(request))return;
       renderConfig();
     }else if(S.page==='ports'){
-      await loadPorts();
+      await loadPorts(request);
+      if(!isCurrentPageRequest(request))return;
       renderPorts();
     }else if(S.page==='logs'){
-      await loadLogs();
+      await loadLogs(request);
+      if(!isCurrentPageRequest(request))return;
       renderLogs();
     }else if(S.page==='settings'){
-      await Promise.all([loadSettings(),loadSubscriptionConfig(),loadImportSources()]);
+      await Promise.all([loadSettings(request),loadSubscriptionConfig(request),loadImportSources(request)]);
+      if(!isCurrentPageRequest(request))return;
       renderSettings();
 	}else if(S.page==='bulk'){
-	  await loadManaged('nodes');
+	  await loadImportSummary(request);
+	  if(!isCurrentPageRequest(request))return;
 	  renderBulk();
 	}else{
-	  await Promise.all([loadSubscriptionConfig(), loadImportSummary()]);
-	  renderImport();
-	}
+      await Promise.all([loadSubscriptionConfig(request), loadImportSummary(request), loadPortPreview(request)]);
+      if(!isCurrentPageRequest(request))return;
+      renderImport();
+    }
     renderNav();
     restoreActiveJobs();
-  }catch(err){toast(err.message,'err')}
+  }catch(err){if(!isAbortError(err))toast(err.message,'err')}
 }
-async function loadManaged(kind=S.page){
-  const managed=await api('/api/nodes/all').catch(()=>[]);
-  S.nodes=Array.isArray(managed)?managed:(managed.nodes||[]);
+function managedScope(kind){return kind==='pool'?'pool':kind==='failed'?'failed':'candidate'}
+async function loadManaged(kind=S.page,request){
+  const params=new URLSearchParams({
+    scope:managedScope(kind),
+    page:String(S.managedPage),
+    page_size:String(S.pageSize),
+    sort:kind==='pool'?(S.poolSortMode||'port'):(S.filters.sort||'latency'),
+    order:kind==='pool'?(S.poolSortDir||'asc'):(S.candSortDir||'asc'),
+  });
+  if(S.filters.country)params.set('country',S.filters.country);
+  if(S.filters.tag)params.set('tag',S.filters.tag);
+  if(S.filters.latency)params.set('latency',S.filters.latency);
+  if(S.filters.q)params.set('q',S.filters.q);
+  const data=await api('/api/ui/nodes?'+params.toString(),{signal:request?.signal});
+  if(!isCurrentPageRequest(request))return null;
+  S.nodePage=data;
+  S.nodes=Array.isArray(data.items)?data.items:[];
   S.nodesLoadedAt=Date.now();
-  if(kind==='pool')S.viewNodes=S.nodes.filter(inPool);
-  else if(kind==='failed')S.viewNodes=S.nodes.filter(n=>n.state==='failed');
-  else S.viewNodes=S.nodes.slice();
-  await loadImportSummary().catch(()=>{});
+  S.viewNodes=S.nodes.slice();
+  return data;
 }
-async function loadImportSummary(){
-  S.summary=await api('/api/import/summary').catch(()=>S.summary||null);
+async function loadImportSummary(request){
+  const summary=await api('/api/ui/summary',{signal:request?.signal}).catch(err=>{if(isAbortError(err))throw err;return S.summary||null});
+  if(!isCurrentPageRequest(request))return null;
+  S.summary=summary;
   S.summaryLoadedAt=Date.now();
   return S.summary;
 }
-async function loadConfigNodes(){
-  const data=await api('/api/nodes/config');
+async function loadPortPreview(request){
+  const ports=await api('/api/ui/ports?limit=80',{signal:request?.signal});
+  if(!isCurrentPageRequest(request))return null;
+  S.portPreview=Array.isArray(ports)?ports:[];
+  return S.portPreview;
+}
+async function loadConfigNodes(request){
+  const data=await api('/api/nodes/config',{signal:request?.signal});
+  if(!isCurrentPageRequest(request))return null;
   S.configNodes=data.nodes||[];
 }
-async function loadPorts(){
-  S.ports=await api('/api/ports/status');
+async function loadPorts(request){
+  const ports=await api('/api/ports/status',{signal:request?.signal});
+  if(!isCurrentPageRequest(request))return null;
+  S.ports=ports;
 }
 function openDialog(title, html){
   let modal=qs('#resultModal');
@@ -464,32 +510,34 @@ function updateBlockingDialog(title, html, done=false){
   modal.classList.add('show');
 }
 function closeDialog(){qs('#resultModal')?.classList.remove('show')}
-async function loadLogs(){
-  const data=await api('/api/logs');
+async function loadLogs(request){
+  const data=await api('/api/logs',{signal:request?.signal});
+  if(!isCurrentPageRequest(request))return null;
   S.logs=data.logs||'';
 }
-async function loadSettings(){
-  S.settings=await api('/api/settings');
+async function loadSettings(request){
+  const settings=await api('/api/settings',{signal:request?.signal});
+  if(!isCurrentPageRequest(request))return null;
+  S.settings=settings;
 }
-async function loadSubscriptionConfig(){
-  const sub=await api('/api/subscription/config').catch(()=>({subscriptions:[],enabled:true,interval:'24h'}));
+async function loadSubscriptionConfig(request){
+  const sub=await api('/api/subscription/config',{signal:request?.signal}).catch(err=>{if(isAbortError(err))throw err;return {subscriptions:[],enabled:true,interval:'24h'}});
+  if(!isCurrentPageRequest(request))return null;
   sub.subscriptions=Array.isArray(sub.subscriptions)?sub.subscriptions:[];
   if(!sub.subscriptions.length && (!sub.interval || sub.interval==='1h0m0s' || sub.interval==='1h'))sub.interval='24h';
   if(sub.enabled===undefined || !sub.subscriptions.length)sub.enabled=true;
   S.subConfig=sub;
 }
-async function loadImportSources(){
-  const sources=await api('/api/import/sources').catch(()=>[]);
+async function loadImportSources(request){
+  const sources=await api('/api/import/sources',{signal:request?.signal}).catch(err=>{if(isAbortError(err))throw err;return []});
+  if(!isCurrentPageRequest(request))return null;
   S.importSources=Array.isArray(sources)?sources:[];
 }
 function renderManaged(kind){
   const preset=kind==='pool'?'pool':kind==='failed'?'failed':'candidate';
-  let items=filteredManaged(preset);
-  if(kind==='pool')items=sortPoolItems(filteredManagedFrom(S.viewNodes.length?S.viewNodes:items,'pool'));
-  if(kind==='failed')items=filteredManagedFrom(S.viewNodes.length?S.viewNodes:S.nodes.filter(n=>n.state==='failed'),'failed');
-  const baseItems=kind==='pool'||kind==='failed'?(S.viewNodes.length?S.viewNodes:items):S.nodes;
-  const countries=unique(baseItems.map(n=>n.country_code).filter(Boolean));
-  const tags=unique(baseItems.map(n=>n.tag_prefix||'local'));
+  const items=S.nodes||[];
+  const countries=S.nodePage?.countries||[];
+  const tags=S.nodePage?.tags||[];
   const filterHint=kind==='nodes'?'这里只显示测速成功、还没有加入节点池的候选节点；可按国家、标签和名称筛选，点击表头列名排序，再点一次反向。'
     :kind==='pool'?'当前节点池；可按国家、标签和名称筛选，点击表头列名排序，再点一次反向。'
     :'失败节点可按国家、标签和名称筛选。';
@@ -514,7 +562,7 @@ function renderManaged(kind){
       ${S.actionStatus?`<p class="action-status ${S.actionStatusType==='err'?'err':''}">${esc(S.actionStatus)}</p>`:''}
       ${hint}
       ${filters}
-      <div class="muted" style="margin-bottom:10px">正在显示 ${items.length} 行</div>
+      <div class="muted" style="margin-bottom:10px">正在显示第 ${S.nodePage?.page||1} 页，共 ${S.nodePage?.total||0} 个节点</div>
       <div id="nodeList">${renderNodeTable(items,kind)}</div>
     </div></div>
   </div>`;
@@ -563,7 +611,7 @@ function failedOptionBar(tags=[]){
 }
 function setFailedAutoPromote(v){S.failedAutoPromote=!!v;localStorage.setItem('easy_proxies_failed_auto_promote',S.failedAutoPromote?'1':'0');renderManaged(S.page)}
 function renderNodeTable(items,kind='nodes'){
-  const visible=items.slice(0,S.pageSize);
+  const visible=items;
   const allChecked=visible.length&&visible.every(n=>S.selected.has(n.id));
   const sortable=kind!=='pool';
   return `<div class="node-table">
@@ -578,9 +626,21 @@ function renderNodeTable(items,kind='nodes'){
       <div>标签</div>
       <div>操作</div>
     </div>
-    ${visible.length?visible.map((n,i)=>renderNodeRow(n,kind,i)).join(''):'<div class="empty">没有节点</div>'}
-    ${items.length>S.pageSize?`<div class="empty">已显示前 ${S.pageSize} 个节点，请使用搜索或筛选缩小范围</div>`:''}
+    ${visible.length?visible.map((n,i)=>renderNodeRow(n,kind,(S.nodePage?.page-1||0)*(S.nodePage?.page_size||S.pageSize)+i)).join(''):'<div class="empty">没有节点</div>'}
+    ${renderNodePager()}
   </div>`;
+}
+function renderNodePager(){
+  const total=S.nodePage?.total||0,page=S.nodePage?.page||1,size=S.nodePage?.page_size||S.pageSize;
+  const pages=Math.max(1,Math.ceil(total/size));
+  if(pages<=1)return '';
+  return `<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn small" ${page<=1?'disabled':''} onclick="changeManagedPage(-1)">上一页</button><span class="muted">${page} / ${pages}</span><button class="btn small" ${page>=pages?'disabled':''} onclick="changeManagedPage(1)">下一页</button></div>`;
+}
+async function changeManagedPage(delta){
+  const total=S.nodePage?.total||0,size=S.nodePage?.page_size||S.pageSize;
+  const pages=Math.max(1,Math.ceil(total/size));
+  S.managedPage=Math.min(pages,Math.max(1,(S.nodePage?.page||1)+delta));
+  await refresh();
 }
 function renderNodeRow(n,kind,index=0){
   return `<div class="table-row" data-id="${esc(n.id)}" data-name="${esc(searchText(n))}">
@@ -599,7 +659,7 @@ function sortHeader(label,mode,target){
   const active=(target==='pool'?S.poolSortMode:S.filters.sort)===mode;
   return `<button class="th-btn${active?' active':''}" onclick="setListSort('${target}','${mode}')">${label}</button>`;
 }
-function setListSort(target,mode){
+async function setListSort(target,mode){
   if(target==='pool'){
     if(S.poolSortMode===mode)S.poolSortDir=S.poolSortDir==='asc'?'desc':'asc';
     else{S.poolSortMode=mode;S.poolSortDir='asc'}
@@ -607,7 +667,8 @@ function setListSort(target,mode){
     if(S.filters.sort===mode)S.candSortDir=S.candSortDir==='asc'?'desc':'asc';
     else{S.filters.sort=mode;S.candSortDir='asc'}
   }
-  renderManaged(S.page);
+  S.managedPage=1;
+  await refresh();
 }
 function renderNodeActions(n,kind){
   const del=`<button class="btn small danger" onclick="deleteManagedNode('${esc(n.id)}')">删除</button>`;
@@ -677,8 +738,9 @@ function setFilterValues(scope){
 function updateFilters(){
   ['country','tag'].forEach(k=>{const el=qs('#'+k+'Filter');if(el&&!el.disabled)S.filters[k]=el.value});
   const nameEl=qs('#nameFilter');if(nameEl)S.filters.q=nameEl.value||'';
-  renderManaged(S.page);
-  const nameInput=qs('#nameFilter');if(nameInput){nameInput.focus();const v=nameInput.value;nameInput.setSelectionRange(v.length,v.length)}
+  S.managedPage=1;
+  clearTimeout(S.filterTimer);
+  S.filterTimer=setTimeout(()=>refresh(),160);
 }
 function onNameFilterInput(e){
   if(e&&e.isComposing){S.filters.q=e.target.value||'';return}
@@ -712,6 +774,7 @@ async function promoteSelectedVisible(){
 async function runAsyncBatchTest(opts){
   const body={
     node_ids:opts.ids||[],
+    scopes:opts.scopes||[],
     retest:!!opts.retest,
     country:!!opts.country,
     promote_passed:!!opts.promote_passed,
@@ -848,22 +911,18 @@ async function promoteNodes(ids){
 async function runAutoProbe(kind,manual){
   if(!['nodes','pool','failed'].includes(kind))return;
   if(!manual && S.page!==kind)return;
-  await loadManaged();
   const scope=kind==='pool'?'pool':kind==='failed'?'failed':'candidate';
-  const ids=filteredManaged(scope).map(n=>n.id);
-  if(!ids.length){
-    if(manual)toast('当前页面没有可测速节点','err');
+  await loadImportSummary();
+  const count=scope==='pool'?(S.summary?.in_pool||0):scope==='failed'?(S.summary?.failed||0):(S.summary?.passed||0);
+  if(!count){
+    if(manual)toast('当前范围没有可测速节点','err');
     return;
   }
-  if(kind==='failed'){
-    await retestFailedNodes(ids);
-    return;
-  }
-  setActionStatus(`自动测速 ${ids.length} 个节点...`);
+  setActionStatus(`自动测速 ${count} 个节点...`);
   if(manual)renderManaged(kind);
   let job;
   try{
-    job=await runAsyncBatchTest({ids,retest:true,auto_reload:true,label:'自动测速'});
+    job=await runAsyncBatchTest({scopes:[scope],retest:true,country:kind==='failed',promote_passed:kind==='failed'&&S.failedAutoPromote,auto_reload:true,label:'自动测速'});
   }catch(e){
     setActionStatus(`自动测速失败：${e.message}`,'err');
     if(manual)toast(e.message,'err');
@@ -944,7 +1003,7 @@ async function saveOrder(){
   try{await api('/api/nodes/order',{method:'PUT',body:JSON.stringify({order:ids})});toast('排序已保存')}catch(err){toast(err.message,'err')}
 }
 function poolActionBar(){
-  const poolCount=S.nodes.filter(inPool).length;
+  const poolCount=S.nodePage?.total||0;
   return `<div class="pool-toolbar">
     <div><strong>节点池显示排序</strong><div class="muted">这里只改变表格显示顺序，不改端口。</div></div>
     <div class="row">
@@ -1047,7 +1106,11 @@ async function saveGroupedOrder(){
 }
 async function saveGroupedOrderMode(mode){
   S.poolOrderMode=mode;
-  await saveGroupedOrder();
+  try{
+    await api('/api/ui/pool-order',{method:'POST',body:JSON.stringify({mode})});
+    toast('节点池端口顺序已重排，核心已重载');
+    await refresh();
+  }catch(err){toast(err.message,'err')}
 }
 async function probeAll(){
   try{
@@ -1094,15 +1157,15 @@ function renderImport(){
         <span class="pill red">失败 ${esc(dashboard.failed||0)}</span>
         <span class="pill amber">测试中 ${esc(dashboard.testing||0)}</span>
       </div>
-      ${renderGeneratedPorts(dashboard.ports||[])}
+       ${renderGeneratedPorts(S.portPreview||[],Number(dashboard.in_pool)||0)}
     </div></div>
   </div>`;
   qs('#tagPrefix').value=S.tagPrefix||'local';
   if(qs('#importContent'))qs('#importContent').value=S.importText||'';
 }
-function renderGeneratedPorts(ports){
+function renderGeneratedPorts(ports,total=ports.length){
   if(!ports.length)return '<div class="empty">还没有生成端口。粘贴订阅链接后点击“导入并测试”。</div>';
-  return `<div class="table">${ports.slice(0,80).map(n=>`<div class="port"><b>${esc(n.port||'-')}</b><span class="muted">${esc(nodeName(n))}</span><button class="btn small" onclick="copyPort('${esc(n.port||'')}')">复制</button></div>`).join('')}</div>${ports.length>80?`<p class="muted">已显示前 80 个端口，其余可在“可用端口”页面查看。</p>`:''}`;
+  return `<div class="table">${ports.map(n=>`<div class="port"><b>${esc(n.port||'-')}</b><span class="muted">${esc(nodeName(n))}</span><button class="btn small" onclick="copyPort('${esc(n.port||'')}')">复制</button></div>`).join('')}</div>${total>ports.length?`<p class="muted">已显示前 ${ports.length} 个端口，其余可在“可用端口”页面查看。</p>`:''}`;
 }
 async function copyPort(port){
   if(!port)return;
@@ -1111,7 +1174,7 @@ async function copyPort(port){
   try{await navigator.clipboard.writeText(text);toast('已复制 '+text)}catch(e){toast(text)}
 }
 async function refreshHomeSummary(){
-  await loadImportSummary();
+  await Promise.all([loadImportSummary(),loadPortPreview()]);
   renderImport();
 }
 function setImportAutoPromote(v){
@@ -1206,10 +1269,7 @@ async function pollJob(id){
       S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`进度 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
       if(j.status==='completed'||j.status==='failed'||j.status==='canceled'){
         toast(j.status==='canceled'?'导入任务已终止':'导入任务结束');
-        await loadImportSummary();
-        if(S.page!=='import')await loadManaged();
-        renderNav();
-        if(S.page==='import')renderImport();
+        await refresh();
         break;
       }
       await new Promise(r=>setTimeout(r,500));
@@ -1366,11 +1426,11 @@ function bulkScopeIds(scopes){
 }
 function renderBulk(){
   const sel=S.bulkSel=S.bulkSel||{candidate:true,pool:true,failed:true,retest:true,country:false,promote:true};
-  const nodes=S.nodes||[];
+  const summary=S.summary||{};
   const counts={
-    candidate:nodes.filter(n=>!inPool(n)&&n.state==='passed').length,
-    pool:nodes.filter(n=>inPool(n)).length,
-    failed:nodes.filter(n=>n.state==='failed').length,
+    candidate:Number(summary.passed)||0,
+    pool:Number(summary.in_pool)||0,
+    failed:Number(summary.failed)||0,
   };
   qs('#view').innerHTML=`<div class="grid">
     <div class="card"><div class="card-head"><h2>批量测试</h2></div><div class="card-body stack">
@@ -1397,12 +1457,10 @@ async function runBulkTest(){
   S.bulkSel={...scopes,...acts};
   if(!(scopes.candidate||scopes.pool||scopes.failed)){toast('请至少选择一个范围','err');return}
   if(!(acts.retest||acts.country)){toast('请至少选择一种操作','err');return}
-  await loadManaged('nodes');
-  const ids=bulkScopeIds(scopes);
-  if(!ids.length){toast('所选范围内没有节点','err');return}
+  const selectedScopes=Object.entries(scopes).filter(([,enabled])=>enabled).map(([scope])=>scope);
   let job;
   try{
-    job=await runAsyncBatchTest({ids,retest:acts.retest,country:acts.country,promote_passed:acts.promote,auto_reload:true,label:'批量测试'});
+    job=await runAsyncBatchTest({scopes:selectedScopes,retest:acts.retest,country:acts.country,promote_passed:acts.promote,auto_reload:true,label:'批量测试'});
   }catch(e){toast(e.message,'err');return}
   const parts=[];
   if(acts.retest)parts.push(`测速 ${job?.passed||0}/${(job?.passed||0)+(job?.failed||0)} 成功`);
@@ -1656,7 +1714,7 @@ async function refreshAllImportSources(){
     updateBlockingDialog('刷新失败',`<p>${esc(err.message)}</p>`,true);
     return;
   }
-  await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
+  await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadImportSummary()]);
   renderNav();
   renderSettings();
   renderRefreshSourceJobDialog(job,job?.status==='failed'?'刷新失败':'刷新完成',true);
@@ -1692,7 +1750,7 @@ async function refreshImportSource(idx){
   if(!src||src.mode!=='url'||!urls.length){toast('该来源不能刷新','err');return}
   try{
     const job=await refreshSubscriptionSource(src,{index:1,total:1});
-    await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
+    await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadImportSummary()]);
     renderNav();
     renderRefreshSourceJobDialog(job,job?.status==='failed'?'刷新失败':'刷新完成',true);
     renderSettings();
@@ -1720,7 +1778,7 @@ async function deleteAllImportSources(){
   try{
     const res=await api('/api/import/sources',{method:'POST',body:JSON.stringify({all:true})});
     toast(`已删除全部导入，移除节点 ${res.deleted_nodes||0} 个`);
-    await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
+    await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadImportSummary()]);
     renderNav();
     renderSettings();
   }catch(err){toast(err.message,'err')}
@@ -1741,7 +1799,7 @@ async function downloadExport(){
 }
 (async function boot(){
   renderNav();
-  try{await api('/api/import/summary');qs('#authModal').classList.remove('show')}catch(e){}
+  try{await api('/api/ui/summary');qs('#authModal').classList.remove('show')}catch(e){}
   setupAllAutoProbe();
   await go('import');
 })();

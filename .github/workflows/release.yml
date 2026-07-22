@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+      - "replace-v*"
   workflow_dispatch:
     inputs:
       version:
@@ -11,12 +12,17 @@ on:
         required: true
         default: "v1.0"
         type: string
+      replace_existing:
+        description: "Replace an existing release and tag after all builds pass"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+  group: release
   cancel-in-progress: false
 
 env:
@@ -63,6 +69,12 @@ jobs:
           - goos: linux
             goarch: arm64
             extension: ""
+          - goos: darwin
+            goarch: amd64
+            extension: ""
+          - goos: darwin
+            goarch: arm64
+            extension: ""
     steps:
       - name: Check out source
         uses: actions/checkout@v7.0.1
@@ -76,12 +88,13 @@ jobs:
       - name: Build and package
         shell: bash
         env:
-          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          RAW_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           TARGET_OS: ${{ matrix.goos }}
           TARGET_ARCH: ${{ matrix.goarch }}
           EXTENSION: ${{ matrix.extension }}
         run: |
           set -euo pipefail
+          VERSION="${RAW_VERSION#replace-}"
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release version: $VERSION" >&2
             exit 1
@@ -99,7 +112,7 @@ jobs:
           cp "dist/${asset_binary}" "package/${package_binary}"
           cp config.example.yaml README.md README.zh-CN.md README.zh-TW.md LICENSE package/
 
-          if [[ "$TARGET_OS" == "linux" ]]; then
+          if [[ "$TARGET_OS" != "windows" ]]; then
             chmod +x "dist/${asset_binary}" "package/${package_binary}"
           fi
 
@@ -140,8 +153,8 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f -name 'easy_proxies-*' | sort)
-          if [[ ${#assets[@]} -ne 8 ]]; then
-            printf 'Expected 8 release assets, found %d\n' "${#assets[@]}" >&2
+          if [[ ${#assets[@]} -ne 12 ]]; then
+            printf 'Expected 12 release assets, found %d\n' "${#assets[@]}" >&2
             printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi
@@ -151,16 +164,24 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          RAW_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          REPLACE_EXISTING: ${{ (github.event_name == 'workflow_dispatch' && inputs.replace_existing) || startsWith(github.ref_name, 'replace-v') }}
         run: |
           set -euo pipefail
+          VERSION="${RAW_VERSION#replace-}"
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release version: $VERSION" >&2
             exit 1
           fi
           if gh release view "$VERSION" >/dev/null 2>&1; then
-            echo "Release $VERSION already exists" >&2
-            exit 1
+            if [[ "$REPLACE_EXISTING" != "true" ]]; then
+              echo "Release $VERSION already exists; enable replacement explicitly" >&2
+              exit 1
+            fi
+            gh release delete "$VERSION" --cleanup-tag --yes
+          fi
+          if [[ "$REPLACE_EXISTING" == "true" ]] && git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/${VERSION}"
           fi
 
           notes_file="release-notes/${VERSION}.md"
@@ -172,7 +193,9 @@ jobs:
             notes_args=(--generate-notes)
           fi
 
-          if git rev-parse --verify "refs/tags/${VERSION}" >/dev/null 2>&1; then
+          if [[ "$REPLACE_EXISTING" == "true" ]]; then
+            tag_args=(--target "$GITHUB_SHA")
+          elif git rev-parse --verify "refs/tags/${VERSION}" >/dev/null 2>&1; then
             tag_args=(--verify-tag)
           else
             tag_args=(--target "$GITHUB_SHA")

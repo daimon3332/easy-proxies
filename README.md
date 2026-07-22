@@ -36,18 +36,42 @@ Paste subscription URLs
 
 The default runtime mode is `multi-port`, so every passed node receives its own local port. **Automatically add passed nodes to the pool** is enabled by default for first-time use.
 
-## Key features
+## ✨ Key features
 
-- Subscription-first WebUI workflow.
+- 🔗 Subscription-first WebUI workflow.
 - Imports HTTP/HTTPS subscriptions, URI lists, Base64 content, and Clash/Mihomo YAML.
-- Concurrent and asynchronous node testing with live progress.
-- Keeps candidate, pooled, and failed nodes instead of silently dropping failures.
+- ⚡ Concurrent and asynchronous node testing with live progress.
+- 🧩 Keeps candidate, pooled, and failed nodes instead of silently dropping failures.
 - Automatically promotes passed imports to the node pool by default.
-- One local port per node in the default `multi-port` mode.
+- 🔌 One local port per node in the default `multi-port` mode.
 - Optional `pool` and `hybrid` runtime modes.
 - Batch retest, country detection, subscription refresh, port inspection, and logs.
 - Probe target selection between `https://www.gstatic.com/generate_204` and `https://cp.cloudflare.com/generate_204`.
 - WebUI and REST API served from the same management endpoint.
+
+<details>
+<summary><strong>🖼️ WebUI preview</strong> (all navigation tabs)</summary>
+<br>
+
+<table>
+  <tr>
+    <td><strong>Import and create ports</strong><br><img src="./images/webui-import.png" width="480" alt="Import subscriptions"></td>
+    <td><strong>Available ports</strong><br><img src="./images/webui-pool.png" width="480" alt="Available proxy ports"></td>
+  </tr>
+  <tr>
+    <td><strong>Candidate nodes</strong><br><img src="./images/webui-nodes.png" width="480" alt="Candidate nodes"></td>
+    <td><strong>Failed nodes</strong><br><img src="./images/webui-failed.png" width="480" alt="Failed nodes"></td>
+  </tr>
+  <tr>
+    <td><strong>Batch tools</strong><br><img src="./images/webui-bulk.png" width="480" alt="Batch tools"></td>
+    <td><strong>Port status</strong><br><img src="./images/webui-ports.png" width="480" alt="Port status"></td>
+  </tr>
+  <tr>
+    <td><strong>Logs</strong><br><img src="./images/webui-logs.png" width="480" alt="Logs"></td>
+    <td><strong>Settings</strong><br><img src="./images/webui-settings.png" width="480" alt="Settings"></td>
+  </tr>
+</table>
+</details>
 
 ## Getting started
 

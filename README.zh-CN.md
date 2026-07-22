@@ -36,18 +36,42 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 
 默认运行模式是 `multi-port`，每个测速成功并进入节点池的节点都会获得独立本地端口。首次使用时，“测速成功后自动加入节点池”默认开启。
 
-## 核心功能
+## ✨ 核心功能
 
-- 面向普通用户的订阅优先 WebUI 流程。
+- 🔗 面向普通用户的订阅优先 WebUI 流程。
 - 支持 HTTP/HTTPS 订阅、URI 列表、Base64 内容和 Clash/Mihomo YAML。
-- 并发、异步节点测速和实时进度。
-- 分别保留候选节点、节点池节点和失败节点。
+- ⚡ 并发、异步节点测速和实时进度。
+- 🧩 分别保留候选节点、节点池节点和失败节点。
 - 导入测速成功后默认自动加入节点池。
-- 默认 `multi-port` 模式下每个节点独立端口。
+- 🔌 默认 `multi-port` 模式下每个节点独立端口。
 - 可选 `pool` 和 `hybrid` 模式。
 - 支持批量重测、国家检测、订阅刷新、端口查看和运行日志。
 - 探测目标只支持 `https://www.gstatic.com/generate_204` 和 `https://cp.cloudflare.com/generate_204`。
 - WebUI 与 REST API 共用管理入口。
+
+<details>
+<summary><strong>🖼️ WebUI 预览</strong>（全部导航页面）</summary>
+<br>
+
+<table>
+  <tr>
+    <td><strong>导入并生成端口</strong><br><img src="./images/webui-import.png" width="480" alt="导入订阅"></td>
+    <td><strong>可用端口</strong><br><img src="./images/webui-pool.png" width="480" alt="可用代理端口"></td>
+  </tr>
+  <tr>
+    <td><strong>候选节点</strong><br><img src="./images/webui-nodes.png" width="480" alt="候选节点"></td>
+    <td><strong>失败节点</strong><br><img src="./images/webui-failed.png" width="480" alt="失败节点"></td>
+  </tr>
+  <tr>
+    <td><strong>批量工具</strong><br><img src="./images/webui-bulk.png" width="480" alt="批量工具"></td>
+    <td><strong>端口状态</strong><br><img src="./images/webui-ports.png" width="480" alt="端口状态"></td>
+  </tr>
+  <tr>
+    <td><strong>日志</strong><br><img src="./images/webui-logs.png" width="480" alt="日志"></td>
+    <td><strong>设置</strong><br><img src="./images/webui-settings.png" width="480" alt="设置"></td>
+  </tr>
+</table>
+</details>
 
 ## 开始使用
 

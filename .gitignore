@@ -46,6 +46,7 @@ coverage.html
 *.tmp
 *.bak
 *.bundle
+/images/.preview-browser*/
 
 # Qodo
 .qodo/

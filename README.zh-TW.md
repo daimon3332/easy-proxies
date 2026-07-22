@@ -36,18 +36,42 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 
 預設執行模式是 `multi-port`，每個測速成功並進入節點池的節點都會取得獨立本機連接埠。首次使用時，「測速成功後自動加入節點池」預設開啟。
 
-## 核心功能
+## ✨ 核心功能
 
-- 面向一般使用者的訂閱優先 WebUI 流程。
+- 🔗 面向一般使用者的訂閱優先 WebUI 流程。
 - 支援 HTTP/HTTPS 訂閱、URI 清單、Base64 內容和 Clash/Mihomo YAML。
-- 並行、非同步節點測速和即時進度。
-- 分別保留候選節點、節點池節點和失敗節點。
+- ⚡ 並行、非同步節點測速和即時進度。
+- 🧩 分別保留候選節點、節點池節點和失敗節點。
 - 匯入測速成功後預設自動加入節點池。
-- 預設 `multi-port` 模式下每個節點使用獨立連接埠。
+- 🔌 預設 `multi-port` 模式下每個節點使用獨立連接埠。
 - 可選 `pool` 和 `hybrid` 模式。
 - 支援批次重測、國家檢測、訂閱重新整理、連接埠檢視和執行日誌。
 - 探測目標僅支援 `https://www.gstatic.com/generate_204` 和 `https://cp.cloudflare.com/generate_204`。
 - WebUI 與 REST API 共用管理入口。
+
+<details>
+<summary><strong>🖼️ WebUI 預覽</strong>（全部導覽頁面）</summary>
+<br>
+
+<table>
+  <tr>
+    <td><strong>匯入並生成連接埠</strong><br><img src="./images/webui-import.png" width="480" alt="匯入訂閱"></td>
+    <td><strong>可用連接埠</strong><br><img src="./images/webui-pool.png" width="480" alt="可用代理連接埠"></td>
+  </tr>
+  <tr>
+    <td><strong>候選節點</strong><br><img src="./images/webui-nodes.png" width="480" alt="候選節點"></td>
+    <td><strong>失敗節點</strong><br><img src="./images/webui-failed.png" width="480" alt="失敗節點"></td>
+  </tr>
+  <tr>
+    <td><strong>批次工具</strong><br><img src="./images/webui-bulk.png" width="480" alt="批次工具"></td>
+    <td><strong>連接埠狀態</strong><br><img src="./images/webui-ports.png" width="480" alt="連接埠狀態"></td>
+  </tr>
+  <tr>
+    <td><strong>日誌</strong><br><img src="./images/webui-logs.png" width="480" alt="日誌"></td>
+    <td><strong>設定</strong><br><img src="./images/webui-settings.png" width="480" alt="設定"></td>
+  </tr>
+</table>
+</details>
 
 ## 開始使用
 

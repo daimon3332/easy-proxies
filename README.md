@@ -65,7 +65,7 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 
 ```powershell
 Copy-Item config.example.yaml config.yaml
-.\build.ps1
+go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/easy_proxies
 .\easy_proxies.exe -config config.yaml
 ```
 
@@ -160,7 +160,7 @@ The settings page can change the runtime mode, listeners, ports, credentials, po
 | `with_utls` | Enables uTLS/Reality-related capabilities. |
 | `with_quic` | Enables QUIC-based protocols such as Hysteria2 and TUIC. |
 
-The Windows build scripts include all three tags.
+The Windows build command above includes all three tags.
 
 ## Data and privacy
 
@@ -182,7 +182,7 @@ Use `config.example.yaml` for documentation and commits. Before publishing a for
 
 ### `clash api is not included in this build`
 
-Rebuild with the provided Windows script or include `with_clash_api` in the Go build tags.
+Rebuild with the Windows command above or include `with_clash_api` in the Go build tags.
 
 ### A passed node has no expected port
 

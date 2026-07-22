@@ -63,7 +63,7 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 
 ```powershell
 Copy-Item config.example.yaml config.yaml
-.\build.ps1
+go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/easy_proxies
 .\easy_proxies.exe -config config.yaml
 ```
 
@@ -158,7 +158,7 @@ nodes: []
 | `with_utls` | 啟用 uTLS/Reality 相關能力。 |
 | `with_quic` | 啟用 Hysteria2、TUIC 等 QUIC 協定。 |
 
-Windows 建置指令碼已包含這三個標籤。
+上面的 Windows 建置命令已包含這三個標籤。
 
 ## 資料與隱私
 
@@ -180,7 +180,7 @@ node_ports.json
 
 ### 啟動提示 `clash api is not included in this build`
 
-使用 Windows 建置指令碼重新建置，或在 Go 建置參數中加入 `with_clash_api`。
+使用上面的 Windows 命令重新建置，或在 Go 建置參數中加入 `with_clash_api`。
 
 ### 節點沒有使用預期連接埠
 

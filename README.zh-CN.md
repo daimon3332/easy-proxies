@@ -63,7 +63,7 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 
 ```powershell
 Copy-Item config.example.yaml config.yaml
-.\build.ps1
+go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/easy_proxies
 .\easy_proxies.exe -config config.yaml
 ```
 
@@ -158,7 +158,7 @@ nodes: []
 | `with_utls` | 启用 uTLS/Reality 相关能力。 |
 | `with_quic` | 启用 Hysteria2、TUIC 等 QUIC 协议。 |
 
-Windows 构建脚本已经包含这三个标签。
+上面的 Windows 构建命令已经包含这三个标签。
 
 ## 数据与隐私
 
@@ -180,7 +180,7 @@ node_ports.json
 
 ### 启动提示 `clash api is not included in this build`
 
-使用 Windows 构建脚本重新构建，或者在 Go 构建参数中加入 `with_clash_api`。
+使用上面的 Windows 命令重新构建，或者在 Go 构建参数中加入 `with_clash_api`。
 
 ### 节点没有使用预期端口
 

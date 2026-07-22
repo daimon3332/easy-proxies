@@ -49,29 +49,39 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 - Probe target selection between `https://www.gstatic.com/generate_204` and `https://cp.cloudflare.com/generate_204`.
 - WebUI and REST API served from the same management endpoint.
 
-<details>
-<summary><strong>🖼️ WebUI preview</strong> (all navigation tabs)</summary>
-<br>
+## 🖼️ WebUI preview
 
-<table>
-  <tr>
-    <td><strong>Import and create ports</strong><br><img src="./images/webui-import.png" width="480" alt="Import subscriptions"></td>
-    <td><strong>Available ports</strong><br><img src="./images/webui-pool.png" width="480" alt="Available proxy ports"></td>
-  </tr>
-  <tr>
-    <td><strong>Candidate nodes</strong><br><img src="./images/webui-nodes.png" width="480" alt="Candidate nodes"></td>
-    <td><strong>Failed nodes</strong><br><img src="./images/webui-failed.png" width="480" alt="Failed nodes"></td>
-  </tr>
-  <tr>
-    <td><strong>Batch tools</strong><br><img src="./images/webui-bulk.png" width="480" alt="Batch tools"></td>
-    <td><strong>Port status</strong><br><img src="./images/webui-ports.png" width="480" alt="Port status"></td>
-  </tr>
-  <tr>
-    <td><strong>Logs</strong><br><img src="./images/webui-logs.png" width="480" alt="Logs"></td>
-    <td><strong>Settings</strong><br><img src="./images/webui-settings.png" width="480" alt="Settings"></td>
-  </tr>
-</table>
-</details>
+### Import and create ports
+
+<img src="./images/webui-import.png" width="960" alt="Import subscriptions">
+
+### Available ports
+
+<img src="./images/webui-pool.png" width="960" alt="Available proxy ports">
+
+### Candidate nodes
+
+<img src="./images/webui-nodes.png" width="960" alt="Candidate nodes">
+
+### Failed nodes
+
+<img src="./images/webui-failed.png" width="960" alt="Failed nodes">
+
+### Batch tools
+
+<img src="./images/webui-bulk.png" width="960" alt="Batch tools">
+
+### Port status
+
+<img src="./images/webui-ports.png" width="960" alt="Port status">
+
+### Logs
+
+<img src="./images/webui-logs.png" width="960" alt="Logs">
+
+### Settings
+
+<img src="./images/webui-settings.png" width="960" alt="Settings">
 
 ## Getting started
 

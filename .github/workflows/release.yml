@@ -193,13 +193,20 @@ jobs:
           fi
 
           notes_file="release-notes/${VERSION}.md"
-          if [[ -f "$notes_file" ]]; then
-            title="$(sed -n 's/^# //p' "$notes_file" | head -n 1)"
-            notes_args=(--notes-file "$notes_file")
-          else
-            title="Easy Proxies ${VERSION}"
-            notes_args=(--generate-notes)
+          if [[ ! -f "$notes_file" ]]; then
+            echo "Missing bilingual release notes: $notes_file" >&2
+            exit 1
           fi
+          if ! grep -qP '[\x{4E00}-\x{9FFF}]' "$notes_file"; then
+            echo "Release notes must include Chinese content: $notes_file" >&2
+            exit 1
+          fi
+          if ! grep -q '[A-Za-z]' "$notes_file"; then
+            echo "Release notes must include English content: $notes_file" >&2
+            exit 1
+          fi
+          title="$(sed -n 's/^# //p' "$notes_file" | head -n 1)"
+          notes_args=(--notes-file "$notes_file")
 
           if [[ "$REPLACE_EXISTING" == "true" ]]; then
             tag_args=(--target "$GITHUB_SHA")

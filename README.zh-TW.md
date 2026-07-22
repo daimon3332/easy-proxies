@@ -49,29 +49,39 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 - 探測目標僅支援 `https://www.gstatic.com/generate_204` 和 `https://cp.cloudflare.com/generate_204`。
 - WebUI 與 REST API 共用管理入口。
 
-<details>
-<summary><strong>🖼️ WebUI 預覽</strong>（全部導覽頁面）</summary>
-<br>
+## 🖼️ WebUI 預覽
 
-<table>
-  <tr>
-    <td><strong>匯入並生成連接埠</strong><br><img src="./images/webui-import.png" width="480" alt="匯入訂閱"></td>
-    <td><strong>可用連接埠</strong><br><img src="./images/webui-pool.png" width="480" alt="可用代理連接埠"></td>
-  </tr>
-  <tr>
-    <td><strong>候選節點</strong><br><img src="./images/webui-nodes.png" width="480" alt="候選節點"></td>
-    <td><strong>失敗節點</strong><br><img src="./images/webui-failed.png" width="480" alt="失敗節點"></td>
-  </tr>
-  <tr>
-    <td><strong>批次工具</strong><br><img src="./images/webui-bulk.png" width="480" alt="批次工具"></td>
-    <td><strong>連接埠狀態</strong><br><img src="./images/webui-ports.png" width="480" alt="連接埠狀態"></td>
-  </tr>
-  <tr>
-    <td><strong>日誌</strong><br><img src="./images/webui-logs.png" width="480" alt="日誌"></td>
-    <td><strong>設定</strong><br><img src="./images/webui-settings.png" width="480" alt="設定"></td>
-  </tr>
-</table>
-</details>
+### 匯入並生成連接埠
+
+<img src="./images/webui-import.png" width="960" alt="匯入訂閱">
+
+### 可用連接埠
+
+<img src="./images/webui-pool.png" width="960" alt="可用代理連接埠">
+
+### 候選節點
+
+<img src="./images/webui-nodes.png" width="960" alt="候選節點">
+
+### 失敗節點
+
+<img src="./images/webui-failed.png" width="960" alt="失敗節點">
+
+### 批次工具
+
+<img src="./images/webui-bulk.png" width="960" alt="批次工具">
+
+### 連接埠狀態
+
+<img src="./images/webui-ports.png" width="960" alt="連接埠狀態">
+
+### 日誌
+
+<img src="./images/webui-logs.png" width="960" alt="日誌">
+
+### 設定
+
+<img src="./images/webui-settings.png" width="960" alt="設定">
 
 ## 開始使用
 

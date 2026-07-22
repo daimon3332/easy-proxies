@@ -117,7 +117,8 @@ jobs:
 
           go version -m "dist/${asset_binary}" | grep -F -- "-tags=with_clash_api,with_utls,with_quic"
           cp "dist/${asset_binary}" "package/${package_binary}"
-          cp config.example.yaml README.md README.zh-CN.md README.zh-TW.md LICENSE package/
+          cp config.example.yaml README.md README.zh-CN.md README.zh-TW.md CONTRIBUTING.md LICENSE package/
+          cp -r docs package/
 
           if [[ "$TARGET_OS" != "windows" ]]; then
             chmod +x "dist/${asset_binary}" "package/${package_binary}"

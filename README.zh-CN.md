@@ -40,81 +40,33 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 
 - 面向普通用户的订阅优先 WebUI 流程。
 - 支持 HTTP/HTTPS 订阅、URI 列表、Base64 内容和 Clash/Mihomo YAML。
-- 一次导入多个订阅 URL。
 - 并发、异步节点测速和实时进度。
 - 分别保留候选节点、节点池节点和失败节点。
 - 导入测速成功后默认自动加入节点池。
 - 默认 `multi-port` 模式下每个节点独立端口。
 - 可选 `pool` 和 `hybrid` 模式。
 - 支持批量重测、国家检测、订阅刷新、端口查看和运行日志。
-- 探测目标只支持：
-  - `https://www.gstatic.com/generate_204`
-  - `https://cp.cloudflare.com/generate_204`
+- 探测目标只支持 `https://www.gstatic.com/generate_204` 和 `https://cp.cloudflare.com/generate_204`。
 - WebUI 与 REST API 共用管理入口。
 
-## 快速开始
+## 开始使用
 
-### 环境要求
-
-- Go 1.24 或更高版本
-- Windows、Linux 或 macOS
-
-### Windows
-
-```powershell
-Copy-Item config.example.yaml config.yaml
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe .
-.\easy_proxies.exe -config config.yaml
-```
-
-### Linux / macOS
-
-```bash
-cp config.example.yaml config.yaml
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies .
-./easy_proxies -config config.yaml
-```
-
-浏览器打开：
+普通用户应从 [Releases](https://github.com/daimon3332/easy-proxies/releases/latest) 下载与操作系统和 CPU 架构匹配的 ZIP 压缩包。
 
 ```text
-http://127.0.0.1:9091
+下载 Release
+  -> 把 config.example.yaml 复制为 config.yaml
+  -> 启动 Easy Proxies
+  -> 打开 WebUI
+  -> 导入订阅 URL 并测速
+  -> 使用生成的本地端口
 ```
 
-首次启动不需要预先配置节点；空节点状态下 WebUI 仍然可以打开。
-
-## 最常见的使用流程
-
-1. 在 WebUI 打开“导入节点”。
-2. 保持“订阅链接”格式。
-3. 每行粘贴一个订阅 URL。
-4. 保持“测速成功后自动加入节点池”开启。
-5. 点击“导入并测试”。
-6. 等待解析和测速完成。
-7. 复制生成的地址，例如 `127.0.0.1:24000`。
-
-HTTP 代理示例：
-
-```bash
-curl -x http://127.0.0.1:24000 https://api.ipify.org
-```
-
-SOCKS5 示例：
-
-```bash
-curl --proxy socks5h://127.0.0.1:24000 https://api.ipify.org
-```
-
-被其他程序占用的端口会自动跳过，实际端口分配以 WebUI 的端口状态页面为准。
+下载选择、启动命令、订阅导入、节点测速和常见问题请查看 **[简体中文使用教程](./docs/USER_GUIDE.zh-CN.md)**。
 
 ## 导入格式与协议
 
-支持的导入格式：
-
-- HTTP/HTTPS 订阅 URL
-- 代理 URI 列表
-- Base64 编码 URI 列表
-- Clash/Mihomo YAML 的 `proxies` 部分
+支持 HTTP/HTTPS 订阅 URL、代理 URI 列表、Base64 编码 URI 列表，以及 Clash/Mihomo YAML 的 `proxies` 部分。
 
 常见协议包括 VLESS、VMess、Trojan、Shadowsocks、ShadowsocksR、Hysteria、Hysteria2、TUIC、AnyTLS、HTTP/HTTPS、SOCKS4 和 SOCKS5。实际协议能力取决于 sing-box 版本与构建标签。
 
@@ -128,41 +80,9 @@ curl --proxy socks5h://127.0.0.1:24000 https://api.ipify.org
 
 配置中的 `multi_port` 写法也受支持，并会自动规范为 `multi-port`。
 
-## 配置
-
-启动前把 `config.example.yaml` 复制为 `config.yaml`。模板不包含订阅或节点信息，默认配置为：
-
-```yaml
-mode: multi-port
-
-multi_port:
-  address: 127.0.0.1
-  base_port: 24000
-
-management:
-  enabled: true
-  listen: 127.0.0.1:9091
-  probe_target: https://www.gstatic.com/generate_204
-
-subscriptions: []
-nodes: []
-```
-
-设置页面可以修改运行模式、监听地址、端口、认证信息、节点池策略、探测目标、黑名单秒数和轮换秒数。
-
-## 构建标签
-
-| 标签 | 用途 |
-| --- | --- |
-| `with_clash_api` | Clash API 集成所需。 |
-| `with_utls` | 启用 uTLS/Reality 相关能力。 |
-| `with_quic` | 启用 Hysteria2、TUIC 等 QUIC 协议。 |
-
-上面的 Windows 构建命令已经包含这三个标签。
-
 ## 数据与隐私
 
-以下文件可能包含订阅 URL、凭据、节点 URI、运行状态或本地日志，已被 Git 忽略：
+以下可能包含订阅 URL、凭据、节点 URI、运行状态或本地日志的文件已被 Git 忽略：
 
 ```text
 config.yaml
@@ -171,24 +91,17 @@ managed_nodes.json
 node_ports.json
 *.log
 *.mmdb
-*.exe
 ```
 
 提交代码时使用 `config.example.yaml`。公开已有仓库前还需要检查完整 Git 历史，因为加入 `.gitignore` 不会删除旧提交中的文件。
 
+## 二次开发与贡献
+
+源码环境、构建标签、测试命令、分支规范和 Pull Request 流程请查看 **[CONTRIBUTING.md](./CONTRIBUTING.md)**。
+
 ## 常见问题
 
-### 启动提示 `clash api is not included in this build`
-
-使用上面的 Windows 命令重新构建，或者在 Go 构建参数中加入 `with_clash_api`。
-
-### 节点没有使用预期端口
-
-打开端口状态页面。被其他进程占用的端口会自动跳过。
-
-### 自动加入节点池没有开启
-
-WebUI 会在浏览器中保存用户选择；在导入页面重新勾选即可恢复自动入池。
+使用教程包含启动报错、端口分配、浏览器保存的导入选项和 macOS Gatekeeper 处理方法。测速成功的节点没有使用预期端口时，请查看 WebUI 的端口页面；被其他程序占用的端口会自动跳过。
 
 ## 上游项目与致谢
 

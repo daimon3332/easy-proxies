@@ -58,21 +58,27 @@ jobs:
       matrix:
         include:
           - goos: windows
+            asset_os: windows
             goarch: amd64
             extension: .exe
           - goos: windows
+            asset_os: windows
             goarch: arm64
             extension: .exe
           - goos: linux
+            asset_os: linux
             goarch: amd64
             extension: ""
           - goos: linux
+            asset_os: linux
             goarch: arm64
             extension: ""
           - goos: darwin
+            asset_os: macos
             goarch: amd64
             extension: ""
           - goos: darwin
+            asset_os: macos
             goarch: arm64
             extension: ""
     steps:
@@ -90,6 +96,7 @@ jobs:
         env:
           RAW_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           TARGET_OS: ${{ matrix.goos }}
+          ASSET_OS: ${{ matrix.asset_os }}
           TARGET_ARCH: ${{ matrix.goarch }}
           EXTENSION: ${{ matrix.extension }}
         run: |
@@ -100,7 +107,7 @@ jobs:
             exit 1
           fi
 
-          asset_base="easy_proxies-${VERSION}-${TARGET_OS}-${TARGET_ARCH}"
+          asset_base="easy_proxies-${VERSION}-${ASSET_OS}-${TARGET_ARCH}"
           asset_binary="${asset_base}${EXTENSION}"
           package_binary="easy_proxies${EXTENSION}"
 

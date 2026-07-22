@@ -59,6 +59,7 @@ coverage.html
 # Local implementation plans and release workspace
 plan.md
 .public-release/
+/dist/
 
 # Personal automation
 start_easy_outlook.bat

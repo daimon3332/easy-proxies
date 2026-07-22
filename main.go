@@ -15,7 +15,8 @@ import (
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/monitor"
 
-	"gopkg.in/natefinch/lumberjack.v2")
+	"gopkg.in/natefinch/lumberjack.v2"
+)
 
 func main() {
 	var configPath string
@@ -63,9 +64,9 @@ func setupLogging(cfg *config.Config) {
 		} else {
 			lj := &lumberjack.Logger{
 				Filename:   cfg.Log.File,
-				MaxSize:    cfg.Log.MaxSize,    // MB
+				MaxSize:    cfg.Log.MaxSize, // MB
 				MaxBackups: cfg.Log.MaxBackups,
-				MaxAge:     cfg.Log.MaxAge,     // days
+				MaxAge:     cfg.Log.MaxAge, // days
 				Compress:   cfg.Log.Compress,
 			}
 			writers = append(writers, lj)

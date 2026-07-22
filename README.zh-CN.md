@@ -63,7 +63,7 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 
 ```powershell
 Copy-Item config.example.yaml config.yaml
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/easy_proxies
+go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe .
 .\easy_proxies.exe -config config.yaml
 ```
 
@@ -71,7 +71,7 @@ go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/ea
 
 ```bash
 cp config.example.yaml config.yaml
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies ./cmd/easy_proxies
+go build -tags "with_clash_api with_utls with_quic" -o easy_proxies .
 ./easy_proxies -config config.yaml
 ```
 

@@ -65,7 +65,7 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 
 ```powershell
 Copy-Item config.example.yaml config.yaml
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/easy_proxies
+go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe .
 .\easy_proxies.exe -config config.yaml
 ```
 
@@ -73,7 +73,7 @@ go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe ./cmd/ea
 
 ```bash
 cp config.example.yaml config.yaml
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies ./cmd/easy_proxies
+go build -tags "with_clash_api with_utls with_quic" -o easy_proxies .
 ./easy_proxies -config config.yaml
 ```
 

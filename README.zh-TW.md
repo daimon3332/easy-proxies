@@ -51,6 +51,10 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 
 ## 🖼️ WebUI 預覽
 
+<details>
+<summary>顯示全部介面截圖</summary>
+<br>
+
 ### 匯入並生成連接埠
 
 <img src="./images/webui-import.png" width="960" alt="匯入訂閱">
@@ -82,6 +86,8 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 ### 設定
 
 <img src="./images/webui-settings.png" width="960" alt="設定">
+
+</details>
 
 ## 開始使用
 

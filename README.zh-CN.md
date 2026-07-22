@@ -51,6 +51,10 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 
 ## 🖼️ WebUI 预览
 
+<details>
+<summary>显示全部界面截图</summary>
+<br>
+
 ### 导入并生成端口
 
 <img src="./images/webui-import.png" width="960" alt="导入订阅">
@@ -82,6 +86,8 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 ### 设置
 
 <img src="./images/webui-settings.png" width="960" alt="设置">
+
+</details>
 
 ## 开始使用
 

@@ -51,6 +51,10 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 
 ## 🖼️ WebUI preview
 
+<details>
+<summary>Show all interface screenshots</summary>
+<br>
+
 ### Import and create ports
 
 <img src="./images/webui-import.png" width="960" alt="Import subscriptions">
@@ -82,6 +86,8 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 ### Settings
 
 <img src="./images/webui-settings.png" width="960" alt="Settings">
+
+</details>
 
 ## Getting started
 

@@ -1,0 +1,65 @@
+# Binaries
+/easy-proxies
+/easy-proxies-*
+/easy_proxies
+/easy_proxies-*
+*.exe
+!/easy_proxies.exe
+
+# Configuration (contains sensitive data)
+config.yaml
+nodes.txt
+managed_nodes.json
+node_ports.json
+
+# GeoIP database (auto-downloaded)
+*.mmdb
+GeoLite2-Country.mmdb
+
+# Logs
+*.log
+logs/
+
+# IDE and editor
+.idea/
+.vscode/
+.serena/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Go
+vendor/
+
+# Test artifacts
+coverage.out
+coverage.html
+*.test
+
+# Temporary and local backup files
+*.lock
+*.tmp
+*.bak
+*.bundle
+
+# Qodo
+.qodo/
+
+# AI tool artifacts
+.ace-tool/
+.ccg/
+.claude/
+.codex/
+
+# Local implementation plans and release workspace
+plan.md
+.public-release/
+
+# Personal automation
+start_easy_outlook.bat
+start_easy_outlook.ps1

@@ -1,0 +1,1750 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Easy Proxies</title>
+<style>
+:root{
+  --bg:#f4f7f9;
+  --panel:#ffffff;
+  --panel-soft:#f7f9fb;
+  --line:#dce3e8;
+  --line-strong:#b9c7d0;
+  --text:#17242d;
+  --muted:#687783;
+  --blue:#2563eb;
+  --blue-deep:#1d4ed8;
+  --green:#0f9f6e;
+  --green-soft:#e8f8f2;
+  --red:#d64545;
+  --red-soft:#fff0ef;
+  --amber:#b7791f;
+  --amber-soft:#fff8e8;
+  --shadow:0 10px 30px rgba(20,30,40,.08);
+  --shadow-strong:0 14px 34px rgba(37,99,235,.16);
+  --radius:8px;
+  --mono:"Cascadia Mono","SFMono-Regular",Consolas,monospace;
+  --font:"Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--text);
+  font:14px/1.55 var(--font);
+}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+.side{padding:22px 16px;border-right:1px solid var(--line);background:#fff;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:12px;margin:0 8px 28px}
+.logo{width:40px;height:40px;border-radius:8px;background:url('/logo.png') center/cover no-repeat;box-shadow:0 8px 20px rgba(20,30,40,.12)}
+.brand strong{display:block;font-size:19px;letter-spacing:-.03em}
+.brand span{display:block;color:var(--muted);font-size:12px}
+.nav{display:grid;gap:8px}
+.nav button{
+  border:0;background:transparent;color:var(--muted);border-radius:14px;padding:12px 13px;text-align:left;
+  display:flex;align-items:center;justify-content:space-between;transition:.18s ease;
+}
+.nav button:hover{background:#e9f7fe;color:var(--blue-deep)}
+.nav button.active{background:#eef4ff;color:var(--text);font-weight:700;box-shadow:inset 0 0 0 1px var(--line-strong)}
+.badge{font-size:12px;color:var(--blue-deep);background:#dff4ff;border-radius:999px;padding:1px 8px}
+.main{padding:28px;display:grid;gap:20px;align-content:start}
+.topbar{display:flex;gap:14px;align-items:center;justify-content:space-between}
+.title h1{margin:0;font-size:28px;letter-spacing:-.04em}
+.title p{margin:4px 0 0;color:var(--muted)}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-head{padding:20px 22px;border-bottom:1px solid var(--line);display:flex;gap:14px;justify-content:space-between;align-items:center}
+.card-head h2{margin:0;font-size:18px}
+.card-body{padding:22px}
+.stack{display:grid;gap:16px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.source-row{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:16px;background:#fbfdff}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.filters.compact{display:flex;gap:10px;flex-wrap:wrap}
+.filters.compact select,.filters.compact input{width:220px;max-width:100%}
+.action-line{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.action-line strong{font-size:16px}
+.pool-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding:14px;border:1px solid var(--line);border-radius:8px;background:#f7f9fb}
+.list-tools{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px}
+.node-table{border:1px solid var(--line);border-radius:16px;overflow:auto;background:#fff}
+.table-head,.table-row{display:grid;grid-template-columns:34px 52px minmax(260px,1.7fr) 96px 112px 118px 96px minmax(120px,.8fr) 240px;gap:12px;align-items:center;min-width:1120px}
+.table-head{padding:14px 16px;border-bottom:1px solid var(--line);font-weight:800;color:var(--text)}
+.table-row{padding:13px 16px;border-bottom:1px solid var(--line)}
+.table-row:last-child{border-bottom:0}
+.th-btn{border:0;background:transparent;padding:0;color:inherit;font-weight:800;box-shadow:none}
+.th-btn:hover{transform:none;color:var(--blue-deep)}
+.th-btn.active{color:var(--blue-deep)}
+.cell-muted{color:var(--muted);font-size:12px}
+.table-name{display:grid;gap:3px;min-width:0}
+.table-name strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.table-uri{font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.value-pill{display:inline-flex;align-items:center;justify-content:center;min-width:54px;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;background:#eaf7ff;color:#0f78aa;border:1px solid #bce2f3}
+.value-pill.green{background:#dcf7ec;color:#087a55;border-color:#a8e4cc}
+.value-pill.amber{background:#fff4d8;color:#9c6500;border-color:#f0d38e}
+.value-pill.red{background:#ffe9e7;color:#bd352f;border-color:#f2bab5}
+.value-pill.muted{background:#f3f8fb;color:#668596;border-color:#d5e7f0}
+.check{width:18px;height:18px;accent-color:var(--green)}
+.time-grid{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.time-grid .field{width:120px}
+.import-format-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px;border:1px solid var(--line);border-radius:8px;background:#f7f9fb}
+.import-format-card strong{display:block;font-size:16px}
+.import-format-card span{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.format-main{padding:11px 16px;font-size:14px}
+.format-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.format-choice{border:1px solid var(--line-strong);background:#fff;border-radius:8px;padding:16px;text-align:left}
+.format-choice strong{display:block;font-size:15px;color:var(--text)}
+.format-choice span{display:block;margin-top:4px;color:var(--muted);font-size:12px}
+.node-check{width:auto;margin-top:4px}
+.node.selectable{grid-template-columns:auto 1fr;align-items:start}
+.node-content{display:grid;gap:9px}
+.btn{
+  min-height:42px;border:1px solid var(--line-strong);background:#fff;color:var(--text);border-radius:10px;padding:10px 16px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:750;line-height:1.2;
+  transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease;color:inherit;
+  box-shadow:0 4px 12px rgba(20,30,40,.05)
+}
+.btn:hover{border-color:var(--blue);transform:translateY(-1px);box-shadow:0 8px 20px rgba(20,30,40,.09)}
+.btn:active{transform:translateY(0);box-shadow:0 3px 10px rgba(20,30,40,.08)}
+.btn:disabled{opacity:.48;cursor:not-allowed;transform:none;box-shadow:none}
+.btn.primary{min-height:48px;background:var(--blue);border-color:transparent;color:#fff;font-size:15px;box-shadow:var(--shadow-strong)}
+.btn.secondary{background:#eef4ff;border-color:#bcd0ff;color:var(--blue-deep)}
+.btn.green{min-height:46px;background:var(--green);border-color:transparent;color:#fff;box-shadow:0 12px 26px rgba(15,159,110,.16)}
+.btn.ghost{background:transparent;border-color:transparent;box-shadow:none;color:var(--muted)}
+.btn.danger{border-color:#f0b8b8;color:#b42323;background:#fff5f5}
+.btn.block{width:100%;display:flex}
+.btn.small{min-height:34px;padding:7px 12px;font-size:12px;border-radius:8px;font-weight:750;box-shadow:none}
+.field{display:grid;gap:8px}
+.field label{font-size:13px;font-weight:800;color:#40515d}
+input,textarea,select{
+  width:100%;min-height:44px;border:1px solid var(--line-strong);border-radius:10px;background:#fff;color:var(--text);
+  padding:11px 13px;outline:none;transition:.16s ease;
+}
+textarea{resize:vertical;min-height:240px;font-family:var(--mono);font-size:13px;line-height:1.55}
+input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(47,159,216,.12)}
+input[type="checkbox"]{
+  appearance:none;width:24px!important;height:24px;min-width:24px;min-height:24px;padding:0;border:2px solid var(--line-strong);
+  border-radius:6px;background:#fff;display:inline-grid;place-content:center;cursor:pointer;vertical-align:middle;accent-color:var(--blue)
+}
+input[type="checkbox"]::before{content:"";width:12px;height:12px;transform:scale(0);transition:.12s ease;background:#fff;clip-path:polygon(14% 44%,0 59%,42% 100%,100% 18%,84% 4%,39% 67%)}
+input[type="checkbox"]:checked{background:var(--blue);border-color:var(--blue)}
+input[type="checkbox"]:checked::before{transform:scale(1)}
+input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
+.toggle-row{display:flex;gap:14px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:16px;background:#fbfdff;cursor:pointer}
+.toggle-row:hover{border-color:#bcd0ff;background:#f3f7ff}
+.toggle-row input{margin-top:1px}
+.toggle-row strong{display:block}
+.toggle-row span{display:block;margin-top:2px;color:var(--muted);font-size:12px}
+.settings-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr);gap:20px;align-items:start}
+.settings-stack{display:grid;gap:20px}
+.settings-section{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.settings-section-head{padding:18px 20px;border-bottom:1px solid var(--line);background:#fbfdff;display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.settings-section-head h2{margin:0;font-size:18px}
+.settings-section-head p{margin:4px 0 0;color:var(--muted)}
+.settings-section-body{padding:20px;display:grid;gap:18px}
+.settings-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.settings-form .wide{grid-column:1/-1}
+.settings-highlight{border:1px solid #c6d7ff;background:#f3f7ff;border-radius:10px;padding:14px;display:grid;gap:6px}
+.settings-highlight strong{font-size:15px}
+.settings-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;padding-top:4px}
+.metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.metric{border:1px solid var(--line);border-radius:10px;background:#fff;padding:12px}
+.metric span{display:block;color:var(--muted);font-size:12px}
+.metric strong{display:block;margin-top:2px;font-size:18px}
+.tabs{display:flex;gap:8px;background:var(--panel-soft);border:1px solid var(--line);padding:5px;border-radius:14px;width:max-content}
+.tabs button{border:0;background:transparent;color:var(--muted);border-radius:10px;padding:8px 12px}
+.tabs button.active{background:#fff;color:var(--blue-deep);font-weight:700;box-shadow:0 6px 20px rgba(47,159,216,.12)}
+.list{display:grid;gap:10px}
+.node{
+  border:1px solid var(--line);background:#fff;border-radius:15px;padding:13px;display:grid;gap:9px;
+}
+.node-main{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.node-name{font-weight:800;word-break:break-word}
+.node-uri{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all}
+.meta{display:flex;gap:7px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;background:#dff4ff;color:var(--blue-deep)}
+.pill.green{background:#dcf7ec;color:#087a55}
+.pill.red{background:#ffe9e7;color:#bd352f}
+.pill.amber{background:#fff4d8;color:#9c6500}
+.action-status{margin:0 0 12px;padding:12px 14px;border:1px solid #a8e4cc;border-radius:14px;background:#e8f8f2;color:#087a55;font-weight:800}
+.action-status.err{border-color:#f2bab5;background:#fff0ef;color:#bd352f}
+.group-list{display:grid;gap:9px}
+.group-item{display:grid;gap:7px;border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px}
+.group-item[draggable=true]{cursor:grab}
+.group-item.dragging{opacity:.45}
+.group-main{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.drag-handle{color:var(--muted);font-weight:900;letter-spacing:.08em}
+.muted{color:var(--muted)}
+.empty{text-align:center;color:var(--muted);padding:42px 12px;border:1px dashed var(--line-strong);border-radius:16px;background:rgba(255,255,255,.5)}
+.status{min-height:22px;color:var(--muted)}
+.toast-wrap{position:fixed;right:22px;top:22px;z-index:30;display:grid;gap:10px}
+.toast{background:#fff;border:1px solid var(--line);border-left:5px solid var(--green);box-shadow:var(--shadow);border-radius:14px;padding:12px 14px;max-width:360px}
+.toast.err{border-left-color:var(--red)}
+.modal{position:fixed;inset:0;background:rgba(20,51,68,.22);display:none;align-items:center;justify-content:center;z-index:20;padding:20px}
+.modal.show{display:flex}
+.dialog{width:min(430px,100%);background:#fff;border-radius:20px;border:1px solid var(--line);box-shadow:var(--shadow);padding:22px}
+.dialog.wide{width:min(920px,100%)}
+.dialog-back{position:fixed;inset:0;background:rgba(20,51,68,.22);display:flex;align-items:center;justify-content:center;z-index:30;padding:20px}
+.progress-bar{height:10px;background:#eef3f5;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.progress-fill{height:100%;background:var(--green);transition:width .25s ease}
+.dialog h2{margin:0 0 14px}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;color:#315467;background:#f5fbff;border:1px solid var(--line);border-radius:14px;padding:14px;max-height:460px;overflow:auto}
+pre.log-view{height:100%;max-height:none}
+.log-card{height:calc(100vh - 112px);display:flex;flex-direction:column}
+.log-card .card-body{flex:1;min-height:0}
+.table{display:grid;gap:8px}
+.port{display:grid;grid-template-columns:90px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);background:#fff;border-radius:8px;padding:10px}
+.checkbox-row{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start}
+.progress{height:9px;background:#e3f2f8;border-radius:999px;overflow:hidden}
+.progress div{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));width:0;transition:.2s ease}
+@media(max-width:980px){
+  .app{grid-template-columns:1fr}
+  .side{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}
+  .nav{grid-template-columns:repeat(2,1fr)}
+  .grid{grid-template-columns:1fr}
+  .filters{grid-template-columns:1fr}
+  .filters.compact select,.filters.compact input{width:100%}
+  .settings-grid{grid-template-columns:1fr}
+  .settings-form{grid-template-columns:1fr}
+  .metric-grid{grid-template-columns:1fr}
+  .settings-actions{justify-content:stretch}
+  .settings-actions .btn{width:100%}
+  .table-head{display:none}
+  .table-head,.table-row{min-width:0}
+  .table-row{grid-template-columns:1fr}
+  .time-grid .field{width:100%}
+  .import-format-card{align-items:flex-start;flex-direction:column}
+  .topbar{align-items:flex-start;flex-direction:column}
+  .toolbar{justify-content:flex-start}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="logo"></div>
+      <div><strong>Easy Proxies</strong><span>代理池管理</span></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="title"><h1 id="pageTitle">导入节点</h1><p id="pageDesc">支持订阅链接、URI、Base64 和 Clash YAML。</p></div>
+    </div>
+    <section id="view"></section>
+  </main>
+</div>
+
+<div class="modal" id="authModal">
+  <form class="dialog" onsubmit="login(event)">
+    <h2>登录</h2>
+    <div class="field"><label>管理密码</label><input id="password" type="password" autocomplete="current-password"></div>
+    <p class="status" id="authStatus"></p>
+    <button class="btn primary" type="submit">进入管理</button>
+  </form>
+</div>
+<div class="modal" id="importTypeModal">
+  <div class="dialog wide">
+    <h2>选择导入格式</h2>
+    <div class="format-grid">
+      <button class="format-choice" onclick="chooseImportKind('sub_url')"><strong>订阅链接格式</strong><span>http/https 开头；可每行一个订阅链接，内容可为 Clash、Base64 或 URI。</span></button>
+      <button class="format-choice" onclick="chooseImportKind('uri')"><strong>URI 格式</strong><span>每行一个 ss://、trojan://、vmess://、vless://、http://、https://、socks5://、socks4:// 等节点。</span></button>
+      <button class="format-choice" onclick="chooseImportKind('base64')"><strong>Base64 格式</strong><span>粘贴 Base64 编码后的节点列表。</span></button>
+      <button class="format-choice" onclick="chooseImportKind('clash')"><strong>Clash YAML 格式</strong><span>粘贴包含 proxies: 的 Clash 配置；只提取节点。</span></button>
+    </div>
+    <div class="row" style="margin-top:14px"><button class="btn" onclick="closeImportTypeModal()">关闭</button></div>
+  </div>
+</div>
+<div class="modal" id="resultModal">
+  <div class="dialog" id="resultDialog"></div>
+</div>
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+const ACTIVE_IMPORT_JOB_KEY='easy_proxies_active_import_job';
+const ACTIVE_BATCH_JOB_KEY='easy_proxies_active_batch_job';
+const S={
+  token:localStorage.getItem('easy_proxies_token')||'',
+  page:'import',
+  importKind:'sub_url',
+  importText:'',
+  tagPrefix:'local',
+  importAutoPromote:localStorage.getItem('easy_proxies_import_auto_promote')!=='0',
+  importSummary:null,
+  nodes:[],
+  viewNodes:[],
+  runtime:[],
+  configNodes:[],
+  ports:null,
+  settings:null,
+  subConfig:null,
+  importSources:[],
+  summary:null,
+  nodesLoadedAt:0,
+  summaryLoadedAt:0,
+  pageSize:120,
+  logs:'',
+  lastJob:null,
+  activeImportJob:localStorage.getItem(ACTIVE_IMPORT_JOB_KEY)||'',
+  activeBatchJob:localStorage.getItem(ACTIVE_BATCH_JOB_KEY)||'',
+  importPollingJob:'',
+  batchPollingJob:'',
+  selected:new Set(),
+  poolOrderMode:'country',
+  poolSortMode:'port',
+  poolSortDir:'asc',
+  candSortDir:'asc',
+  actionStatus:'',
+  actionStatusType:'ok',
+  failedAutoPromote:localStorage.getItem('easy_proxies_failed_auto_promote')==='1',
+  autoTimers:{},
+  autoProbe:JSON.parse(localStorage.getItem('easy_proxies_auto_probe')||'{}'),
+  poolGroupOrder:{country:[],tag:[],latency:[]},
+  draggingGroup:'',
+  filters:{scope:'all',country:'',tag:'',source:'',latency:'',q:'',sort:'latency'}
+};
+const pages=[
+  ['import','导入并生成端口','粘贴订阅 URL，自动测速并生成本地端口'],
+  ['pool','可用端口','已经生成的本地代理端口'],
+  ['nodes','候选节点','测速成功但尚未生成端口的节点'],
+  ['failed','失败节点','保留失败节点，避免误删可用节点'],
+  ['bulk','批量工具','手动批量测速 / 测试国家 / 入池'],
+  ['ports','端口状态','扫描本机端口占用'],
+  ['logs','日志','查看最近运行日志'],
+  ['settings','设置','运行参数和订阅刷新']
+];
+const qs=s=>document.querySelector(s);
+const qsa=s=>Array.from(document.querySelectorAll(s));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function decodeText(s){s=String(s??'');for(let i=0;i<2;i++){try{const d=decodeURIComponent(s);if(!d||d===s)break;s=d}catch(e){break}}return s}
+function countryLabel(code){return {JP:'日本',SG:'新加坡',HK:'香港',TW:'台湾',US:'美国',KR:'韩国',CH:'瑞士',NL:'荷兰',RU:'俄罗斯',GB:'英国',DE:'德国',FR:'法国',CA:'加拿大',AU:'澳大利亚',IN:'印度'}[String(code||'').toUpperCase()]||code||'未知'}
+function nodeName(n){return decodeText(n.name||n.original_name||n.id)}
+function toast(msg,type='ok'){const el=document.createElement('div');el.className='toast '+(type==='err'?'err':'');el.textContent=msg;qs('#toasts').appendChild(el);setTimeout(()=>el.remove(),3600)}
+function setStatus(id,msg){const el=qs(id);if(el)el.textContent=msg||''}
+function setActionStatus(msg,type='ok'){S.actionStatus=msg||'';S.actionStatusType=type}
+function statePill(s){
+  const cls=s==='in_pool'||s==='passed'?'green':s==='failed'||s==='excluded'?'red':s==='testing'?'amber':'';
+  return `<span class="pill ${cls}">${esc(s||'unknown')}</span>`;
+}
+function valuePill(text,cls='muted'){return `<span class="value-pill ${cls}">${esc(text||'-')}</span>`}
+function latencyPill(n){
+  const ms=Number(n.latency_ms)||0;
+  if(!ms || n.state==='failed')return valuePill('-','muted');
+  if(ms<=500)return valuePill(`${ms} ms`,'green');
+  if(ms<=1500)return valuePill(`${ms} ms`,'amber');
+  return valuePill(`${ms} ms`,'red');
+}
+function countryPill(n){return n.country_code?valuePill(countryLabel(n.country_code),'green'):valuePill('-','muted')}
+function portPill(n){return n.port?valuePill(n.port,'green'):valuePill('-','muted')}
+async function api(path,opt={}){
+  const headers={...(opt.headers||{})};
+  if(opt.body!==undefined && !(opt.body instanceof FormData)) headers['Content-Type']='application/json';
+  if(S.token) headers.Authorization='Bearer '+S.token;
+  const res=await fetch(path,{...opt,headers});
+  const ct=res.headers.get('content-type')||'';
+  let data=ct.includes('application/json')?await res.json().catch(()=>({})):await res.text();
+  if(typeof data==='string'&&data.trim().startsWith('{')){try{data=JSON.parse(data)}catch(e){}}
+  const message=typeof data==='string'?data:(data&&data.error);
+  if(res.status===401){qs('#authModal').classList.add('show');throw new Error(message||'未授权')}
+  if(!res.ok) throw new Error(message||res.statusText);
+  return data;
+}
+async function login(e){
+  e.preventDefault();
+  try{
+    const data=await api('/api/auth',{method:'POST',body:JSON.stringify({password:qs('#password').value})});
+    S.token=data.token||'';
+    if(S.token)localStorage.setItem('easy_proxies_token',S.token);
+    qs('#authModal').classList.remove('show');
+    await refresh();
+  }catch(err){setStatus('#authStatus',err.message)}
+}
+function renderNav(){
+  qs('#nav').innerHTML=pages.map(([id,label])=>{
+    const count=id==='nodes'?(S.summary?.passed??''):id==='pool'?(S.summary?.in_pool??''):id==='failed'?(S.summary?.failed??''):'';
+    return `<button class="${S.page===id?'active':''}" onclick="go('${id}')"><span>${label}</span>${count!==''?`<span class="badge">${count}</span>`:''}</button>`;
+  }).join('');
+}
+async function go(page){
+  if(S.page!==page)resetFilters();
+  S.page=page;
+  const p=pages.find(x=>x[0]===page);
+  qs('#pageTitle').textContent=p[1];
+  qs('#pageDesc').textContent=p[2];
+  renderNav();
+  await refresh();
+}
+function resetFilters(){S.filters={scope:'all',country:'',tag:'',source:'',latency:'',q:'',sort:'latency'};S.candSortDir='asc'}
+async function refresh(){
+  try{
+    if(['nodes','pool','failed'].includes(S.page)){
+      await loadManaged(S.page);
+      renderManaged(S.page);
+    }else if(S.page==='config'){
+      await loadConfigNodes();
+      renderConfig();
+    }else if(S.page==='ports'){
+      await loadPorts();
+      renderPorts();
+    }else if(S.page==='logs'){
+      await loadLogs();
+      renderLogs();
+    }else if(S.page==='settings'){
+      await Promise.all([loadSettings(),loadSubscriptionConfig(),loadImportSources()]);
+      renderSettings();
+	}else if(S.page==='bulk'){
+	  await loadManaged('nodes');
+	  renderBulk();
+	}else{
+	  await Promise.all([loadSubscriptionConfig(), loadImportSummary()]);
+	  renderImport();
+	}
+    renderNav();
+    restoreActiveJobs();
+  }catch(err){toast(err.message,'err')}
+}
+async function loadManaged(kind=S.page){
+  const managed=await api('/api/nodes/all').catch(()=>[]);
+  S.nodes=Array.isArray(managed)?managed:(managed.nodes||[]);
+  S.nodesLoadedAt=Date.now();
+  if(kind==='pool')S.viewNodes=S.nodes.filter(inPool);
+  else if(kind==='failed')S.viewNodes=S.nodes.filter(n=>n.state==='failed');
+  else S.viewNodes=S.nodes.slice();
+  await loadImportSummary().catch(()=>{});
+}
+async function loadImportSummary(){
+  S.summary=await api('/api/import/summary').catch(()=>S.summary||null);
+  S.summaryLoadedAt=Date.now();
+  return S.summary;
+}
+async function loadConfigNodes(){
+  const data=await api('/api/nodes/config');
+  S.configNodes=data.nodes||[];
+}
+async function loadPorts(){
+  S.ports=await api('/api/ports/status');
+}
+function openDialog(title, html){
+  let modal=qs('#resultModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.className='modal';
+    modal.id='resultModal';
+    modal.innerHTML='<div class="dialog" id="resultDialog"></div>';
+    document.body.appendChild(modal);
+  }
+  const dialog=qs('#resultDialog')||modal.firstElementChild;
+  dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div><div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn primary" onclick="closeDialog()">确定</button></div>`;
+  modal.classList.add('show');
+}
+function openBlockingDialog(title, html){
+  let modal=qs('#resultModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.className='modal';
+    modal.id='resultModal';
+    modal.innerHTML='<div class="dialog" id="resultDialog"></div>';
+    document.body.appendChild(modal);
+  }
+  const dialog=qs('#resultDialog')||modal.firstElementChild;
+  dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div>`;
+  modal.classList.add('show');
+}
+function updateBlockingDialog(title, html, done=false){
+  const modal=qs('#resultModal');
+  if(!modal)return openBlockingDialog(title,html);
+  const dialog=qs('#resultDialog')||modal.firstElementChild;
+  dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div>${done?'<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn primary" onclick="closeDialog()">确定</button></div>':''}`;
+  modal.classList.add('show');
+}
+function closeDialog(){qs('#resultModal')?.classList.remove('show')}
+async function loadLogs(){
+  const data=await api('/api/logs');
+  S.logs=data.logs||'';
+}
+async function loadSettings(){
+  S.settings=await api('/api/settings');
+}
+async function loadSubscriptionConfig(){
+  const sub=await api('/api/subscription/config').catch(()=>({subscriptions:[],enabled:true,interval:'24h'}));
+  sub.subscriptions=Array.isArray(sub.subscriptions)?sub.subscriptions:[];
+  if(!sub.subscriptions.length && (!sub.interval || sub.interval==='1h0m0s' || sub.interval==='1h'))sub.interval='24h';
+  if(sub.enabled===undefined || !sub.subscriptions.length)sub.enabled=true;
+  S.subConfig=sub;
+}
+async function loadImportSources(){
+  const sources=await api('/api/import/sources').catch(()=>[]);
+  S.importSources=Array.isArray(sources)?sources:[];
+}
+function renderManaged(kind){
+  const preset=kind==='pool'?'pool':kind==='failed'?'failed':'candidate';
+  let items=filteredManaged(preset);
+  if(kind==='pool')items=sortPoolItems(filteredManagedFrom(S.viewNodes.length?S.viewNodes:items,'pool'));
+  if(kind==='failed')items=filteredManagedFrom(S.viewNodes.length?S.viewNodes:S.nodes.filter(n=>n.state==='failed'),'failed');
+  const baseItems=kind==='pool'||kind==='failed'?(S.viewNodes.length?S.viewNodes:items):S.nodes;
+  const countries=unique(baseItems.map(n=>n.country_code).filter(Boolean));
+  const tags=unique(baseItems.map(n=>n.tag_prefix||'local'));
+  const filterHint=kind==='nodes'?'这里只显示测速成功、还没有加入节点池的候选节点；可按国家、标签和名称筛选，点击表头列名排序，再点一次反向。'
+    :kind==='pool'?'当前节点池；可按国家、标签和名称筛选，点击表头列名排序，再点一次反向。'
+    :'失败节点可按国家、标签和名称筛选。';
+  const filters=`<p class="muted">${filterHint}</p>
+      <div class="filters compact">
+        <select id="countryFilter" onchange="updateFilters()"><option value="">全部国家</option>${countries.map(v=>`<option value="${esc(v)}">${esc(countryLabel(v))} (${esc(v)})</option>`).join('')}</select>
+        <select id="tagFilter" onchange="updateFilters()"><option value="">全部标签</option>${tags.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select>
+        <input id="nameFilter" type="search" placeholder="根据名称搜索" oninput="onNameFilterInput(event)" value="${esc(S.filters.q||'')}">
+      </div>`;
+  const heading=kind==='pool'?'节点池':kind==='failed'?'失败节点':'候选节点';
+  const hint=kind==='failed'
+    ? '<p class="muted">失败节点可多选后一键测速；测速成功后会自动测试国家，并按开关进入候选节点或直接加入节点池。</p>'
+    : kind==='pool'
+      ? ''
+      : '<p class="muted">候选节点已经通过 generate_204；需要使用时再加入节点池，国家可单独测试。</p>';
+  qs('#view').innerHTML=`<div class="grid">
+    <div class="card"><div class="card-head"><h2>${heading}</h2><span class="muted">当前 ${items.length} 个</span></div><div class="card-body">
+      ${kind==='pool'?poolActionBar():''}
+      ${kind==='failed'?failedOptionBar(tags):''}
+      ${autoProbeBar(kind)}
+      ${batchActionBar(items,kind)}
+      ${S.actionStatus?`<p class="action-status ${S.actionStatusType==='err'?'err':''}">${esc(S.actionStatus)}</p>`:''}
+      ${hint}
+      ${filters}
+      <div class="muted" style="margin-bottom:10px">正在显示 ${items.length} 行</div>
+      <div id="nodeList">${renderNodeTable(items,kind)}</div>
+    </div></div>
+  </div>`;
+  if(kind==='nodes'||kind==='failed'||kind==='pool')setFilterValues(preset);
+}
+function autoProbeBar(kind){
+  const cfg=autoProbeConfig(kind);
+  const label=kind==='pool'?'节点池':kind==='failed'?'失败节点':'候选节点';
+  return `<div class="pool-toolbar">
+    <div><strong>${label}自动测速</strong><div class="muted">只处理当前页面的节点；节点池/候选失败会进入失败节点，失败节点成功后按上方开关处理。</div></div>
+    <div class="row">
+      <label class="row"><input type="checkbox" style="width:auto" ${cfg.enabled?'checked':''} onchange="setAutoProbe('${kind}','enabled',this.checked)"> 启用</label>
+      <input style="width:92px" type="number" min="10" value="${cfg.seconds}" onchange="setAutoProbe('${kind}','seconds',this.value)">
+      <span class="muted">秒</span>
+      <button class="btn small" onclick="runAutoProbe('${kind}',true)">立即执行</button>
+    </div>
+  </div>`;
+}
+function autoProbeConfig(kind){
+  const v=S.autoProbe[kind]||{};
+  return {enabled:!!v.enabled,seconds:Number(v.seconds)||300};
+}
+function setAutoProbe(kind,key,value){
+  const cfg=autoProbeConfig(kind);
+  if(key==='enabled')cfg.enabled=!!value;
+  if(key==='seconds')cfg.seconds=Math.max(10,Number(value)||300);
+  S.autoProbe[kind]=cfg;
+  localStorage.setItem('easy_proxies_auto_probe',JSON.stringify(S.autoProbe));
+  setupAutoProbe(kind);
+  renderManaged(S.page);
+}
+function setupAutoProbe(kind){
+  if(S.autoTimers[kind]){clearInterval(S.autoTimers[kind]);S.autoTimers[kind]=null}
+  const cfg=autoProbeConfig(kind);
+  if(!cfg.enabled)return;
+  S.autoTimers[kind]=setInterval(()=>runAutoProbe(kind,false),cfg.seconds*1000);
+}
+function setupAllAutoProbe(){['nodes','pool','failed'].forEach(setupAutoProbe)}
+function failedOptionBar(tags=[]){
+  return `<div class="pool-toolbar">
+    <div><strong>失败节点测速结果</strong><div class="muted">开启后，失败节点测速成功并测试国家后直接进入节点池；关闭则进入候选节点。</div></div>
+    <div class="row">
+      <label class="row"><input type="checkbox" style="width:auto" ${S.failedAutoPromote?'checked':''} onchange="setFailedAutoPromote(this.checked)"> 自动加入到节点池</label>
+    </div>
+  </div>`;
+}
+function setFailedAutoPromote(v){S.failedAutoPromote=!!v;localStorage.setItem('easy_proxies_failed_auto_promote',S.failedAutoPromote?'1':'0');renderManaged(S.page)}
+function renderNodeTable(items,kind='nodes'){
+  const visible=items.slice(0,S.pageSize);
+  const allChecked=visible.length&&visible.every(n=>S.selected.has(n.id));
+  const sortable=kind!=='pool';
+  return `<div class="node-table">
+    <div class="table-head">
+      <input class="check" type="checkbox" ${allChecked?'checked':''} onchange="toggleAllVisible(this.checked)">
+      <div>序号</div>
+      ${sortable?sortHeader('名称','name','candidate'):'<div>名称</div>'}
+      <div>状态</div>
+      ${sortable?sortHeader('延迟','latency','candidate'):'<div>延迟</div>'}
+      ${sortable?sortHeader('国家','country','candidate'):'<div>国家</div>'}
+      <div>端口</div>
+      <div>标签</div>
+      <div>操作</div>
+    </div>
+    ${visible.length?visible.map((n,i)=>renderNodeRow(n,kind,i)).join(''):'<div class="empty">没有节点</div>'}
+    ${items.length>S.pageSize?`<div class="empty">已显示前 ${S.pageSize} 个节点，请使用搜索或筛选缩小范围</div>`:''}
+  </div>`;
+}
+function renderNodeRow(n,kind,index=0){
+  return `<div class="table-row" data-id="${esc(n.id)}" data-name="${esc(searchText(n))}">
+    <input class="check" type="checkbox" ${S.selected.has(n.id)?'checked':''} onchange="toggleNode('${esc(n.id)}',this.checked)">
+    <div>${valuePill(index+1,'muted')}</div>
+    <div class="table-name"><strong>${esc(nodeName(n))}</strong>${n.last_error?`<div class="table-uri">错误: ${esc(n.last_error)}</div>`:''}</div>
+    <div>${statePill(n.state)}</div>
+    <div>${latencyPill(n)}</div>
+    <div>${countryPill(n)}</div>
+    <div>${portPill(n)}</div>
+    <div>${n.tag_prefix?valuePill(n.tag_prefix,'muted'):valuePill(shortSource(n.import_source)||'-','muted')}</div>
+    <div>${renderNodeActions(n,kind)}</div>
+  </div>`;
+}
+function sortHeader(label,mode,target){
+  const active=(target==='pool'?S.poolSortMode:S.filters.sort)===mode;
+  return `<button class="th-btn${active?' active':''}" onclick="setListSort('${target}','${mode}')">${label}</button>`;
+}
+function setListSort(target,mode){
+  if(target==='pool'){
+    if(S.poolSortMode===mode)S.poolSortDir=S.poolSortDir==='asc'?'desc':'asc';
+    else{S.poolSortMode=mode;S.poolSortDir='asc'}
+  }else{
+    if(S.filters.sort===mode)S.candSortDir=S.candSortDir==='asc'?'desc':'asc';
+    else{S.filters.sort=mode;S.candSortDir='asc'}
+  }
+  renderManaged(S.page);
+}
+function renderNodeActions(n,kind){
+  const del=`<button class="btn small danger" onclick="deleteManagedNode('${esc(n.id)}')">删除</button>`;
+  if(kind==='pool')return `<div class="row"><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">测速</button><button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>${del}</div>`;
+  if(n.state==='failed')return `<div class="row"><button class="btn small primary" onclick="retestFailedNodes(['${esc(n.id)}'])">测速</button>${del}</div>`;
+  if(candidate(n))return `<div class="row"><button class="btn small green" onclick="managedAction('${esc(n.id)}','promote')">加入节点池</button><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">测速</button><button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>${del}</div>`;
+  if(n.state==='parsed')return `<div class="row"><button class="btn small primary" onclick="managedAction('${esc(n.id)}','retest')">测速</button>${del}</div>`;
+  if(n.state==='excluded')return '';
+  return `<div class="row"><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">重新测速</button>${del}</div>`;
+}
+function inPool(n){return n.state==='in_pool'||n.in_pool}
+function candidate(n){return !inPool(n)&&n.state==='passed'}
+function unique(a){return [...new Set(a)].sort((x,y)=>String(x).localeCompare(String(y)))}
+function shortSource(s){s=String(s||'');return s.length>42?s.slice(0,39)+'...':s}
+function searchText(n){return [nodeName(n),n.original_name,n.uri,n.tag_prefix,n.country_code,countryLabel(n.country_code),n.import_source,n.import_format,n.state].filter(Boolean).join(' ').toLowerCase()}
+function filteredManaged(scope=S.filters.scope){
+  let items=S.nodes.slice();
+  if(scope==='pool')items=items.filter(inPool);
+  if(scope==='not_pool')items=items.filter(n=>!inPool(n));
+  if(scope==='failed')items=items.filter(n=>n.state==='failed');
+  if(scope==='candidate')items=items.filter(candidate);
+  return filteredManagedFrom(items,scope);
+}
+function filteredManagedFrom(items,scope=S.filters.scope){
+  items=items.slice();
+  if(S.filters.country)items=items.filter(n=>n.country_code===S.filters.country);
+  if(S.filters.tag)items=items.filter(n=>(n.tag_prefix||'local')===S.filters.tag);
+  if(S.filters.source)items=items.filter(n=>(n.import_source||n.import_mode||'unknown')===S.filters.source);
+  if(S.filters.latency){
+    items=items.filter(n=>{
+      const l=Number(n.latency_ms)||0;
+      if(S.filters.latency==='none')return !l;
+      if(S.filters.latency==='0-500')return l>0&&l<=500;
+      if(S.filters.latency==='500-1500')return l>500&&l<=1500;
+      if(S.filters.latency==='1500+')return l>1500;
+      return true;
+    });
+  }
+  if(S.filters.q){const q=S.filters.q.toLowerCase();items=items.filter(n=>searchText(n).includes(q))}
+  const dir=S.candSortDir==='desc'?-1:1;
+  items.sort((a,b)=>{
+    return dir*compareNodes(a,b,S.filters.sort);
+  });
+  return items;
+}
+function compareNodes(a,b,mode){
+  if(mode==='latency')return (a.latency_ms||9e12)-(b.latency_ms||9e12)||nodeName(a).localeCompare(nodeName(b));
+  if(mode==='tag')return String(a.tag_prefix||'').localeCompare(String(b.tag_prefix||''))||nodeName(a).localeCompare(nodeName(b));
+  if(mode==='country')return String(a.country_code||'ZZ').localeCompare(String(b.country_code||'ZZ'))||nodeName(a).localeCompare(nodeName(b));
+  if(mode==='port')return (a.port||9e12)-(b.port||9e12)||(a.order||0)-(b.order||0)||nodeName(a).localeCompare(nodeName(b));
+  return nodeName(a).localeCompare(nodeName(b));
+}
+function sortPoolItems(items){
+  const mode=S.poolSortMode||'port';
+  const dir=S.poolSortDir==='desc'?-1:1;
+  return items.slice().sort((a,b)=>dir*compareNodes(a,b,mode));
+}
+function setFilterValues(scope){
+  const set=(id,val)=>{const el=qs('#'+id);if(el)el.value=val};
+  set('countryFilter',S.filters.country);set('tagFilter',S.filters.tag);set('nameFilter',S.filters.q||'');
+  const nameEl=qs('#nameFilter');
+  if(nameEl&&!nameEl.dataset.composeBound){
+    nameEl.dataset.composeBound='1';
+    nameEl.addEventListener('compositionend',()=>{S.filters.q=nameEl.value||'';updateFilters()});
+  }
+}
+function updateFilters(){
+  ['country','tag'].forEach(k=>{const el=qs('#'+k+'Filter');if(el&&!el.disabled)S.filters[k]=el.value});
+  const nameEl=qs('#nameFilter');if(nameEl)S.filters.q=nameEl.value||'';
+  renderManaged(S.page);
+  const nameInput=qs('#nameFilter');if(nameInput){nameInput.focus();const v=nameInput.value;nameInput.setSelectionRange(v.length,v.length)}
+}
+function onNameFilterInput(e){
+  if(e&&e.isComposing){S.filters.q=e.target.value||'';return}
+  updateFilters();
+}
+function toggleNode(id,checked){if(checked)S.selected.add(id);else S.selected.delete(id)}
+function currentVisibleIds(){return qsa('#nodeList .table-row').map(el=>el.dataset.id).filter(Boolean)}
+function toggleAllVisible(checked){currentVisibleIds().forEach(id=>toggleNode(id,checked));renderManaged(S.page)}
+function clearSelection(){S.selected.clear();renderManaged(S.page)}
+async function retestSelectedVisible(){
+  const ids=[...S.selected].filter(id=>currentVisibleIds().includes(id));
+  if(!ids.length){toast('请先选择节点','err');return}
+  const failedIds=ids.filter(id=>S.nodes.find(n=>n.id===id)?.state==='failed');
+  if(failedIds.length===ids.length){
+    await retestFailedNodes(ids);
+    return;
+  }
+  await retestNodes(ids);
+}
+async function countrySelectedVisible(){
+  const ids=[...S.selected].filter(id=>currentVisibleIds().includes(id));
+  if(!ids.length){toast('请先选择节点','err');return}
+  await countryNodes(ids);
+}
+async function promoteSelectedVisible(){
+  const visible=new Set(currentVisibleIds());
+  const selectedCandidates=S.nodes.filter(n=>visible.has(n.id)&&S.selected.has(n.id)&&candidate(n)).map(n=>n.id);
+  if(!selectedCandidates.length){toast('请先选择候选节点','err');return}
+  await promoteNodes(selectedCandidates);
+}
+async function runAsyncBatchTest(opts){
+  const body={
+    node_ids:opts.ids||[],
+    retest:!!opts.retest,
+    country:!!opts.country,
+    promote_passed:!!opts.promote_passed,
+    auto_reload:opts.auto_reload!==false,
+  };
+  const start=await api('/api/managed-nodes/batch-test/start',{method:'POST',body:JSON.stringify(body)});
+  const jobId=start.job_id;
+  if(!jobId)throw new Error('启动测试失败');
+  S.activeBatchJob=jobId;
+  localStorage.setItem(ACTIVE_BATCH_JOB_KEY,jobId);
+  return await pollBatchJob(jobId,opts.label||'正在测试');
+}
+async function pollBatchJob(jobId,label){
+  if(S.batchPollingJob===jobId)return null;
+  S.batchPollingJob=jobId;
+  S.activeBatchJob=jobId;
+  localStorage.setItem(ACTIVE_BATCH_JOB_KEY,jobId);
+  openProgress(label||'正在测试');
+  let last=null;
+  try{
+    while(true){
+      last=await api('/api/managed-nodes/batch-test/status?id='+encodeURIComponent(jobId));
+      updateProgress(last,label||'正在测试');
+      if(last.status!=='running')break;
+      await new Promise(r=>setTimeout(r,500));
+    }
+    if(last?.status==='canceled')toast('测速已终止');
+    setTimeout(closeProgress,400);
+    return last;
+  }catch(e){
+    closeProgress();
+    throw e;
+  }finally{
+    S.batchPollingJob='';
+    if(last && last.status!=='running'){
+      S.activeBatchJob='';
+      localStorage.removeItem(ACTIVE_BATCH_JOB_KEY);
+    }
+  }
+}
+function openProgress(title){
+  let host=qs('#progressHost');
+  if(!host){host=document.createElement('div');host.id='progressHost';document.body.appendChild(host)}
+  host.innerHTML=`<div class="dialog-back"><div class="dialog">
+    <h3 id="progressTitle">${esc(title)}</h3>
+    <div id="progressBody" class="stack"><div class="muted">等待启动...</div></div>
+  </div></div>`;
+}
+async function cancelActiveBatchTest(){
+  const id=S.activeBatchJob||localStorage.getItem(ACTIVE_BATCH_JOB_KEY);
+  if(!id){toast('没有正在运行的测速任务','err');return}
+  try{
+    const job=await api('/api/managed-nodes/batch-test/cancel?id='+encodeURIComponent(id),{method:'POST'});
+    updateProgress(job,'正在终止');
+    toast('已发送终止请求');
+  }catch(err){toast(err.message,'err')}
+}
+function updateProgress(job,title){
+  const t=qs('#progressTitle');if(t)t.textContent=title;
+  const body=qs('#progressBody');if(!body)return;
+  const total=job.total||0,done=job.done||0;
+  const pct=total>0?Math.min(100,Math.round(done/total*100)):0;
+  const phaseLabel={probe:'测速中',country:'测试国家',promote:'入池',done:'完成',queued:'排队中',empty:'空',canceling:'正在终止',canceled:'已终止'}[job.phase]||job.phase||'';
+  const stats=[];
+  if(job.passed!=null)stats.push(`成功 ${job.passed}`);
+  if(job.failed!=null)stats.push(`失败 ${job.failed}`);
+  if(job.country_ok)stats.push(`国家OK ${job.country_ok}`);
+  if(job.country_bad)stats.push(`国家失败 ${job.country_bad}`);
+  if(job.promoted)stats.push(`已入池 ${job.promoted}`);
+  body.innerHTML=`
+    <div><strong>${esc(phaseLabel)}</strong> · ${esc(done)}/${esc(total)} (${pct}%)</div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <div class="muted">${stats.map(esc).join(' · ')||'-'}</div>
+    <div class="row" style="justify-content:flex-end">
+      ${job.status==='running'?(job.phase==='canceling'?'<button class="btn danger" disabled>正在终止</button>':'<button class="btn danger" onclick="cancelActiveBatchTest()">终止</button>'):'<button class="btn" onclick="closeProgress()">关闭</button>'}
+    </div>
+  `;
+}
+function closeProgress(){const host=qs('#progressHost');if(host)host.innerHTML=''}
+async function retestNodes(ids){
+  setActionStatus(`正在测速 ${ids.length} 个节点...`);
+  renderManaged(S.page);
+  let job;
+  try{
+    job=await runAsyncBatchTest({ids,retest:true,auto_reload:true,label:'测速候选/池节点'});
+  }catch(e){
+    setActionStatus(e.message,'err');toast(e.message,'err');return;
+  }
+  const ok=job?.passed||0,fail=job?.failed||0;
+  setActionStatus(`测速完成：成功 ${ok}，失败 ${fail}`, fail?'err':'ok');
+  toast(`测速完成：成功 ${ok}，失败 ${fail}`, fail?'err':'ok');
+  S.selected.clear();
+  await refresh();
+}
+async function retestFailedSelectedVisible(){
+  const ids=[...S.selected].filter(id=>currentVisibleIds().includes(id)&&S.nodes.find(n=>n.id===id)?.state==='failed');
+  if(!ids.length){toast('请先选择失败节点','err');return}
+  await retestFailedNodes(ids);
+}
+async function retestFailedNodes(ids){
+  setActionStatus(`正在处理 ${ids.length} 个失败节点...`);
+  renderManaged(S.page);
+  let job;
+  try{
+    job=await runAsyncBatchTest({ids,retest:true,country:true,promote_passed:S.failedAutoPromote,auto_reload:true,label:'失败节点测速 + 测国家'});
+  }catch(e){
+    setActionStatus(e.message,'err');toast(e.message,'err');return;
+  }
+  const passed=job?.passed||0,failed=job?.failed||0,promotedCount=job?.promoted||0,candidateCount=S.failedAutoPromote?0:passed;
+  const msg=S.failedAutoPromote
+    ? `失败节点处理完成：测速成功 ${passed}，失败 ${failed}，已入池 ${promotedCount}`
+    : `失败节点处理完成：测速成功 ${passed}，失败 ${failed}，进入候选 ${candidateCount}`;
+  setActionStatus(msg, failed?'err':'ok');
+  toast(msg, failed?'err':'ok');
+  S.selected.clear();
+  await refresh();
+}
+async function promoteNodes(ids){
+  if(!ids.length){toast('请先选择候选节点','err');return}
+  setActionStatus(`正在加入节点池 ${ids.length} 个节点...`);
+  try{
+    const res=await api('/api/managed-nodes/batch-promote',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true})});
+    const ok=res.promoted||0,fail=Math.max(0,ids.length-ok);
+    const msg=`加入节点池完成：成功 ${ok}，失败 ${fail}`;
+    setActionStatus(msg,fail?'err':'ok');
+    toast(msg,fail?'err':'ok');
+    S.selected.clear();
+    await refresh();
+  }catch(err){
+    setActionStatus(err.message,'err');
+    toast(err.message,'err');
+  }
+}
+async function runAutoProbe(kind,manual){
+  if(!['nodes','pool','failed'].includes(kind))return;
+  if(!manual && S.page!==kind)return;
+  await loadManaged();
+  const scope=kind==='pool'?'pool':kind==='failed'?'failed':'candidate';
+  const ids=filteredManaged(scope).map(n=>n.id);
+  if(!ids.length){
+    if(manual)toast('当前页面没有可测速节点','err');
+    return;
+  }
+  if(kind==='failed'){
+    await retestFailedNodes(ids);
+    return;
+  }
+  setActionStatus(`自动测速 ${ids.length} 个节点...`);
+  if(manual)renderManaged(kind);
+  let job;
+  try{
+    job=await runAsyncBatchTest({ids,retest:true,auto_reload:true,label:'自动测速'});
+  }catch(e){
+    setActionStatus(`自动测速失败：${e.message}`,'err');
+    if(manual)toast(e.message,'err');
+    return;
+  }
+  const msg=`自动测速完成：成功 ${job?.passed||0}，失败 ${job?.failed||0}`;
+  setActionStatus(msg,(job?.failed||0)?'err':'ok');
+  if(manual)toast(msg,(job?.failed||0)?'err':'ok');
+  await refresh();
+}
+async function countryNodes(ids){
+  setActionStatus(`正在测试国家 ${ids.length} 个节点...`);
+  renderManaged(S.page);
+  let job;
+  try{
+    job=await runAsyncBatchTest({ids,country:true,auto_reload:true,label:'测试国家'});
+  }catch(e){
+    setActionStatus(e.message,'err');toast(e.message,'err');return;
+  }
+  const ok=job?.country_ok||0,fail=job?.country_bad||0;
+  setActionStatus(`测试国家完成：成功 ${ok}，失败 ${fail}`, fail?'err':'ok');
+  toast(`测试国家完成：成功 ${ok}，失败 ${fail}`, fail?'err':'ok');
+  S.selected.clear();
+  await refresh();
+}
+async function managedAction(id,action){
+  try{
+    const cur=S.nodes.find(n=>n.id===id);
+    if(action==='retest'&&cur&&cur.state==='failed')return await retestFailedNodes([id]);
+    const n=await api('/api/managed-nodes/'+encodeURIComponent(id)+'/'+action,{method:'POST'});
+    let msg='操作完成';
+    if(action==='retest')msg=(candidate(n)||inPool(n))?'测速完成':(n.state==='failed'?'测速失败，已进入失败节点':'测速完成');
+    if(action==='country')msg=n.country_code?`国家已更新为 ${countryLabel(n.country_code)}`:'国家测试完成';
+    if(action==='promote'){
+      if(inPool(n)){
+        await api('/api/reload',{method:'POST'});
+        msg='已加入节点池并重载核心';
+      }else msg='未加入节点池';
+    }
+    toast(msg);
+    await refresh();
+  }catch(err){toast(err.message,'err')}
+}
+async function deleteManagedNode(id){
+  if(!confirm('删除后将从所有列表移除，确定继续？'))return;
+  try{
+    setActionStatus('正在删除节点...');
+    await api('/api/managed-nodes/batch-delete',{method:'POST',body:JSON.stringify({node_ids:[id]})});
+    S.selected.delete(id);
+    setActionStatus('节点已删除');
+    toast('节点已删除');
+    await refresh();
+  }catch(err){
+    setActionStatus(err.message,'err');
+    toast(err.message,'err');
+  }
+}
+async function deleteSelectedVisible(){
+  const ids=[...S.selected].filter(id=>currentVisibleIds().includes(id));
+  if(!ids.length){toast('请先选择要删除的节点','err');return}
+  if(!confirm(`将删除当前选中的 ${ids.length} 个节点，删除后不会出现在任何列表中，确定继续？`))return;
+  setActionStatus(`正在删除 ${ids.length} 个节点...`);
+  try{
+    const res=await api('/api/managed-nodes/batch-delete',{method:'POST',body:JSON.stringify({node_ids:ids})});
+    const ok=res.deleted||0,fail=Math.max(0,ids.length-ok);
+    ids.forEach(id=>S.selected.delete(id));
+    const msg=`删除完成：成功 ${ok}，失败 ${fail}`;
+    setActionStatus(msg,fail?'err':'ok');
+    toast(msg,fail?'err':'ok');
+    await refresh();
+  }catch(err){
+    setActionStatus(err.message,'err');
+    toast(err.message,'err');
+  }
+}
+async function saveOrder(){
+  const ids=S.nodes.filter(n=>n.state==='in_pool'||n.in_pool).map(n=>n.id);
+  try{await api('/api/nodes/order',{method:'PUT',body:JSON.stringify({order:ids})});toast('排序已保存')}catch(err){toast(err.message,'err')}
+}
+function poolActionBar(){
+  const poolCount=S.nodes.filter(inPool).length;
+  return `<div class="pool-toolbar">
+    <div><strong>节点池显示排序</strong><div class="muted">这里只改变表格显示顺序，不改端口。</div></div>
+    <div class="row">
+      ${poolSortButton('port','按端口排序')}
+      ${poolSortButton('country','按国家排序')}
+      ${poolSortButton('tag','按标签排序')}
+      ${poolSortButton('latency','按延迟排序')}
+    </div>
+  </div>
+  <div class="pool-toolbar">
+    <div><strong>重排端口</strong><div class="muted">池内 ${poolCount} 个。下面三个按钮会直接改端口顺序。</div></div>
+    <div class="row">
+      <button class="btn green" onclick="saveGroupedOrderMode('country')">按国家重排</button>
+      <button class="btn green" onclick="saveGroupedOrderMode('tag')">按标签重排</button>
+      <button class="btn green" onclick="saveGroupedOrderMode('latency')">按延迟重排</button>
+    </div>
+  </div>`;
+}
+function poolSortButton(mode,label){
+  const active=S.poolSortMode===mode;
+  const dir=active?(S.poolSortDir==='desc'?'降序':'升序'):'';
+  return `<button class="btn ${active?'primary':''}" onclick="setListSort('pool','${mode}')">${label}${dir?` · ${dir}`:''}</button>`;
+}
+function batchActionBar(items,kind){
+  const selected=[...S.selected].filter(id=>items.some(n=>n.id===id));
+  const promoteButton=kind==='nodes'?'<button class="btn green" onclick="promoteSelectedVisible()">加入节点池</button>':'';
+  const failedButton=kind==='failed'?'<button class="btn primary" onclick="retestFailedSelectedVisible()">一键测速</button>':'';
+  const deleteButton=(kind==='failed'||kind==='nodes'||kind==='pool')?'<button class="btn danger" onclick="deleteSelectedVisible()">删除选中</button>':'';
+  const speedButtons=kind==='failed'?'':'<button class="btn" onclick="retestSelectedVisible()">测速</button><button class="btn" onclick="countrySelectedVisible()">测试国家</button>';
+  return `<div class="pool-toolbar">
+    <div><strong>批量操作</strong><div class="muted">已选择 ${selected.length} 个。测速只访问 generate_204；测试国家只访问 ipinfo.io。</div></div>
+    <div class="row">
+      ${promoteButton}
+      ${failedButton}
+      ${speedButtons}
+      ${deleteButton}
+      <button class="btn" onclick="clearSelection()">清空选择</button>
+    </div>
+  </div>`;
+}
+function poolGroups(mode){
+  const map=new Map();
+  for(const n of S.nodes.filter(inPool)){
+    const key=poolGroupKey(mode,n);
+    if(!map.has(key))map.set(key,{key,label:poolGroupLabel(mode,key),nodes:[]});
+    map.get(key).nodes.push(n);
+  }
+  for(const g of map.values()){
+    g.nodes.sort((a,b)=>{
+      if(mode==='latency')return (a.latency_ms||9e12)-(b.latency_ms||9e12);
+      return (a.port||9e12)-(b.port||9e12)||String(a.name||'').localeCompare(String(b.name||''));
+    });
+  }
+  const known=[...(S.poolGroupOrder[mode]||[])].filter(k=>map.has(k));
+  const rest=[...map.keys()].filter(k=>!known.includes(k)).sort((a,b)=>String(a).localeCompare(String(b)));
+  S.poolGroupOrder[mode]=[...known,...rest];
+  return S.poolGroupOrder[mode].map(k=>map.get(k)).filter(Boolean);
+}
+function poolGroupKey(mode,n){
+  if(mode==='tag')return n.tag_prefix||'local';
+  if(mode==='latency'){
+    const l=Number(n.latency_ms)||0;
+    if(!l)return 'none';
+    if(l<=500)return '0-500';
+    if(l<=1500)return '500-1500';
+    return '1500+';
+  }
+  return n.country_code||'OTHER';
+}
+function poolGroupLabel(mode,key){
+  if(mode==='latency')return {'none':'未测速/无延迟','0-500':'0-500ms','500-1500':'500-1500ms','1500+':'1500ms+'}[key]||key;
+  if(mode==='country')return `${countryLabel(key)} (${key})`;
+  return key;
+}
+function renderPoolGroup(g){
+  const ports=g.nodes.map(n=>Number(n.port)||0).filter(Boolean).sort((a,b)=>a-b);
+  const range=ports.length?(ports[0]===ports[ports.length-1]?String(ports[0]):`${ports[0]}-${ports[ports.length-1]}`):'未分配';
+  return `<div class="group-item" draggable="true" data-key="${esc(g.key)}" ondragstart="groupDragStart(event)" ondragover="event.preventDefault()" ondrop="groupDrop(event)" ondragend="groupDragEnd(event)">
+    <div class="group-main"><strong><span class="drag-handle">::</span> ${esc(g.label)}</strong><span class="pill green">${g.nodes.length} 个</span></div>
+    <div class="meta"><span class="pill">端口 ${esc(range)}</span><span class="pill">${esc(g.nodes[0]?.tag_prefix||'mixed')}</span></div>
+  </div>`;
+}
+function groupDragStart(e){S.draggingGroup=e.currentTarget.dataset.key;e.currentTarget.classList.add('dragging')}
+function groupDragEnd(e){e.currentTarget.classList.remove('dragging');S.draggingGroup=''}
+function groupDrop(e){
+  e.preventDefault();
+  const from=S.draggingGroup,to=e.currentTarget.dataset.key,mode=S.poolOrderMode;
+  if(!from||!to||from===to)return;
+  const order=[...(S.poolGroupOrder[mode]||[])];
+  const a=order.indexOf(from),b=order.indexOf(to);
+  if(a<0||b<0)return;
+  order.splice(b,0,order.splice(a,1)[0]);
+  S.poolGroupOrder[mode]=order;
+  renderManaged(S.page);
+}
+async function saveGroupedOrder(){
+  const ids=poolGroups(S.poolOrderMode).flatMap(g=>g.nodes.map(n=>n.id));
+  if(!ids.length){toast('池内没有可排序节点','err');return}
+  try{await api('/api/nodes/order',{method:'PUT',body:JSON.stringify({order:ids})});toast('分组排序已保存，核心已按新端口顺序重载');await refresh()}catch(err){toast(err.message,'err')}
+}
+async function saveGroupedOrderMode(mode){
+  S.poolOrderMode=mode;
+  await saveGroupedOrder();
+}
+async function probeAll(){
+  try{
+    const res=await fetch('/api/nodes/probe-all',{method:'POST',headers:S.token?{Authorization:'Bearer '+S.token}:{}});
+    if(!res.ok)throw new Error('探测启动失败: '+res.status);
+    const reader=res.body.getReader(),dec=new TextDecoder();let buf='',last='';
+    while(true){
+      const {value,done}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      for(const line of buf.split('\n'))if(line.startsWith('data:'))last=line.slice(5).trim();
+      buf=buf.slice(buf.lastIndexOf('\n')+1);
+    }
+    toast(last?'探测完成: '+last:'探测完成');
+  }catch(err){toast(err.message,'err')}
+}
+function renderImport(){
+  const summary=S.importSummary;
+  const dashboard=S.summary||{};
+  const importCanceling=summary?.status==='running' && String(summary?.detail||'').includes('正在终止');
+  qs('#view').innerHTML=`<div class="grid">
+    <div class="card"><div class="card-head"><h2>导入节点</h2></div>
+      <div class="card-body stack">
+        <div class="import-format-card">
+          <button class="btn primary format-main" onclick="openImportTypeModal()">选择导入格式</button>
+          <div style="flex:1"><strong>${esc(importKindLabel())}</strong><span>${esc(importKindHelp())}</span></div>
+          <button class="btn green format-main" onclick="directImport()">导入并测试</button>
+        </div>
+        <div class="meta"><span class="pill green">${esc(importKindLabel())}</span><span class="pill">${S.importAutoPromote?'成功节点自动加入节点池':'成功节点进入候选池'}</span><span class="pill red">失败节点保留待重测</span></div>
+        <div class="field"><label>Tag 前缀</label><input id="tagPrefix" value="local" oninput="S.tagPrefix=this.value"></div>
+        <label class="row"><input id="importAutoPromote" type="checkbox" ${S.importAutoPromote?'checked':''} style="width:auto" onchange="setImportAutoPromote(this.checked)"> 测速成功后自动加入节点池 <span class="muted">默认开启；关闭后成功节点进入候选节点。</span></label>
+        ${importFields()}
+        <div class="progress"><div id="jobBar"></div></div>
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <p class="status" id="importStatus"></p>
+          ${summary?.status==='running'?(importCanceling?'<button class="btn danger small" disabled>正在终止</button>':'<button class="btn danger small" onclick="cancelImportJob()">终止</button>'):''}
+        </div>
+        ${summary?`<div class="node"><div class="node-main"><div><div class="node-name">${esc(summary.title)}</div><div class="node-uri">${esc(summary.detail)}</div></div>${statePill(summary.status)}</div></div>`:''}
+      </div>
+    </div>
+    <div class="card"><div class="card-head"><h2>本地端口</h2><button class="btn small" onclick="refreshHomeSummary()">刷新</button></div><div class="card-body stack">
+      <div class="meta">
+        <span class="pill green">已生成 ${esc(dashboard.in_pool||0)}</span>
+        <span class="pill">候选 ${esc(dashboard.passed||0)}</span>
+        <span class="pill red">失败 ${esc(dashboard.failed||0)}</span>
+        <span class="pill amber">测试中 ${esc(dashboard.testing||0)}</span>
+      </div>
+      ${renderGeneratedPorts(dashboard.ports||[])}
+    </div></div>
+  </div>`;
+  qs('#tagPrefix').value=S.tagPrefix||'local';
+  if(qs('#importContent'))qs('#importContent').value=S.importText||'';
+}
+function renderGeneratedPorts(ports){
+  if(!ports.length)return '<div class="empty">还没有生成端口。粘贴订阅链接后点击“导入并测试”。</div>';
+  return `<div class="table">${ports.slice(0,80).map(n=>`<div class="port"><b>${esc(n.port||'-')}</b><span class="muted">${esc(nodeName(n))}</span><button class="btn small" onclick="copyPort('${esc(n.port||'')}')">复制</button></div>`).join('')}</div>${ports.length>80?`<p class="muted">已显示前 80 个端口，其余可在“可用端口”页面查看。</p>`:''}`;
+}
+async function copyPort(port){
+  if(!port)return;
+  const host=location.hostname||'127.0.0.1';
+  const text=`${host}:${port}`;
+  try{await navigator.clipboard.writeText(text);toast('已复制 '+text)}catch(e){toast(text)}
+}
+async function refreshHomeSummary(){
+  await loadImportSummary();
+  renderImport();
+}
+function setImportAutoPromote(v){
+  S.importAutoPromote=!!v;
+  localStorage.setItem('easy_proxies_import_auto_promote',S.importAutoPromote?'1':'0');
+  renderImport();
+}
+function openImportTypeModal(){qs('#importTypeModal').classList.add('show')}
+function closeImportTypeModal(){qs('#importTypeModal').classList.remove('show')}
+function chooseImportKind(kind){
+  S.importKind=kind;
+  S.importSummary=null;
+  closeImportTypeModal();
+  renderImport();
+}
+function importKindLabel(){return {sub_url:'订阅链接格式',uri:'URI 格式',base64:'Base64 格式',clash:'Clash YAML 格式'}[S.importKind]||'URI 格式'}
+function importKindHelp(){return {sub_url:'每行一个 http/https 订阅链接，链接内容会自动识别。',uri:'每行一个节点 URI，支持 ss / trojan / vmess / vless / http / https / socks5 / socks4 等协议。',base64:'粘贴 Base64 编码后的节点列表。',clash:'粘贴 Clash YAML，只提取 proxies 节点。'}[S.importKind]||'每行一个节点 URI。'}
+function importInputLabel(){return S.importKind==='sub_url'?'订阅链接（每行一个）':S.importKind==='uri'?'URI 节点（每行一个）':S.importKind==='base64'?'Base64 内容':'Clash YAML 内容'}
+function importPlaceholder(){
+  if(S.importKind==='sub_url')return 'https://example.com/sub1\nhttps://example.com/sub2';
+  if(S.importKind==='uri')return 'ss://...\ntrojan://...\nvmess://...\nhttp://1.2.3.4:8080\nsocks5://1.2.3.4:1080\nsocks4://1.2.3.4:1080';
+  if(S.importKind==='base64')return '粘贴 Base64 编码后的节点列表';
+  return 'proxies:\n  - name: ...';
+}
+function importFields(){
+  return `<div class="field"><label>${esc(importInputLabel())}</label><textarea id="importContent" placeholder="${esc(importPlaceholder())}" oninput="S.importText=this.value"></textarea></div>`;
+}
+function importPayload(){
+  S.tagPrefix=qs('#tagPrefix')?.value||'local';
+  S.importText=qs('#importContent')?.value||'';
+  const body={mode:S.importKind==='sub_url'?'url':'content',tag_prefix:S.tagPrefix};
+  if(body.mode==='url')body.url=S.importText.trim();else body.content=S.importText.trim();
+  return body;
+}
+async function directImport(){
+  try{
+    const body=importPayload();
+    if(S.importKind==='sub_url')return await importSubscriptionURLs(body);
+    if(body.mode==='content'&&!body.content){toast('订阅内容不能为空','err');return}
+    await importOne(body, importKindLabel());
+  }catch(err){setStatus('#importStatus',err.message);toast(err.message,'err')}
+}
+async function importSubscriptionURLs(body){
+  const urls=body.url.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(!urls.length){toast('订阅链接不能为空','err');return}
+  const invalid=urls.find(u=>!/^https?:\/\//i.test(u));
+  if(invalid){toast('订阅链接必须以 http:// 或 https:// 开头: '+invalid,'err');return}
+  await importOne({mode:'url',url:urls.join('\n'),tag_prefix:body.tag_prefix},`订阅 ${urls.length} 个`);
+  await registerSubscriptionURLs(urls,body.tag_prefix);
+}
+async function importOne(body,label){
+  S.importSummary={status:'running',title:'正在解析 '+label,detail:'正在解析并准备测试节点'};
+  renderImport();
+  setStatus('#importStatus','解析中...');
+  const parsed=await api('/api/import/parse',{method:'POST',body:JSON.stringify(body)});
+  const nodes=Array.isArray(parsed.nodes)?parsed.nodes:[];
+  if(!nodes.length)throw new Error('未解析到任何节点');
+  S.importSummary={status:'running',title:`已解析 ${nodes.length} 个节点`,detail:`来源 ${label}，格式 ${parsed.format || 'unknown'}，正在测试；成功节点${S.importAutoPromote?'会自动加入节点池':'会进入候选池'}`};
+  renderImport();
+  const ids=nodes.map(n=>n.id).filter(Boolean);
+  const res=await api('/api/import/'+parsed.import_id+'/commit',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true,promote_passed:S.importAutoPromote})});
+  S.lastJob=res.job_id;
+  S.activeImportJob=res.job_id;
+  localStorage.setItem(ACTIVE_IMPORT_JOB_KEY,res.job_id);
+  await pollJob(res.job_id);
+}
+async function registerSubscriptionURLs(urls,tagPrefix){
+  await loadSubscriptionConfig();
+  const names=S.subConfig?.names||{};
+  const oldUrls=S.subConfig?.subscriptions||[];
+  const kept=oldUrls.filter(u=>names[u]!==tagPrefix && !urls.includes(u));
+  const next=[...new Set([...kept,...urls])];
+  S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify({enabled:S.subConfig?.enabled!==false,interval:S.subConfig?.interval||'24h',subscriptions:next,refresh:false})});
+  toast(`已记录 ${urls.length} 个订阅链接；${tagPrefix} 采用最新快照`);
+}
+async function pollJob(id){
+  if(!id || S.importPollingJob===id)return;
+  S.importPollingJob=id;
+  S.activeImportJob=id;
+  localStorage.setItem(ACTIVE_IMPORT_JOB_KEY,id);
+  let last=null;
+  try{
+    while(true){
+      const bar=qs('#jobBar'),status=qs('#importStatus');
+      const j=await api('/api/import/jobs/'+id);
+      last=j;
+      const done=(j.passed||0)+(j.failed||0);
+      const pct=j.total?Math.min(100,Math.round(done*100/j.total)):0;
+      const line=`${j.status}: ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
+      if(bar)bar.style.width=pct+'%';
+      if(status)status.textContent=line;
+      S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`进度 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
+      if(j.status==='completed'||j.status==='failed'||j.status==='canceled'){
+        toast(j.status==='canceled'?'导入任务已终止':'导入任务结束');
+        await loadImportSummary();
+        if(S.page!=='import')await loadManaged();
+        renderNav();
+        if(S.page==='import')renderImport();
+        break;
+      }
+      await new Promise(r=>setTimeout(r,500));
+    }
+  }finally{
+    S.importPollingJob='';
+    if(last && last.status!=='running'){
+      S.activeImportJob='';
+      localStorage.removeItem(ACTIVE_IMPORT_JOB_KEY);
+    }
+  }
+}
+async function cancelImportJob(){
+  const id=S.activeImportJob||S.lastJob||localStorage.getItem(ACTIVE_IMPORT_JOB_KEY);
+  if(!id){toast('没有正在运行的导入任务','err');return}
+  try{
+    const j=await api('/api/import/jobs/'+encodeURIComponent(id)+'/cancel',{method:'POST'});
+    const done=(j.passed||0)+(j.failed||0);
+    S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`进度 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
+    renderImport();
+    toast('已发送终止请求');
+  }catch(err){toast(err.message,'err')}
+}
+function restoreActiveJobs(){
+  const importId=localStorage.getItem(ACTIVE_IMPORT_JOB_KEY);
+  if(importId && !S.importPollingJob){
+    S.activeImportJob=importId;
+    if(S.page==='import' && !S.importSummary){
+      S.importSummary={status:'running',title:'恢复导入任务',detail:'正在读取后端进度'};
+      renderImport();
+    }
+    pollJob(importId).catch(err=>{
+      S.activeImportJob='';
+      localStorage.removeItem(ACTIVE_IMPORT_JOB_KEY);
+      toast(err.message,'err');
+    });
+  }
+  const batchId=localStorage.getItem(ACTIVE_BATCH_JOB_KEY);
+  if(batchId && !S.batchPollingJob){
+    S.activeBatchJob=batchId;
+    pollBatchJob(batchId,'恢复测速进度').catch(err=>{
+      S.activeBatchJob='';
+      localStorage.removeItem(ACTIVE_BATCH_JOB_KEY);
+      toast(err.message,'err');
+    });
+  }
+}
+function renderConfig(){
+  qs('#view').innerHTML=`<div class="grid">
+    <div class="card"><div class="card-head"><h2>手动节点（高级）</h2></div><div class="card-body"><div class="list">${S.configNodes.length?S.configNodes.map(renderConfigNode).join(''):'<div class="empty">没有手动节点</div>'}</div></div></div>
+    <div class="card"><div class="card-head"><h2>添加 / 更新</h2></div><div class="card-body stack">
+      <div class="field"><label>名称</label><input id="cfgName"></div>
+      <div class="field"><label>URI</label><textarea id="cfgUri"></textarea></div>
+      <div class="field"><label>端口（0 自动）</label><input id="cfgPort" type="number" value="0"></div>
+      <button class="btn primary" onclick="saveConfigNode()">保存节点</button>
+      <p class="muted">保存后点击顶部“重载核心”生效。</p>
+    </div></div>
+  </div>`;
+}
+function renderConfigNode(n){
+  return `<article class="node"><div class="node-main"><div><div class="node-name">${esc(n.name)}</div><div class="node-uri">${esc(n.uri)}</div></div>${n.port?`<span class="pill">端口 ${n.port}</span>`:''}</div><div class="row"><button class="btn small" onclick='editConfigNode(${JSON.stringify(n).replace(/'/g,"&#39;")})'>编辑</button><button class="btn small danger" onclick="deleteConfigNode('${esc(n.name)}')">删除</button></div></article>`;
+}
+function editConfigNode(n){qs('#cfgName').value=n.name||'';qs('#cfgUri').value=n.uri||'';qs('#cfgPort').value=n.port||0}
+async function saveConfigNode(){
+  const name=qs('#cfgName').value.trim(),uri=qs('#cfgUri').value.trim(),port=Number(qs('#cfgPort').value)||0;
+  if(!uri){toast('URI 不能为空','err');return}
+  const exists=S.configNodes.some(n=>n.name===name);
+  try{
+    if(exists)await api('/api/nodes/config/'+encodeURIComponent(name),{method:'PUT',body:JSON.stringify({name,uri,port})});
+    else await api('/api/nodes/config',{method:'POST',body:JSON.stringify({name,uri,port})});
+    toast('手动节点已保存');await loadConfigNodes();renderConfig();
+  }catch(err){toast(err.message,'err')}
+}
+async function deleteConfigNode(name){
+  if(!confirm('删除手动节点 '+name+' ?'))return;
+  try{await api('/api/nodes/config/'+encodeURIComponent(name),{method:'DELETE'});toast('已删除');await loadConfigNodes();renderConfig()}catch(err){toast(err.message,'err')}
+}
+function renderPorts(){
+  const ports=(S.ports&&S.ports.ports)||[];
+  const occupied=ports.filter(p=>p.reason==='used_by_pool');
+  const conflicts=ports.filter(p=>!p.available && p.reason!=='used_by_pool');
+  const free=ports.filter(p=>p.available);
+  const basePort=(S.ports&&S.ports.base_port)||0;
+  const endPort=ports.length?ports[ports.length-1].port:basePort;
+  const skipped=(S.ports&&S.ports.skipped_ports)||[];
+  qs('#view').innerHTML=`<div class="card"><div class="card-head"><h2>端口状态</h2><button class="btn small" onclick="refreshPorts()">重新扫描</button></div><div class="card-body stack">
+    <p class="muted">扫描范围 <b>${esc(basePort)}</b> – <b>${esc(endPort)}</b>（起始端口由 <code>multi_port.base_port</code> 控制，可在「设置」中修改）。</p>
+    <p class="muted">节点池占用 <b>${esc(occupied.length)}</b> 个，其他进程占用 <b>${esc(conflicts.length)}</b> 个，空闲 <b>${esc(free.length)}</b> 个。</p>
+    ${skipped.length?`<p class="status err">分配端口时跳过了被外部进程占用的 ${esc(skipped.length)} 个端口：${esc(skipped.join(' / '))}</p>`:''}
+    <div class="section"><h3>节点池监听端口</h3><div class="table">${occupied.length?occupied.map(p=>`<div class="port"><b>${p.port}</b><span class="muted">${esc(p.node_name||'')}</span></div>`).join(''):'<div class="empty">节点池为空</div>'}</div></div>
+    ${conflicts.length?`<div class="section"><h3>冲突端口</h3><div class="table">${conflicts.map(p=>`<div class="port"><b>${p.port}</b><span class="pill red">${esc(reasonText(p.reason))}</span><span class="muted">${esc(reasonDetail(p.reason))}</span></div>`).join('')}</div></div>`:''}
+  </div></div>`;
+  maybeNotifySkippedPorts(skipped, S.ports&&S.ports.skipped_at);
+}
+function maybeNotifySkippedPorts(list, at){
+  if(!list||!list.length||!at)return;
+  if(S.lastSkipSeen===at)return;
+  S.lastSkipSeen=at;
+  openDialog('端口被外部占用',`<p>分配端口时检测到以下端口被其他进程占用，已自动跳过并使用后续可用端口：</p><p><b>${esc(list.join(' / '))}</b></p><p class="muted">如果你希望保持端口连续，请释放这些端口或在「设置」里调整 multi_port.base_port。</p>`);
+}
+async function refreshPorts(){
+  try{
+    await loadPorts();
+    renderPorts();
+    const ports=(S.ports?.ports)||[];
+    const occupied=ports.filter(p=>p.reason==='used_by_pool').length;
+    const conflicts=ports.filter(p=>!p.available && p.reason!=='used_by_pool').length;
+    const free=ports.filter(p=>p.available).length;
+    openDialog('端口扫描完成',`<p>节点池占用 ${esc(occupied)} 个，其他进程占用 ${esc(conflicts)} 个，空闲 ${esc(free)} 个。</p>`);
+  }catch(err){
+    openDialog('端口扫描失败',`<p>${esc(err.message)}</p>`);
+  }
+}
+function reasonText(r){return {used_by_pool:'节点池占用',used_by_config:'配置占用',listener_conflict:'入口端口冲突',occupied_by_os:'系统占用'}[r]||r}
+function reasonDetail(r){return {used_by_pool:'已分配给池内节点',used_by_config:'已被节点池/配置占用',listener_conflict:'与入口监听端口冲突',occupied_by_os:'被系统或其他进程占用'}[r]||r}
+function bestPortRun(ports){
+  let best=null,cur=null;
+  for(const p of ports){
+    if(p.available){if(!cur)cur={start:p.port,end:p.port,len:1};else{cur.end=p.port;cur.len++}}
+    else{if(cur&&(!best||cur.len>best.len))best=cur;cur=null}
+  }
+  if(cur&&(!best||cur.len>best.len))best=cur;
+  return best;
+}
+function renderLogs(){
+  qs('#view').innerHTML=`<div class="card log-card"><div class="card-head"><h2>运行日志</h2><div class="row"><button class="btn small" onclick="refresh()">刷新</button><button class="btn small danger" onclick="clearLogs()">清空日志</button></div></div><div class="card-body"><p class="action-status ${S.logActionType==='err'?'err':''}" style="display:${S.logAction?'block':'none'}">${esc(S.logAction||'')}</p><pre class="log-view">${esc(S.logs||'暂无日志')}</pre></div></div>`;
+}
+async function clearLogs(){
+  if(!confirm('确定清空日志吗？'))return;
+  try{
+    await api('/api/logs/clear',{method:'POST'});
+    S.logs='';
+    S.logAction='日志已清空';
+    S.logActionType='ok';
+    await loadLogs();
+    renderLogs();
+  }catch(err){
+    S.logAction=err.message;
+    S.logActionType='err';
+    toast(err.message,'err');
+    renderLogs();
+  }
+}
+function bulkScopeIds(scopes){
+  const nodes=S.nodes||[];
+  const ids=new Set();
+  for(const n of nodes){
+    const isCandidate=!inPool(n)&&n.state==='passed';
+    const isPool=inPool(n);
+    const isFailed=n.state==='failed';
+    if((scopes.candidate&&isCandidate)||(scopes.pool&&isPool)||(scopes.failed&&isFailed))ids.add(n.id);
+  }
+  return [...ids];
+}
+function renderBulk(){
+  const sel=S.bulkSel=S.bulkSel||{candidate:true,pool:true,failed:true,retest:true,country:false,promote:true};
+  const nodes=S.nodes||[];
+  const counts={
+    candidate:nodes.filter(n=>!inPool(n)&&n.state==='passed').length,
+    pool:nodes.filter(n=>inPool(n)).length,
+    failed:nodes.filter(n=>n.state==='failed').length,
+  };
+  qs('#view').innerHTML=`<div class="grid">
+    <div class="card"><div class="card-head"><h2>批量测试</h2></div><div class="card-body stack">
+      <p class="muted">在范围与操作中各至少勾选一项；测速失败的节点默认进入失败节点。</p>
+      <div class="stack">
+        <strong>测试范围（多选）</strong>
+        <label class="row"><input type="checkbox" id="bulkCandidate" ${sel.candidate?'checked':''} style="width:auto"> 候选节点 <span class="muted">${counts.candidate}</span></label>
+        <label class="row"><input type="checkbox" id="bulkPool" ${sel.pool?'checked':''} style="width:auto"> 节点池 <span class="muted">${counts.pool}</span></label>
+        <label class="row"><input type="checkbox" id="bulkFailed" ${sel.failed?'checked':''} style="width:auto"> 失败节点 <span class="muted">${counts.failed}</span></label>
+      </div>
+      <div class="stack">
+        <strong>操作（多选）</strong>
+        <label class="row"><input type="checkbox" id="bulkRetest" ${sel.retest?'checked':''} style="width:auto"> 测速</label>
+        <label class="row"><input type="checkbox" id="bulkCountry" ${sel.country?'checked':''} style="width:auto"> 测试国家</label>
+      </div>
+      <label class="row"><input type="checkbox" id="bulkPromote" ${sel.promote?'checked':''} style="width:auto"> 测速成功后自动加入节点池 <span class="muted">（失败节点会自动补测国家）</span></label>
+      <div class="row"><button class="btn primary" onclick="runBulkTest()">开始</button></div>
+    </div></div>
+  </div>`;
+}
+async function runBulkTest(){
+  const scopes={candidate:qs('#bulkCandidate').checked,pool:qs('#bulkPool').checked,failed:qs('#bulkFailed').checked};
+  const acts={retest:qs('#bulkRetest').checked,country:qs('#bulkCountry').checked,promote:qs('#bulkPromote').checked};
+  S.bulkSel={...scopes,...acts};
+  if(!(scopes.candidate||scopes.pool||scopes.failed)){toast('请至少选择一个范围','err');return}
+  if(!(acts.retest||acts.country)){toast('请至少选择一种操作','err');return}
+  await loadManaged('nodes');
+  const ids=bulkScopeIds(scopes);
+  if(!ids.length){toast('所选范围内没有节点','err');return}
+  let job;
+  try{
+    job=await runAsyncBatchTest({ids,retest:acts.retest,country:acts.country,promote_passed:acts.promote,auto_reload:true,label:'批量测试'});
+  }catch(e){toast(e.message,'err');return}
+  const parts=[];
+  if(acts.retest)parts.push(`测速 ${job?.passed||0}/${(job?.passed||0)+(job?.failed||0)} 成功`);
+  if(acts.country)parts.push(`国家 ${job?.country_ok||0} 成功 / ${job?.country_bad||0} 失败`);
+  if(acts.promote)parts.push(`入池 ${job?.promoted||0}`);
+  toast('批量测试完成：'+parts.join(' · '));
+  await refresh();
+}
+function importSourceType(s){
+  if(s?.mode==='url')return '订阅链接';
+  const f=String(s?.format||'');
+  if(f.includes('base64'))return 'Base64';
+  if(f.includes('clash'))return 'Clash YAML';
+  if(f.includes('uri'))return 'URI';
+  return s?.mode==='content'?'内容导入':'导入来源';
+}
+function importSourceText(s){
+  if(s?.mode==='url')return s.source||'';
+  const f=String(s?.format||'');
+  if(f.includes('base64'))return 'Base64 内容导入';
+  if(f.includes('clash'))return 'Clash YAML 内容导入';
+  if(f.includes('uri'))return 'URI 列表内容导入';
+  return s?.source&&s.source!=='content'?s.source:'内容导入';
+}
+function fmtDate(v){
+  if(!v)return '-';
+  const d=new Date(v);
+  return Number.isNaN(d.getTime())?'-':d.toLocaleString();
+}
+function renderSettings(){
+  const s=S.settings||{};
+  const listener=s.listener||{},multi=s.multi_port||{},pool=s.pool||{},management=s.management||{};
+  const sub=S.subConfig||{subscriptions:[],enabled:true,interval:'24h'};
+  const sources=S.importSources||[];
+  const interval=durationParts(sub.interval||'24h');
+  const probeTarget=allowedProbeTarget(s.probe_target);
+  const blacklistSeconds=durationSeconds(pool.blacklist_duration,600);
+  const rotationSeconds=durationSeconds(pool.rotation_interval,120);
+  qs('#view').innerHTML=`<div class="settings-grid">
+    <div class="settings-stack">
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <div><h2>基础运行</h2><p>控制运行模式、测速目标和管理入口。</p></div>
+          <span class="pill green">${esc(s.mode||'pool')}</span>
+        </div>
+        <div class="settings-section-body">
+          <div class="settings-highlight">
+            <strong>当前测速目标</strong>
+            <span class="muted">${esc(probeTarget)}</span>
+          </div>
+          <div class="settings-form">
+            <div class="field"><label>运行模式</label><select id="setMode"><option value="pool">pool</option><option value="multi-port">multi-port</option><option value="hybrid">hybrid</option></select></div>
+            <div class="field"><label>探测目标</label><select id="setProbe"><option value="https://www.gstatic.com/generate_204">gstatic generate_204</option><option value="https://cp.cloudflare.com/generate_204">cloudflare generate_204</option></select></div>
+            <div class="field"><label>外部 IP</label><input id="setExternal" value="${esc(s.external_ip||'')}" placeholder="留空则使用当前访问地址"></div>
+            <div class="field"><label>管理监听</label><input id="setMgmtListen" value="${esc(management.listen||'')}"></div>
+            <label class="toggle-row wide"><input id="setSkip" type="checkbox" ${s.skip_cert_verify?'checked':''} style="width:auto"><div><strong>跳过证书验证</strong><span>仅在订阅或节点证书异常时使用。</span></div></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <div><h2>端口与监听</h2><p>这些设置决定用户最终复制和使用的本地端口。</p></div>
+          <span class="pill">起始端口 ${esc(multi.base_port||0)}</span>
+        </div>
+        <div class="settings-section-body">
+          <div class="metric-grid">
+            <div class="metric"><span>Pool 端口</span><strong>${esc(listener.port||0)}</strong></div>
+            <div class="metric"><span>Multi 起始</span><strong>${esc(multi.base_port||0)}</strong></div>
+            <div class="metric"><span>监听地址</span><strong>${esc(multi.address||listener.address||'-')}</strong></div>
+          </div>
+          <div class="settings-form">
+            <div class="field"><label>Pool 监听地址</label><input id="setListenAddr" value="${esc(listener.address||'')}"></div>
+            <div class="field"><label>Pool 端口</label><input id="setListenPort" type="number" value="${esc(listener.port||0)}"></div>
+            <div class="field"><label>Multi 地址</label><input id="setMultiAddr" value="${esc(multi.address||'')}"></div>
+            <div class="field"><label>Multi 起始端口</label><input id="setMultiPort" type="number" value="${esc(multi.base_port||0)}"></div>
+            <div class="field"><label>Multi 用户名</label><input id="setMultiUser" value="${esc(multi.username||'')}"></div>
+            <div class="field"><label>Multi 密码</label><input id="setMultiPass" value="${esc(multi.password||'')}"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <div><h2>节点池策略</h2><p>控制节点轮换、失败判定和临时拉黑。</p></div>
+          <span class="pill amber">失败阈值 ${esc(pool.failure_threshold||2)}</span>
+        </div>
+        <div class="settings-section-body">
+          <div class="settings-form">
+            <div class="field"><label>池模式</label><select id="setPoolMode"><option value="rotate">rotate</option><option value="sequential">sequential</option><option value="random">random</option><option value="balance">balance</option></select></div>
+            <div class="field"><label>失败次数</label><input id="setFail" type="number" min="1" value="${esc(pool.failure_threshold||2)}"></div>
+            <div class="field"><label>黑名单时间（秒）</label><input id="setBlacklist" type="number" min="1" step="1" value="${esc(blacklistSeconds)}"></div>
+            <div class="field"><label>轮换间隔（秒）</label><input id="setRotateInterval" type="number" min="1" step="1" value="${esc(rotationSeconds)}"></div>
+          </div>
+          <div class="settings-actions"><button class="btn primary" onclick="saveSettings()">保存运行设置并重载</button></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="settings-stack">
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <div><h2>订阅刷新</h2><p>管理订阅定时刷新和手动刷新。</p></div>
+          <span class="pill green">${esc((sub.subscriptions||[]).length)} 个订阅</span>
+        </div>
+        <div class="settings-section-body">
+          <label class="toggle-row"><input id="subEnabled" type="checkbox" ${sub.enabled!==false?'checked':''} style="width:auto"><div><strong>启用自动刷新</strong><span>手动刷新不受这个开关影响。</span></div></label>
+          <div class="time-grid">
+            <div class="field"><label>天</label><input id="subDays" type="number" min="0" value="${interval.days}"></div>
+            <div class="field"><label>小时</label><input id="subHours" type="number" min="0" max="23" value="${interval.hours}"></div>
+            <div class="field"><label>分钟</label><input id="subMinutes" type="number" min="0" max="59" value="${interval.minutes}"></div>
+          </div>
+          <button class="btn secondary block" onclick="saveAutoRefresh()">保存自动刷新设置</button>
+          <button class="btn green block" onclick="refreshAllImportSources()">手动刷新全部订阅来源</button>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-section-head">
+          <div><h2>导入来源</h2><p>查看和刷新已经导入过的订阅或内容来源。</p></div>
+          <button class="btn small danger" onclick="deleteAllImportSources()" ${sources.length?'':'disabled'}>删除全部</button>
+        </div>
+        <div class="settings-section-body">
+      ${sources.length?`<div class="stack">${sources.map((src,i)=>`<div class="source-row">
+        <div style="flex:1;min-width:0">
+          <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
+            <strong>${esc(importSourceType(src))}</strong>
+            <span class="pill green">${esc(src.tag_prefix||'local')}</span>
+            <span class="muted">总数 ${esc(src.total||0)} / 池内 ${esc(src.pool||0)} / 候选 ${esc(src.candidate||0)} / 失败 ${esc(src.failed||0)}</span>
+          </div>
+          <div style="word-break:break-all;margin-top:6px"><code class="muted">${esc(importSourceText(src))}</code></div>
+          <div class="muted" style="margin-top:6px">更新：${esc(fmtDate(src.updated_at))}</div>
+        </div>
+        ${src.mode==='url'&&src.source?`<button class="btn small green" onclick="refreshImportSource(${i})">手动刷新</button>`:''}
+        <button class="btn small danger" onclick="deleteImportSource(${i})">删除</button>
+      </div>`).join('')}</div>`:`<div class="empty">还没有导入来源</div>`}
+        </div>
+      </section>
+    </div>
+  </div>`;
+  qs('#setMode').value=s.mode||'pool';
+  qs('#setProbe').value=probeTarget;
+  qs('#setPoolMode').value=pool.mode||'rotate';
+}
+function allowedProbeTarget(value){
+  const allowed=['https://www.gstatic.com/generate_204','https://cp.cloudflare.com/generate_204'];
+  return allowed.includes(String(value||'').trim())?String(value).trim():allowed[0];
+}
+async function saveSettings(){
+  const current=S.settings||{},currentListener=current.listener||{},currentMulti=current.multi_port||{},currentMgmt=current.management||{},currentGeo=current.geoip||{};
+  const body={
+    mode:qs('#setMode').value,
+    external_ip:qs('#setExternal').value.trim(),
+    probe_target:qs('#setProbe').value.trim(),
+    skip_cert_verify:qs('#setSkip').checked,
+    listener:{address:qs('#setListenAddr').value.trim(),port:Number(qs('#setListenPort').value)||0,username:currentListener.username||'',password:currentListener.password||''},
+    multi_port:{address:qs('#setMultiAddr').value.trim(),base_port:Number(qs('#setMultiPort').value)||0,username:qs('#setMultiUser').value,password:qs('#setMultiPass').value},
+    pool:{mode:qs('#setPoolMode').value.trim()||'rotate',failure_threshold:Number(qs('#setFail').value)||2,blacklist_duration:secondsDuration(qs('#setBlacklist').value,600),rotation_interval:secondsDuration(qs('#setRotateInterval').value,120)},
+    management:{listen:qs('#setMgmtListen').value.trim(),password:currentMgmt.password||''},
+    geoip:{
+      enabled:!!currentGeo.enabled,
+      database_path:currentGeo.database_path||'',
+      listen:currentGeo.listen||'',
+      port:currentGeo.port||0,
+      auto_update_enabled:!!currentGeo.auto_update_enabled,
+      auto_update_interval:currentGeo.auto_update_interval||''
+    }
+  };
+  try{
+    const res=await api('/api/settings',{method:'PUT',body:JSON.stringify(body)});
+    toast(res?.message||'设置已保存');
+    await api('/api/reload',{method:'POST'});
+    await refresh();
+  }catch(err){toast(err.message,'err')}
+}
+function durationSeconds(value,fallback){
+  value=String(value||'').trim();
+  if(!value)return fallback;
+  if(/^\d+(\.\d+)?$/.test(value))return Math.max(1,Math.round(Number(value)));
+  const re=/(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)/g;
+  let total=0,matched=false,m;
+  while((m=re.exec(value))){
+    matched=true;
+    const n=Number(m[1]);
+    const unit=m[2];
+    if(unit==='h')total+=n*3600;
+    else if(unit==='m')total+=n*60;
+    else if(unit==='s')total+=n;
+    else if(unit==='ms')total+=n/1000;
+  }
+  if(!matched || !Number.isFinite(total) || total<=0)return fallback;
+  return Math.max(1,Math.round(total));
+}
+function secondsDuration(value,fallback){
+  const n=Math.max(1,Math.round(Number(value)||fallback));
+  return `${n}s`;
+}
+function durationParts(v){
+  v=String(v||'24h');
+  let days=0,hours=0,minutes=0;
+  const h=v.match(/(\d+)h/),m=v.match(/(\d+)m/);
+  if(h){hours=Number(h[1])||0;days=Math.floor(hours/24);hours=hours%24}
+  if(m)minutes=Number(m[1])||0;
+  if(!h&&!m){days=1}
+  if(days===0&&hours===0&&minutes===0)days=1;
+  return {days,hours,minutes};
+}
+function subscriptionInterval(){
+  const d=Number(qs('#subDays')?.value)||0,h=Number(qs('#subHours')?.value)||0,m=Number(qs('#subMinutes')?.value)||0;
+  const totalMinutes=d*24*60+h*60+m;
+  if(totalMinutes<=0)return '24h';
+  if(totalMinutes%60===0)return `${Math.floor(totalMinutes/60)}h`;
+  const hh=Math.floor(totalMinutes/60),mm=totalMinutes%60;
+  return `${hh}h${mm}m`;
+}
+async function saveAutoRefresh(){
+  const body={enabled:qs('#subEnabled').checked,interval:subscriptionInterval(),subscriptions:S.subConfig?.subscriptions||[],refresh:false};
+  try{S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify(body)});toast('订阅自动刷新设置已保存');renderSettings()}catch(err){toast(err.message,'err')}
+}
+function renderRefreshSourceJobDialog(job,title,done){
+  const groups=Array.isArray(job?.groups)?job.groups:[];
+  const list=groups.map((g,groupIdx)=>{
+    const rows=(Array.isArray(g.urls)?g.urls:[]).map((r,urlIdx)=>{
+      const raw=String(r.status||'waiting').toLowerCase();
+      const cls=raw==='completed'?'green':raw==='failed'?'red':'amber';
+      const statusText=raw==='pulling'?'拉取节点中':raw==='testing'?'测速/入池中':raw==='completed'?'完成':raw==='failed'?'失败':'等待';
+      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>订阅 ${groupIdx+1}-${urlIdx+1}</strong><span class="pill ${cls}">${esc(statusText)}</span></div><div style="word-break:break-all"><code class="muted">${esc(r.url||'')}</code></div><div class="muted">节点 ${esc(r.nodes||0)} · 进度 ${esc(r.done||0)}/${esc(r.total||0)} · 成功 ${esc(r.passed||0)} · 失败 ${esc(r.failed||0)} · 入池 ${esc(r.promoted||0)}</div>${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
+    }).join('');
+    return `<div class="stack" style="gap:10px;margin-bottom:12px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">URL ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
+  }).join('');
+  updateBlockingDialog(title,`<p>订阅链接 ${esc(job?.done_urls||0)}/${esc(job?.total_urls||0)}，成功 ${esc(job?.successful||0)}，失败 ${esc(job?.failed||0)}，当前入池 ${esc(job?.pool_count||0)}。</p>${list}`,done);
+}
+async function waitRefreshSourceJob(jobId,title){
+  while(true){
+    const job=await api('/api/import/refresh/jobs/'+jobId);
+    renderRefreshSourceJobDialog(job,title||'正在刷新订阅',false);
+    if(job.status==='finished'||job.status==='failed'){
+      return job;
+    }
+    await new Promise(r=>setTimeout(r,500));
+  }
+}
+async function refreshAllImportSources(){
+  const sources=(S.importSources||[]).filter(s=>s.mode==='url'&&s.source);
+  if(!sources.length){toast('没有可刷新的订阅来源','err');return}
+  let job;
+  try{
+    const started=await api('/api/import/refresh',{method:'POST',body:JSON.stringify({key:''})});
+    job=await waitRefreshSourceJob(started.job_id,'正在刷新订阅');
+  }catch(err){
+    updateBlockingDialog('刷新失败',`<p>${esc(err.message)}</p>`,true);
+    return;
+  }
+  await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
+  renderNav();
+  renderSettings();
+  renderRefreshSourceJobDialog(job,job?.status==='failed'?'刷新失败':'刷新完成',true);
+}
+async function deleteSubscription(idx){
+  const urls=S.subConfig?.subscriptions||[];
+  const url=urls[idx];
+  if(!url){toast('订阅不存在','err');return}
+  if(!confirm(`确认删除订阅？\n${url}\n\n所有由该订阅导入的节点也会被删除。`))return;
+  try{
+    const res=await api('/api/subscription/delete',{method:'POST',body:JSON.stringify({url})});
+    toast(`已删除订阅，移除节点 ${res.deleted_nodes||0} 个`);
+    S.subConfig=await api('/api/subscription/config');
+    renderSettings();
+  }catch(err){toast(err.message,'err')}
+}
+async function deleteImportSource(idx){
+  const src=(S.importSources||[])[idx];
+  if(!src){toast('导入来源不存在','err');return}
+  const label=importSourceText(src);
+  if(!confirm(`确认删除导入来源？\n${label}\n\n该来源导入的节点都会被删除。`))return;
+  try{
+    const res=await api('/api/import/sources',{method:'POST',body:JSON.stringify({key:src.key})});
+    if(src.mode==='url'&&src.source)await removeSubscriptionURLs(src.source.split(/\r?\n/).map(x=>x.trim()).filter(Boolean));
+    toast(`已删除导入来源，移除节点 ${res.deleted_nodes||0} 个`);
+    await Promise.all([loadSubscriptionConfig(),loadImportSources()]);
+    renderSettings();
+  }catch(err){toast(err.message,'err')}
+}
+async function refreshImportSource(idx){
+  const src=(S.importSources||[])[idx];
+  const urls=(src?.source||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(!src||src.mode!=='url'||!urls.length){toast('该来源不能刷新','err');return}
+  try{
+    const job=await refreshSubscriptionSource(src,{index:1,total:1});
+    await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
+    renderNav();
+    renderRefreshSourceJobDialog(job,job?.status==='failed'?'刷新失败':'刷新完成',true);
+    renderSettings();
+  }catch(err){
+    updateBlockingDialog('刷新失败',`<p>${esc(err.message)}</p>`,true);
+  }
+}
+async function refreshSubscriptionSource(src,ctx){
+  if(!src||src.mode!=='url'||!src.key)throw new Error('该来源不能刷新');
+  const started=await api('/api/import/refresh',{method:'POST',body:JSON.stringify({key:src.key})});
+  return await waitRefreshSourceJob(started.job_id,'正在刷新订阅');
+}
+async function removeSubscriptionURLs(urls){
+  if(!urls.length)return;
+  await loadSubscriptionConfig();
+  const remove=new Set(urls);
+  const next=(S.subConfig?.subscriptions||[]).filter(u=>!remove.has(u));
+  S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify({enabled:S.subConfig?.enabled!==false,interval:S.subConfig?.interval||'24h',subscriptions:next,refresh:false})});
+}
+async function deleteAllImportSources(){
+  const sources=S.importSources||[];
+  if(!sources.length){toast('没有可删除的导入来源','err');return}
+  const total=sources.reduce((sum,src)=>sum+(Number(src.total)||0),0);
+  if(!confirm(`确认删除全部导入？\n\n将删除 ${sources.length} 个导入来源、${total} 个节点，并清空所有订阅链接。此操作不会删除手动配置节点。`))return;
+  try{
+    const res=await api('/api/import/sources',{method:'POST',body:JSON.stringify({all:true})});
+    toast(`已删除全部导入，移除节点 ${res.deleted_nodes||0} 个`);
+    await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadManaged('nodes')]);
+    renderNav();
+    renderSettings();
+  }catch(err){toast(err.message,'err')}
+}
+async function reloadCore(){
+  try{await api('/api/reload',{method:'POST'});openDialog('重载完成','<p>核心已重载。</p>')}catch(err){openDialog('重载失败',`<p>${esc(err.message)}</p>`)}
+}
+async function downloadExport(){
+  try{
+    const headers=S.token?{Authorization:'Bearer '+S.token}:{};
+    const res=await fetch('/api/export?scheme=all',{headers});
+    if(!res.ok)throw new Error('导出失败: '+res.status);
+    const text=await res.text();
+    const blob=new Blob([text],{type:'text/plain;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='easy-proxies-export.txt';a.click();URL.revokeObjectURL(a.href);
+    openDialog('导出完成','<p>已生成导出文件。</p>');
+  }catch(err){openDialog('导出失败',`<p>${esc(err.message)}</p>`)}
+}
+(async function boot(){
+  renderNav();
+  try{await api('/api/import/summary');qs('#authModal').classList.remove('show')}catch(e){}
+  setupAllAutoProbe();
+  await go('import');
+})();
+</script>
+</body>
+</html>

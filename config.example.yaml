@@ -1,0 +1,53 @@
+mode: multi-port
+
+listener:
+  address: 127.0.0.1
+  port: 2323
+  username: ""
+  password: ""
+
+multi_port:
+  address: 127.0.0.1
+  base_port: 24000
+  username: ""
+  password: ""
+
+pool:
+  mode: rotate
+  failure_threshold: 2
+  blacklist_duration: 600s
+  rotation_interval: 120s
+
+management:
+  enabled: true
+  listen: 127.0.0.1:9091
+  probe_target: https://www.gstatic.com/generate_204
+  password: ""
+
+subscription_refresh:
+  enabled: false
+  interval: 24h
+  timeout: 30s
+  health_check_timeout: 5s
+  drain_timeout: 30s
+  min_available_nodes: 1
+
+geoip:
+  enabled: false
+  database_path: ./GeoLite2-Country.mmdb
+  listen: ""
+  port: 0
+  auto_update_enabled: true
+  auto_update_interval: 24h
+
+log:
+  output: stdout
+  file: logs/easy_proxies.log
+  max_size: 50
+  max_backups: 3
+  max_age: 7
+  compress: false
+
+subscriptions: []
+nodes: []
+skip_cert_verify: false

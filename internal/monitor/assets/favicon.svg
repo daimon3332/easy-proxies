@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Easy Proxies">
+  <defs>
+    <linearGradient id="bg" x1="16" y1="12" x2="112" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#073b8f"/>
+      <stop offset="0.55" stop-color="#066b91"/>
+      <stop offset="1" stop-color="#00b96b"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="25" y1="24" x2="105" y2="105" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00c8ff"/>
+      <stop offset="1" stop-color="#39ed87"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="49" y1="48" x2="80" y2="84" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#54e8ff"/>
+      <stop offset="1" stop-color="#16c995"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="url(#bg)"/>
+  <path d="M27 76a42 42 0 0 1 64-43" fill="none" stroke="url(#flow)" stroke-width="5" stroke-linecap="round"/>
+  <path d="m85 28 13 2-5 12" fill="url(#flow)"/>
+  <path d="M101 52a42 42 0 0 1-64 43" fill="none" stroke="url(#flow)" stroke-width="5" stroke-linecap="round"/>
+  <path d="m43 100-13-3 6-12" fill="url(#flow)"/>
+  <circle cx="64" cy="64" r="31" fill="none" stroke="#bffcf2" stroke-opacity="0.82" stroke-width="2.5"/>
+  <g fill="none" stroke="#4cf1e4" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 5">
+    <path d="M64 38c0 13-8 16-20 14"/>
+    <path d="M44 52c9 7 9 16 0 24"/>
+    <path d="M44 76c12-2 20 2 20 14"/>
+    <path d="M64 90c0-12 8-16 20-14"/>
+    <path d="M84 76c-9-8-9-16 0-24"/>
+    <path d="M84 52c-12 2-20-1-20-14"/>
+  </g>
+  <g stroke="#bffcf2" stroke-width="2">
+    <circle cx="64" cy="36" r="7" fill="#15d8e7"/>
+    <circle cx="40" cy="50" r="7" fill="#00c9ef"/>
+    <circle cx="40" cy="78" r="7" fill="#0ed7d4"/>
+    <circle cx="64" cy="92" r="7" fill="#1de093"/>
+    <circle cx="88" cy="78" r="7" fill="#37e882"/>
+    <circle cx="88" cy="50" r="7" fill="#27ddd0"/>
+  </g>
+  <path d="M64 48c7 5 13 7 19 9v11c0 13-8 22-19 28-11-6-19-15-19-28V57c6-2 12-4 19-9Z" fill="#e8ffff"/>
+  <path d="M64 54c5 3 9 5 13 6v8c0 9-5 16-13 21-8-5-13-12-13-21v-8c4-1 8-3 13-6Z" fill="url(#shield)"/>
+  <path d="M64 54v35c8-5 13-12 13-21v-8c-4-1-8-3-13-6Z" fill="#13bd9f" fill-opacity="0.72"/>
+</svg>

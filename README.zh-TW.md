@@ -90,19 +90,10 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 </details>
 
 ## 開始使用
+請參閱 **[繁體中文使用教學](./docs/USER_GUIDE.zh-TW.md)**，教學提供兩種啟動方法：
 
-一般使用者應從 [Releases](https://github.com/daimon3332/easy-proxies/releases/latest) 下載與作業系統和 CPU 架構相符的 ZIP 壓縮包。
-
-```text
-下載 Release
-  -> 將 config.example.yaml 複製為 config.yaml
-  -> 啟動 Easy Proxies
-  -> 開啟 WebUI
-  -> 匯入訂閱 URL 並測速
-  -> 使用產生的本機連接埠
-```
-
-下載選擇、啟動指令、訂閱匯入、節點測速和常見問題請參閱 **[繁體中文使用教學](./docs/USER_GUIDE.zh-TW.md)**。
+1. 將專案原始碼複製到本機，自行建置並啟動 Easy Proxies。
+2. 從 [Releases](https://github.com/daimon3332/easy-proxies/releases/latest) 下載對應版本並啟動。
 
 ## 匯入格式與協定
 
@@ -119,21 +110,6 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 | `hybrid` | 同時啟用共用入口和每節點獨立連接埠。 |
 
 設定中的 `multi_port` 寫法也受支援，並會自動正規化為 `multi-port`。
-
-## 資料與隱私
-
-以下可能包含訂閱 URL、憑證、節點 URI、執行狀態或本機日誌的檔案已被 Git 忽略：
-
-```text
-config.yaml
-nodes.txt
-managed_nodes.json
-node_ports.json
-*.log
-*.mmdb
-```
-
-提交程式碼時請使用 `config.example.yaml`。公開既有儲存庫前還需要檢查完整 Git 歷史，因為加入 `.gitignore` 不會移除舊提交中的檔案。
 
 ## 二次開發與貢獻
 

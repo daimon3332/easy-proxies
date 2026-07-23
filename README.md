@@ -90,19 +90,10 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 </details>
 
 ## Getting started
+Follow the **[English User Guide](./docs/USER_GUIDE.md)** for two startup methods:
 
-For ordinary use, download the ZIP package matching your operating system and CPU architecture from [Releases](https://github.com/daimon3332/easy-proxies/releases/latest).
-
-```text
-download a release
-  -> copy config.example.yaml to config.yaml
-  -> start Easy Proxies
-  -> open the WebUI
-  -> import subscription URLs and test
-  -> use the generated local ports
-```
-
-See the **[English User Guide](./docs/USER_GUIDE.md)** for download selection, startup commands, subscription importing, node testing, and troubleshooting.
+1. Clone the source, build Easy Proxies locally, and start the binary.
+2. Download the matching binary package from [Releases](https://github.com/daimon3332/easy-proxies/releases/latest) and start it.
 
 ## Import formats and protocols
 
@@ -124,21 +115,6 @@ Common protocols include VLESS, VMess, Trojan, Shadowsocks, ShadowsocksR, Hyster
 | `hybrid` | Enable the shared pool entry and per-node ports together. |
 
 `multi_port` is accepted in configuration files and normalized to `multi-port`.
-
-## Data and privacy
-
-Files that may contain subscription URLs, credentials, node URIs, runtime state, or local logs are ignored by Git, including:
-
-```text
-config.yaml
-nodes.txt
-managed_nodes.json
-node_ports.json
-*.log
-*.mmdb
-```
-
-Use `config.example.yaml` for documentation and commits. Before publishing a fork, inspect the complete Git history because adding a file to `.gitignore` does not remove old commits.
 
 ## Development and contributing
 

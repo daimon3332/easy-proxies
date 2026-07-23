@@ -90,19 +90,10 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 </details>
 
 ## 开始使用
+请查看 **[简体中文使用教程](./docs/USER_GUIDE.zh-CN.md)**，教程提供两种启动方法：
 
-普通用户应从 [Releases](https://github.com/daimon3332/easy-proxies/releases/latest) 下载与操作系统和 CPU 架构匹配的 ZIP 压缩包。
-
-```text
-下载 Release
-  -> 把 config.example.yaml 复制为 config.yaml
-  -> 启动 Easy Proxies
-  -> 打开 WebUI
-  -> 导入订阅 URL 并测速
-  -> 使用生成的本地端口
-```
-
-下载选择、启动命令、订阅导入、节点测速和常见问题请查看 **[简体中文使用教程](./docs/USER_GUIDE.zh-CN.md)**。
+1. 复制项目源码到本地，自行构建并启动 Easy Proxies。
+2. 从 [Releases](https://github.com/daimon3332/easy-proxies/releases/latest) 下载对应版本并启动。
 
 ## 导入格式与协议
 
@@ -119,21 +110,6 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 | `hybrid` | 同时启用共享入口和每节点独立端口。 |
 
 配置中的 `multi_port` 写法也受支持，并会自动规范为 `multi-port`。
-
-## 数据与隐私
-
-以下可能包含订阅 URL、凭据、节点 URI、运行状态或本地日志的文件已被 Git 忽略：
-
-```text
-config.yaml
-nodes.txt
-managed_nodes.json
-node_ports.json
-*.log
-*.mmdb
-```
-
-提交代码时使用 `config.example.yaml`。公开已有仓库前还需要检查完整 Git 历史，因为加入 `.gitignore` 不会删除旧提交中的文件。
 
 ## 二次开发与贡献
 

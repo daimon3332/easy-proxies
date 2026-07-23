@@ -4,7 +4,6 @@
 /easy_proxies
 /easy_proxies-*
 *.exe
-!/easy_proxies.exe
 
 # Configuration (contains sensitive data)
 config.yaml

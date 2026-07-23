@@ -490,6 +490,49 @@ func TestParseDuplicateURLReplacesPrefixSnapshot(t *testing.T) {
 	}
 }
 
+func TestParseContentReplacesFailedPrefixSnapshot(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	svc, store := newBatchServiceForTest(t, mgr)
+	const uri = "trojan://pass@example.com:443#Alpha"
+	if err := store.UpsertNodes([]ManagedNode{
+		{ID: nodeID(uri), URI: uri, Name: "Glados-Alpha", TagPrefix: "Glados", State: StateFailed, ImportMode: "url", ImportSource: "https://example.test/glados"},
+		{ID: "stale", URI: "trojan://stale@example.com:443#Stale", Name: "Glados-Stale", TagPrefix: "Glados", State: StatePassed},
+	}); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	parsed, err := svc.Parse(ParseRequest{Mode: "content", Content: uri + "\n", TagPrefix: "Glados"})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if len(parsed.Nodes) != 1 || parsed.Nodes[0].State != StateParsed {
+		t.Fatalf("parsed nodes = %#v, want one fresh parsed node", parsed.Nodes)
+	}
+	if _, ok := store.GetNode("stale"); ok {
+		t.Fatal("stale node from the replaced tag should be deleted")
+	}
+	job, ok := store.GetJob(parsed.ImportID)
+	if !ok || job.Total != 1 || job.Mode != "content" || job.TagPrefix != "Glados" {
+		t.Fatalf("import job = %#v found=%v, want content snapshot metadata", job, ok)
+	}
+}
+
+func TestCommitRejectsNonParsedNodes(t *testing.T) {
+	svc, store := newBatchServiceForTest(t, &batchNodeManagerStub{})
+	if err := store.UpsertNode(ManagedNode{ID: "failed", State: StateFailed}); err != nil {
+		t.Fatalf("UpsertNode() error = %v", err)
+	}
+	if err := store.UpsertJob(ImportJob{ID: "import", Status: ImportStatusParsed, NodeIDs: []string{"failed"}}); err != nil {
+		t.Fatalf("UpsertJob() error = %v", err)
+	}
+	if _, err := svc.Commit("import", CommitRequest{}); err == nil {
+		t.Fatal("Commit() should reject an empty parsed selection")
+	}
+	if _, ok := store.GetJob("import"); !ok {
+		t.Fatal("the parsed import job should remain available for diagnosis")
+	}
+}
+
 func TestListAndDeleteImportSources(t *testing.T) {
 	mgr := &batchNodeManagerStub{}
 	svc, store := newBatchServiceForTest(t, mgr)

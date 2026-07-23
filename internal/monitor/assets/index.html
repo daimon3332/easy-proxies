@@ -1237,6 +1237,12 @@ async function importSubscriptionURLs(body){
   await registerSubscriptionURLs(urls,body.tag_prefix);
 }
 async function importOne(body,label){
+  let replacedSubscriptionURLs=[];
+  if(body.mode==='content'){
+    await loadSubscriptionConfig();
+    const names=S.subConfig?.names||{};
+    replacedSubscriptionURLs=(S.subConfig?.subscriptions||[]).filter(url=>names[url]===S.tagPrefix);
+  }
   S.importSummary={status:'running',title:'正在解析 '+label,detail:'正在解析并准备测试节点'};
   renderImport();
   setStatus('#importStatus','解析中...');
@@ -1250,7 +1256,11 @@ async function importOne(body,label){
   S.lastJob=res.job_id;
   S.activeImportJob=res.job_id;
   localStorage.setItem(ACTIVE_IMPORT_JOB_KEY,res.job_id);
-  await pollJob(res.job_id);
+  const job=await pollJob(res.job_id);
+  if(body.mode==='content'&&job?.status==='completed'&&replacedSubscriptionURLs.length){
+    await removeSubscriptionURLs(replacedSubscriptionURLs);
+    toast(`已用内容导入替换 ${replacedSubscriptionURLs.length} 个旧订阅`);
+  }
 }
 async function registerSubscriptionURLs(urls,tagPrefix){
   await loadSubscriptionConfig();
@@ -1292,6 +1302,7 @@ async function pollJob(id){
       localStorage.removeItem(ACTIVE_IMPORT_JOB_KEY);
     }
   }
+  return last;
 }
 async function cancelImportJob(){
   const id=S.activeImportJob||S.lastJob||localStorage.getItem(ACTIVE_IMPORT_JOB_KEY);

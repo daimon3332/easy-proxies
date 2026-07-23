@@ -649,7 +649,7 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 		format string
 	}
 	var parsedNodes []parsedNode
-	replaceTag := false
+	replaceTag := req.Mode == "content"
 	if req.Mode == "url" {
 		urls := splitSubscriptionURLs(req.URL)
 		if len(urls) == 0 {
@@ -712,7 +712,6 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 	nodes := make([]ManagedNode, 0, len(parsedNodes))
 	nodeIDs := make([]string, 0, len(parsedNodes))
 	now := time.Now()
-	existingNodes := s.nodesByID()
 	seen := make(map[string]int, len(parsedNodes))
 
 	for _, item := range parsedNodes {
@@ -738,9 +737,6 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		}
-		if existing, ok := existingNodes[id]; ok && !replaceTag {
-			mn = mergeImportedNode(existing, mn)
-		}
 		if idx, ok := seen[id]; ok {
 			nodes[idx] = mn
 			continue
@@ -765,6 +761,10 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 	job := ImportJob{
 		ID:        importID,
 		Status:    ImportStatusParsed,
+		Mode:      req.Mode,
+		Format:    format,
+		TagPrefix: req.TagPrefix,
+		Source:    importSourceForParse(req),
 		Total:     len(nodes),
 		NodeIDs:   nodeIDs,
 		CreatedAt: now,
@@ -779,6 +779,13 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 		Format:   format,
 		Nodes:    nodes,
 	}, nil
+}
+
+func importSourceForParse(req ParseRequest) string {
+	if req.Mode == "url" {
+		return req.URL
+	}
+	return req.Mode
 }
 
 func splitSubscriptionURLs(raw string) []string {
@@ -849,15 +856,6 @@ func (s *Service) fetchSubscriptionViaPool(ctx context.Context, rawURL string, h
 	return nil, fmt.Errorf("%s", strings.Join(errs, " | "))
 }
 
-func (s *Service) nodesByID() map[string]ManagedNode {
-	nodes := s.store.ListNodes()
-	byID := make(map[string]ManagedNode, len(nodes))
-	for _, node := range nodes {
-		byID[node.ID] = node
-	}
-	return byID
-}
-
 func (s *Service) tagPrefixForImportSource(source string) string {
 	source = strings.TrimSpace(source)
 	if source == "" {
@@ -889,31 +887,6 @@ func (s *Service) sharedTagPrefixForImportSources(sources []string) string {
 	return ""
 }
 
-func mergeImportedNode(existing, incoming ManagedNode) ManagedNode {
-	incoming.State = existing.State
-	incoming.Enabled = existing.Enabled
-	incoming.InPool = existing.InPool
-	incoming.Port = existing.Port
-	incoming.Order = existing.Order
-	incoming.LatencyMs = existing.LatencyMs
-	incoming.CountryCode = existing.CountryCode
-	incoming.CountryName = existing.CountryName
-	incoming.LastError = existing.LastError
-	incoming.LastTestAt = existing.LastTestAt
-	incoming.ConsecutiveFailures = existing.ConsecutiveFailures
-	incoming.CreatedAt = existing.CreatedAt
-	if existing.OriginalName != "" {
-		incoming.OriginalName = existing.OriginalName
-	}
-	if existing.Name != "" {
-		incoming.Name = existing.Name
-	}
-	if existing.TagPrefix != "" {
-		incoming.TagPrefix = existing.TagPrefix
-	}
-	return incoming
-}
-
 func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, error) {
 	job, ok := s.store.GetJob(importID)
 	if !ok {
@@ -941,20 +914,7 @@ func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, er
 		nodes = append(nodes, n)
 	}
 	if len(nodes) == 0 {
-		jobID := randomHex(12)
-		now := time.Now()
-		job = ImportJob{
-			ID:        jobID,
-			Status:    ImportStatusCompleted,
-			Total:     0,
-			NodeIDs:   selectedIDs,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-		if err := s.store.UpsertJob(job); err != nil {
-			return CommitResponse{}, err
-		}
-		return CommitResponse{JobID: jobID}, nil
+		return CommitResponse{}, fmt.Errorf("没有可测试的导入节点")
 	}
 
 	if err := s.store.UpsertNodes(nodes); err != nil {
@@ -965,6 +925,10 @@ func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, er
 	job = ImportJob{
 		ID:        jobID,
 		Status:    ImportStatusRunning,
+		Mode:      job.Mode,
+		Format:    job.Format,
+		TagPrefix: job.TagPrefix,
+		Source:    job.Source,
 		Total:     len(nodes),
 		NodeIDs:   selectedIDs,
 		CreatedAt: time.Now(),

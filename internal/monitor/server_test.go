@@ -35,3 +35,17 @@ func TestHandleFavicon(t *testing.T) {
 		t.Fatalf("unexpected favicon body: %q", body)
 	}
 }
+
+func TestHandleIndexIncludesRefreshProgressUI(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	(&Server{}).handleIndex(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	body := recorder.Body.String()
+	for _, marker := range []string{"easy_proxies_active_refresh_job", "failed_nodes", "refresh-modal"} {
+		if !strings.Contains(body, marker) {
+			t.Fatalf("index is missing refresh UI marker %q", marker)
+		}
+	}
+}

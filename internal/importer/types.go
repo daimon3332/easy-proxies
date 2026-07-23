@@ -276,15 +276,21 @@ type SourceRefreshGroup struct {
 }
 
 type SourceRefreshJob struct {
-	ID         string                 `json:"id"`
-	Status     SourceRefreshJobStatus `json:"status"`
-	TotalURLs  int                    `json:"total_urls"`
-	DoneURLs   int                    `json:"done_urls"`
-	Successful int                    `json:"successful"`
-	Failed     int                    `json:"failed"`
-	PoolCount  int                    `json:"pool_count"`
-	Groups     []SourceRefreshGroup   `json:"groups"`
-	Error      string                 `json:"error,omitempty"`
-	StartedAt  time.Time              `json:"started_at"`
-	UpdatedAt  time.Time              `json:"updated_at"`
+	ID          string                 `json:"id"`
+	Status      SourceRefreshJobStatus `json:"status"`
+	Phase       string                 `json:"phase"`
+	TotalURLs   int                    `json:"total_urls"`
+	DoneURLs    int                    `json:"done_urls"`
+	Successful  int                    `json:"successful"`
+	Failed      int                    `json:"failed"`
+	TotalNodes  int                    `json:"total_nodes"`
+	DoneNodes   int                    `json:"done_nodes"`
+	Passed      int                    `json:"passed"`
+	FailedNodes int                    `json:"failed_nodes"`
+	Promoted    int                    `json:"promoted"`
+	PoolCount   int                    `json:"pool_count"`
+	Groups      []SourceRefreshGroup   `json:"groups"`
+	Error       string                 `json:"error,omitempty"`
+	StartedAt   time.Time              `json:"started_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
 }

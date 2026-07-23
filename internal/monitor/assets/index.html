@@ -188,6 +188,8 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .toast.err{border-left-color:var(--red)}
 .modal{position:fixed;inset:0;background:rgba(20,51,68,.22);display:none;align-items:center;justify-content:center;z-index:20;padding:20px}
 .modal.show{display:flex}
+.modal.refresh-modal{background:transparent;pointer-events:none;align-items:flex-end;justify-content:flex-end;padding:24px}
+.modal.refresh-modal .dialog{pointer-events:auto;max-height:calc(100vh - 48px);overflow:auto}
 .dialog{width:min(430px,100%);background:#fff;border-radius:20px;border:1px solid var(--line);box-shadow:var(--shadow);padding:22px}
 .dialog.wide{width:min(920px,100%)}
 .dialog-back{position:fixed;inset:0;background:rgba(20,51,68,.22);display:flex;align-items:center;justify-content:center;z-index:30;padding:20px}
@@ -203,6 +205,20 @@ pre.log-view{height:100%;max-height:none}
 .checkbox-row{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start}
 .progress{height:9px;background:#e3f2f8;border-radius:999px;overflow:hidden}
 .progress div{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));width:0;transition:.2s ease}
+.refresh-status{display:grid;gap:12px;border:1px solid #bcd0ff;background:#f7faff;border-radius:10px;padding:14px}
+.refresh-status.done{border-color:#a9ddc8;background:#f4fcf8}
+.refresh-status.failed{border-color:#efb8b8;background:#fff7f7}
+.refresh-status-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.refresh-status-head strong{display:block}
+.refresh-stats{display:flex;gap:12px 18px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.refresh-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.refresh-top{display:flex;align-items:center;gap:10px;max-width:360px;border:1px solid #bcd0ff;background:#f7faff;border-radius:10px;padding:8px 12px;color:var(--blue-deep);cursor:pointer;text-align:left}
+.refresh-top .progress{width:74px;height:7px;flex:none}
+.refresh-progress{height:10px;background:#dce8ef;border-radius:6px;overflow:hidden}
+.refresh-progress span{display:block;height:100%;background:var(--green);transition:width .25s ease}
+.refresh-progress span.indeterminate{width:32%;animation:refresh-progress 1.2s ease-in-out infinite}
+.refresh-detail-list{display:grid;gap:12px;max-height:min(56vh,560px);overflow:auto;padding-right:4px}
+@keyframes refresh-progress{0%{transform:translateX(-110%)}100%{transform:translateX(330%)}}
 @media(max-width:980px){
   .app{grid-template-columns:1fr}
   .side{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}
@@ -237,6 +253,7 @@ pre.log-view{height:100%;max-height:none}
   <main class="main">
     <div class="topbar">
       <div class="title"><h1 id="pageTitle">导入节点</h1><p id="pageDesc">支持订阅链接、URI、Base64 和 Clash YAML。</p></div>
+      <div id="globalRefreshStatus"></div>
     </div>
     <section id="view"></section>
   </main>
@@ -270,6 +287,7 @@ pre.log-view{height:100%;max-height:none}
 <script>
 const ACTIVE_IMPORT_JOB_KEY='easy_proxies_active_import_job';
 const ACTIVE_BATCH_JOB_KEY='easy_proxies_active_batch_job';
+const ACTIVE_REFRESH_JOB_KEY='easy_proxies_active_refresh_job';
 const S={
   token:localStorage.getItem('easy_proxies_token')||'',
   page:'import',
@@ -300,8 +318,14 @@ const S={
   lastJob:null,
   activeImportJob:localStorage.getItem(ACTIVE_IMPORT_JOB_KEY)||'',
   activeBatchJob:localStorage.getItem(ACTIVE_BATCH_JOB_KEY)||'',
+  activeRefreshJob:localStorage.getItem(ACTIVE_REFRESH_JOB_KEY)||'',
   importPollingJob:'',
   batchPollingJob:'',
+  refreshPollingJob:'',
+  refreshJob:null,
+  refreshDialogOpen:false,
+  refreshDialogJob:'',
+  refreshPollError:'',
   selected:new Set(),
   poolOrderMode:'country',
   poolSortMode:'port',
@@ -358,8 +382,11 @@ async function api(path,opt={}){
   let data=ct.includes('application/json')?await res.json().catch(()=>({})):await res.text();
   if(typeof data==='string'&&data.trim().startsWith('{')){try{data=JSON.parse(data)}catch(e){}}
   const message=typeof data==='string'?data:(data&&data.error);
-  if(res.status===401){qs('#authModal').classList.add('show');throw new Error(message||'未授权')}
-  if(!res.ok) throw new Error(message||res.statusText);
+  if(res.status===401){
+    qs('#authModal').classList.add('show');
+    const err=new Error(message||'未授权');err.status=res.status;throw err;
+  }
+  if(!res.ok){const err=new Error(message||res.statusText);err.status=res.status;throw err}
   return data;
 }
 async function login(e){
@@ -487,30 +514,13 @@ function openDialog(title, html){
     document.body.appendChild(modal);
   }
   const dialog=qs('#resultDialog')||modal.firstElementChild;
+  S.refreshDialogOpen=false;
+  modal.classList.remove('refresh-modal');
+  dialog.className='dialog';
   dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div><div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn primary" onclick="closeDialog()">确定</button></div>`;
   modal.classList.add('show');
 }
-function openBlockingDialog(title, html){
-  let modal=qs('#resultModal');
-  if(!modal){
-    modal=document.createElement('div');
-    modal.className='modal';
-    modal.id='resultModal';
-    modal.innerHTML='<div class="dialog" id="resultDialog"></div>';
-    document.body.appendChild(modal);
-  }
-  const dialog=qs('#resultDialog')||modal.firstElementChild;
-  dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div>`;
-  modal.classList.add('show');
-}
-function updateBlockingDialog(title, html, done=false){
-  const modal=qs('#resultModal');
-  if(!modal)return openBlockingDialog(title,html);
-  const dialog=qs('#resultDialog')||modal.firstElementChild;
-  dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div>${done?'<div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn primary" onclick="closeDialog()">确定</button></div>':''}`;
-  modal.classList.add('show');
-}
-function closeDialog(){qs('#resultModal')?.classList.remove('show')}
+function closeDialog(){const modal=qs('#resultModal');S.refreshDialogOpen=false;modal?.classList.remove('show','refresh-modal')}
 async function loadLogs(request){
   const data=await api('/api/logs',{signal:request?.signal});
   if(!isCurrentPageRequest(request))return null;
@@ -1317,6 +1327,15 @@ function restoreActiveJobs(){
       toast(err.message,'err');
     });
   }
+  const refreshId=localStorage.getItem(ACTIVE_REFRESH_JOB_KEY);
+  if(refreshId && !S.refreshPollingJob){
+    S.activeRefreshJob=refreshId;
+    if(!S.refreshJob||S.refreshJob.id!==refreshId){
+      S.refreshJob={id:refreshId,status:'running',phase:'waiting',total_urls:0,done_urls:0,total_nodes:0,done_nodes:0,started_at:new Date().toISOString()};
+    }
+    renderRefreshStatusHost();
+    pollRefreshSourceJob(refreshId).catch(handleRefreshPollError);
+  }
 }
 function renderConfig(){
   qs('#view').innerHTML=`<div class="grid">
@@ -1500,6 +1519,7 @@ function renderSettings(){
   const probeTarget=allowedProbeTarget(s.probe_target);
   const blacklistSeconds=durationSeconds(pool.blacklist_duration,600);
   const rotationSeconds=durationSeconds(pool.rotation_interval,120);
+  const refreshing=S.refreshJob?.status==='running'||!!S.activeRefreshJob;
   qs('#view').innerHTML=`<div class="settings-grid">
     <div class="settings-stack">
       <section class="settings-section">
@@ -1568,6 +1588,7 @@ function renderSettings(){
           <span class="pill green">${esc((sub.subscriptions||[]).length)} 个订阅</span>
         </div>
         <div class="settings-section-body">
+          <div id="refreshStatusHost">${refreshStatusHTML(S.refreshJob)}</div>
           <label class="toggle-row"><input id="subEnabled" type="checkbox" ${sub.enabled!==false?'checked':''} style="width:auto"><div><strong>启用自动刷新</strong><span>手动刷新不受这个开关影响。</span></div></label>
           <div class="time-grid">
             <div class="field"><label>天</label><input id="subDays" type="number" min="0" value="${interval.days}"></div>
@@ -1575,14 +1596,14 @@ function renderSettings(){
             <div class="field"><label>分钟</label><input id="subMinutes" type="number" min="0" max="59" value="${interval.minutes}"></div>
           </div>
           <button class="btn secondary block" onclick="saveAutoRefresh()">保存自动刷新设置</button>
-          <button class="btn green block" onclick="refreshAllImportSources()">手动刷新全部订阅来源</button>
+          <button class="btn green block" data-refresh-action onclick="refreshAllImportSources()" ${refreshing?'disabled':''}>手动刷新全部订阅来源</button>
         </div>
       </section>
 
       <section class="settings-section">
         <div class="settings-section-head">
           <div><h2>导入来源</h2><p>查看和刷新已经导入过的订阅或内容来源。</p></div>
-          <button class="btn small danger" onclick="deleteAllImportSources()" ${sources.length?'':'disabled'}>删除全部</button>
+          <button class="btn small danger" data-refresh-action onclick="deleteAllImportSources()" ${sources.length&&!refreshing?'':'disabled'}>删除全部</button>
         </div>
         <div class="settings-section-body">
       ${sources.length?`<div class="stack">${sources.map((src,i)=>`<div class="source-row">
@@ -1595,8 +1616,8 @@ function renderSettings(){
           <div style="word-break:break-all;margin-top:6px"><code class="muted">${esc(importSourceText(src))}</code></div>
           <div class="muted" style="margin-top:6px">更新：${esc(fmtDate(src.updated_at))}</div>
         </div>
-        ${src.mode==='url'&&src.source?`<button class="btn small green" onclick="refreshImportSource(${i})">手动刷新</button>`:''}
-        <button class="btn small danger" onclick="deleteImportSource(${i})">删除</button>
+        ${src.mode==='url'&&src.source?`<button class="btn small green" data-refresh-action onclick="refreshImportSource(${i})" ${refreshing?'disabled':''}>手动刷新</button>`:''}
+        <button class="btn small danger" data-refresh-action onclick="deleteImportSource(${i})" ${refreshing?'disabled':''}>删除</button>
       </div>`).join('')}</div>`:`<div class="empty">还没有导入来源</div>`}
         </div>
       </section>
@@ -1681,44 +1702,156 @@ async function saveAutoRefresh(){
   const body={enabled:qs('#subEnabled').checked,interval:subscriptionInterval(),subscriptions:S.subConfig?.subscriptions||[],refresh:false};
   try{S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify(body)});toast('订阅自动刷新设置已保存');renderSettings()}catch(err){toast(err.message,'err')}
 }
-function renderRefreshSourceJobDialog(job,title,done){
-  const groups=Array.isArray(job?.groups)?job.groups:[];
+function refreshPhaseText(job){
+  const phase=String(job?.phase||'waiting');
+  if(job?.status==='failed'||phase==='failed')return '刷新失败';
+  if(job?.status==='finished'||phase==='finished')return '刷新完成';
+  return {pulling:'正在拉取订阅',testing:'正在测试节点',promoting:'正在加入节点池',waiting:'等待开始'}[phase]||'正在刷新';
+}
+function refreshRowStatusText(status){
+  return {pulling:'拉取节点',testing:'测试节点',promoting:'加入节点池',completed:'完成',failed:'失败',waiting:'等待'}[String(status||'waiting')]||'等待';
+}
+function refreshElapsed(job){
+  const start=new Date(job?.started_at||0).getTime();
+  if(!start)return '0 秒';
+  const terminal=job?.status==='running'?Date.now():new Date(job?.updated_at||Date.now()).getTime();
+  const seconds=Math.max(0,Math.floor((terminal-start)/1000));
+  if(seconds<60)return `${seconds} 秒`;
+  const minutes=Math.floor(seconds/60),remain=seconds%60;
+  return `${minutes} 分 ${remain} 秒`;
+}
+function maskedSubscriptionURL(raw){
+  try{return new URL(String(raw||'')).host||'订阅地址'}catch(e){return '订阅地址'}
+}
+function refreshProgressHTML(job){
+  const total=Number(job?.total_nodes)||0,done=Number(job?.done_nodes)||0;
+  const pct=total?Math.min(100,Math.round(done*100/total)):0;
+  const indeterminate=job?.status==='running'&&!total;
+  return `<div class="refresh-progress"><span class="${indeterminate?'indeterminate':''}" style="${indeterminate?'':`width:${pct}%`}"></span></div>`;
+}
+function refreshNodeProgressText(job){
+  const total=Number(job?.total_nodes)||0;
+  return total?`${Number(job?.done_nodes)||0}/${total}`:'准备中';
+}
+function refreshStatusHTML(job){
+  if(!job)return '';
+  const running=job.status==='running';
+  const cls=job.status==='failed'?'failed':running?'':'done';
+  const pollError=S.refreshPollError?`<span style="color:#b94a48">${esc(S.refreshPollError)}</span>`:'';
+  return `<div class="refresh-status ${cls}">
+    <div class="refresh-status-head"><div><strong>${esc(refreshPhaseText(job))}</strong><span class="muted">已耗时 ${esc(refreshElapsed(job))}</span></div><span class="pill ${job.status==='failed'?'red':running?'amber':'green'}">${running?'后台运行':job.status==='failed'?'失败':'完成'}</span></div>
+    ${refreshProgressHTML(job)}
+    <div class="refresh-stats"><span>链接 ${esc(job.done_urls||0)}/${esc(job.total_urls||0)}</span><span>节点 ${esc(refreshNodeProgressText(job))}</span><span>成功 ${esc(job.passed||0)}</span><span>失败 ${esc(job.failed_nodes||0)}</span><span>入池 ${esc(job.promoted||0)}</span>${pollError}</div>
+    <div class="refresh-actions"><button class="btn small secondary" onclick="openRefreshJobDetails()">查看详情</button></div>
+  </div>`;
+}
+function renderGlobalRefreshStatus(){
+  const host=qs('#globalRefreshStatus');
+  if(!host)return;
+  const job=S.refreshJob;
+  if(!job){host.innerHTML='';return}
+  const total=Number(job.total_nodes)||0,done=Number(job.done_nodes)||0;
+  const pct=total?Math.min(100,Math.round(done*100/total)):0;
+  host.innerHTML=`<button class="refresh-top" onclick="openRefreshJobDetails()"><span><strong>${esc(refreshPhaseText(job))}</strong><span class="muted"> ${esc(total?`${done}/${total}`:'准备中')}</span></span><span class="progress"><div style="width:${pct}%"></div></span></button>`;
+}
+function renderRefreshStatusHost(){
+  const host=qs('#refreshStatusHost');
+  if(host)host.innerHTML=refreshStatusHTML(S.refreshJob);
+  renderGlobalRefreshStatus();
+  if(S.refreshJob?.status==='running')qsa('[data-refresh-action]').forEach(button=>button.disabled=true);
+}
+function renderRefreshJobDialog(job){
+  if(!S.refreshDialogOpen)return;
+  const modal=qs('#resultModal'),dialog=qs('#resultDialog');
+  if(!modal||!dialog)return;
+  modal.classList.add('refresh-modal');
+  dialog.className='dialog wide';
+  if(!job){
+    dialog.innerHTML='<h2>订阅刷新</h2><div class="muted">正在读取任务状态...</div><div class="refresh-actions" style="margin-top:16px"><button class="btn" onclick="closeDialog()">收起</button></div>';
+    modal.classList.add('show');
+    return;
+  }
+  const groups=Array.isArray(job.groups)?job.groups:[];
   const list=groups.map((g,groupIdx)=>{
     const rows=(Array.isArray(g.urls)?g.urls:[]).map((r,urlIdx)=>{
       const raw=String(r.status||'waiting').toLowerCase();
       const cls=raw==='completed'?'green':raw==='failed'?'red':'amber';
-      const statusText=raw==='pulling'?'拉取节点中':raw==='testing'?'测速/入池中':raw==='completed'?'完成':raw==='failed'?'失败':'等待';
-      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>订阅 ${groupIdx+1}-${urlIdx+1}</strong><span class="pill ${cls}">${esc(statusText)}</span></div><div style="word-break:break-all"><code class="muted">${esc(r.url||'')}</code></div><div class="muted">节点 ${esc(r.nodes||0)} · 进度 ${esc(r.done||0)}/${esc(r.total||0)} · 成功 ${esc(r.passed||0)} · 失败 ${esc(r.failed||0)} · 入池 ${esc(r.promoted||0)}</div>${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
+      const progress=raw==='pulling'?'正在获取节点':`进度 ${r.done||0}/${r.total||0} · 成功 ${r.passed||0} · 失败 ${r.failed||0} · 入池 ${r.promoted||0}`;
+      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>订阅 ${groupIdx+1}-${urlIdx+1}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span></div><div class="muted">${esc(maskedSubscriptionURL(r.url))}</div><div class="muted">${esc(progress)}</div>${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
     }).join('');
-    return `<div class="stack" style="gap:10px;margin-bottom:12px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">URL ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
+    return `<div class="stack" style="gap:10px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">链接 ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
   }).join('');
-  updateBlockingDialog(title,`<p>订阅链接 ${esc(job?.done_urls||0)}/${esc(job?.total_urls||0)}，成功 ${esc(job?.successful||0)}，失败 ${esc(job?.failed||0)}，当前入池 ${esc(job?.pool_count||0)}。</p>${list}`,done);
+  dialog.innerHTML=`<h2>${esc(refreshPhaseText(job))}</h2><div class="stack">${refreshProgressHTML(job)}<div class="refresh-stats"><span>链接 ${esc(job.done_urls||0)}/${esc(job.total_urls||0)}</span><span>节点 ${esc(refreshNodeProgressText(job))}</span><span>成功 ${esc(job.passed||0)}</span><span>失败 ${esc(job.failed_nodes||0)}</span><span>入池 ${esc(job.promoted||0)}</span><span>耗时 ${esc(refreshElapsed(job))}</span></div>${job.error?`<div style="color:#b94a48">${esc(job.error)}</div>`:''}<div class="refresh-detail-list">${list}</div></div><div class="refresh-actions" style="margin-top:16px"><button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button></div>`;
+  modal.classList.add('show');
 }
-async function waitRefreshSourceJob(jobId,title){
-  while(true){
-    const job=await api('/api/import/refresh/jobs/'+jobId);
-    renderRefreshSourceJobDialog(job,title||'正在刷新订阅',false);
-    if(job.status==='finished'||job.status==='failed'){
-      return job;
+function openRefreshJobDetails(){
+  const jobID=S.refreshJob?.id||S.activeRefreshJob;
+  if(!jobID){toast('没有刷新任务','err');return}
+  S.refreshDialogJob=jobID;
+  S.refreshDialogOpen=true;
+  renderRefreshJobDialog(S.refreshJob?.id===jobID?S.refreshJob:null);
+}
+function rememberRefreshJob(jobID){
+  S.activeRefreshJob=jobID;
+  localStorage.setItem(ACTIVE_REFRESH_JOB_KEY,jobID);
+  S.refreshJob={id:jobID,status:'running',phase:'waiting',total_urls:0,done_urls:0,total_nodes:0,done_nodes:0,started_at:new Date().toISOString()};
+  S.refreshPollError='';
+  renderRefreshStatusHost();
+}
+async function pollRefreshSourceJob(jobID){
+  if(!jobID||S.refreshPollingJob===jobID)return;
+  S.refreshPollingJob=jobID;
+  let failures=0,last=null;
+  try{
+    while(true){
+      try{
+        last=await api('/api/import/refresh/jobs/'+encodeURIComponent(jobID));
+        failures=0;
+        S.refreshPollError='';
+      }catch(err){
+        if(err.status===401||err.status===404)throw err;
+        failures++;
+        S.refreshPollError=`连接中断，正在重试 ${failures}`;
+        renderRefreshStatusHost();
+        if(S.refreshDialogOpen&&S.refreshDialogJob===jobID)renderRefreshJobDialog(S.refreshJob);
+        await new Promise(resolve=>setTimeout(resolve,Math.min(5000,1000*Math.pow(2,Math.min(failures-1,3)))));
+        continue;
+      }
+      S.refreshJob=last;
+      renderRefreshStatusHost();
+      if(S.refreshDialogOpen&&S.refreshDialogJob===jobID)renderRefreshJobDialog(last);
+      if(last.status==='finished'||last.status==='failed')break;
+      await new Promise(resolve=>setTimeout(resolve,1000));
     }
-    await new Promise(r=>setTimeout(r,500));
+    S.activeRefreshJob='';
+    localStorage.removeItem(ACTIVE_REFRESH_JOB_KEY);
+    toast(last.status==='failed'?'订阅刷新失败':'订阅刷新完成',last.status==='failed'?'err':'');
+    await refresh();
+  }finally{
+    S.refreshPollingJob='';
   }
+}
+function handleRefreshPollError(err){
+  S.activeRefreshJob='';
+  S.refreshPollError='';
+  localStorage.removeItem(ACTIVE_REFRESH_JOB_KEY);
+  if(err.status===404)S.refreshJob=null;
+  renderRefreshStatusHost();
+  toast(err.status===404?'刷新任务已失效':err.message,'err');
+}
+async function startRefreshSource(key){
+  try{
+    const started=await api('/api/import/refresh',{method:'POST',body:JSON.stringify({key:key||''})});
+    if(!started.job_id)throw new Error('启动刷新失败');
+    rememberRefreshJob(started.job_id);
+    openRefreshJobDetails();
+    pollRefreshSourceJob(started.job_id).catch(handleRefreshPollError);
+  }catch(err){openDialog('刷新失败',`<p>${esc(err.message)}</p>`)}
 }
 async function refreshAllImportSources(){
   const sources=(S.importSources||[]).filter(s=>s.mode==='url'&&s.source);
   if(!sources.length){toast('没有可刷新的订阅来源','err');return}
-  let job;
-  try{
-    const started=await api('/api/import/refresh',{method:'POST',body:JSON.stringify({key:''})});
-    job=await waitRefreshSourceJob(started.job_id,'正在刷新订阅');
-  }catch(err){
-    updateBlockingDialog('刷新失败',`<p>${esc(err.message)}</p>`,true);
-    return;
-  }
-  await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadImportSummary()]);
-  renderNav();
-  renderSettings();
-  renderRefreshSourceJobDialog(job,job?.status==='failed'?'刷新失败':'刷新完成',true);
+  await startRefreshSource('');
 }
 async function deleteSubscription(idx){
   const urls=S.subConfig?.subscriptions||[];
@@ -1749,20 +1882,7 @@ async function refreshImportSource(idx){
   const src=(S.importSources||[])[idx];
   const urls=(src?.source||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
   if(!src||src.mode!=='url'||!urls.length){toast('该来源不能刷新','err');return}
-  try{
-    const job=await refreshSubscriptionSource(src,{index:1,total:1});
-    await Promise.all([loadSubscriptionConfig(),loadImportSources(),loadImportSummary()]);
-    renderNav();
-    renderRefreshSourceJobDialog(job,job?.status==='failed'?'刷新失败':'刷新完成',true);
-    renderSettings();
-  }catch(err){
-    updateBlockingDialog('刷新失败',`<p>${esc(err.message)}</p>`,true);
-  }
-}
-async function refreshSubscriptionSource(src,ctx){
-  if(!src||src.mode!=='url'||!src.key)throw new Error('该来源不能刷新');
-  const started=await api('/api/import/refresh',{method:'POST',body:JSON.stringify({key:src.key})});
-  return await waitRefreshSourceJob(started.job_id,'正在刷新订阅');
+  await startRefreshSource(src.key);
 }
 async function removeSubscriptionURLs(urls){
   if(!urls.length)return;

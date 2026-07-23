@@ -312,8 +312,53 @@ func TestFinalizeRefreshJobFailsWhenNoSuccessfulURLs(t *testing.T) {
 	if job.Status != SourceRefreshJobFailed {
 		t.Fatalf("job.Status = %q, want %q", job.Status, SourceRefreshJobFailed)
 	}
+	svc.recalculateRefreshJob(job)
+	if job.Phase != "failed" {
+		t.Fatalf("job.Phase = %q, want failed", job.Phase)
+	}
 	if job.Error != "全部订阅链接都未拉取到节点" {
 		t.Fatalf("job.Error = %q, want default failure message", job.Error)
+	}
+}
+
+func TestApplyImportJobProgress(t *testing.T) {
+	row := SourceRefreshURL{Status: "testing"}
+	applyImportJobProgress(&row, ImportJob{
+		Status:   ImportStatusRunning,
+		Total:    10,
+		Passed:   6,
+		Failed:   4,
+		Promoted: 2,
+	})
+	if row.Status != "promoting" || row.Total != 10 || row.Done != 10 || row.Passed != 6 || row.Failed != 4 || row.Promoted != 2 {
+		t.Fatalf("row = %#v, want live promoting progress", row)
+	}
+}
+
+func TestRecalculateRefreshJobAggregatesNodeProgress(t *testing.T) {
+	svc, _ := newBatchServiceForTest(t, &batchNodeManagerStub{})
+	job := &SourceRefreshJob{
+		Status: SourceRefreshJobRunning,
+		Groups: []SourceRefreshGroup{{URLs: []SourceRefreshURL{
+			{Status: "completed", Total: 10, Done: 10, Passed: 8, Failed: 2, Promoted: 8},
+			{Status: "testing", Total: 5, Done: 3, Passed: 2, Failed: 1},
+		}}},
+	}
+	svc.recalculateRefreshJob(job)
+	if job.Phase != "testing" || job.TotalNodes != 15 || job.DoneNodes != 13 || job.Passed != 10 || job.FailedNodes != 3 || job.Promoted != 8 {
+		t.Fatalf("job = %#v, want aggregated live progress", job)
+	}
+}
+
+func TestStartRefreshSourcesReusesRunningJob(t *testing.T) {
+	svc, _ := newBatchServiceForTest(t, &batchNodeManagerStub{})
+	svc.refreshJobs["active"] = &SourceRefreshJob{ID: "active", Status: SourceRefreshJobRunning}
+	jobID, err := svc.StartRefreshSources("")
+	if err != nil {
+		t.Fatalf("StartRefreshSources() error = %v", err)
+	}
+	if jobID != "active" {
+		t.Fatalf("jobID = %q, want active", jobID)
 	}
 }
 

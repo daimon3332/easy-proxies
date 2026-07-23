@@ -112,6 +112,9 @@ type sourceRefreshTarget struct {
 }
 
 func (s *Service) StartRefreshSources(key string) (string, error) {
+	if jobID := s.activeRefreshJobID(); jobID != "" {
+		return jobID, nil
+	}
 	targets, err := s.sourceRefreshTargets(key)
 	if err != nil {
 		return "", err
@@ -141,6 +144,12 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 	}
 	s.recalculateRefreshJob(job)
 	s.refreshJobsMu.Lock()
+	for id, existing := range s.refreshJobs {
+		if existing.Status == SourceRefreshJobRunning {
+			s.refreshJobsMu.Unlock()
+			return id, nil
+		}
+	}
 	s.refreshJobs[jobID] = job
 	for id, existing := range s.refreshJobs {
 		if existing.Status != SourceRefreshJobRunning && time.Since(existing.UpdatedAt) > 10*time.Minute {
@@ -150,6 +159,17 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 	s.refreshJobsMu.Unlock()
 	go s.runRefreshJob(jobID, targets)
 	return jobID, nil
+}
+
+func (s *Service) activeRefreshJobID() string {
+	s.refreshJobsMu.RLock()
+	defer s.refreshJobsMu.RUnlock()
+	for id, job := range s.refreshJobs {
+		if job.Status == SourceRefreshJobRunning {
+			return id
+		}
+	}
+	return ""
 }
 
 func (s *Service) GetRefreshJob(jobID string) (SourceRefreshJob, bool) {
@@ -294,11 +314,20 @@ func (s *Service) runRefreshJob(jobID string, targets []sourceRefreshTarget) {
 				continue
 			}
 
-			importJob, waitErr := s.waitImportJob(commit.JobID)
-			if waitErr != nil || importJob.Status == ImportStatusCanceled {
+			importJob, waitErr := s.waitImportJob(commit.JobID, func(importJob ImportJob) {
+				s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+					if groupIdx >= len(job.Groups) || urlIdx >= len(job.Groups[groupIdx].URLs) {
+						return
+					}
+					applyImportJobProgress(&job.Groups[groupIdx].URLs[urlIdx], importJob)
+				})
+			})
+			if waitErr != nil || importJob.Status == ImportStatusCanceled || importJob.Status == ImportStatusFailed {
 				msg := "刷新任务被终止"
 				if waitErr != nil {
 					msg = waitErr.Error()
+				} else if importJob.Status == ImportStatusFailed {
+					msg = "全部节点测速失败"
 				} else if strings.TrimSpace(importJob.Error) != "" {
 					msg = importJob.Error
 				}
@@ -475,12 +504,17 @@ func (s *Service) parseRefreshSubscriptionURLOnce(tagPrefix, subURL string, time
 	}, nil
 }
 
-func (s *Service) waitImportJob(jobID string) (ImportJob, error) {
+func (s *Service) waitImportJob(jobID string, onProgress func(ImportJob)) (ImportJob, error) {
 	deadline := time.Now().Add(refreshJobMaxWait)
+	var last ImportJob
 	for time.Now().Before(deadline) {
 		job, ok := s.store.GetJob(jobID)
 		if !ok {
 			return ImportJob{}, fmt.Errorf("导入任务 %s 不存在", jobID)
+		}
+		last = job
+		if onProgress != nil {
+			onProgress(job)
 		}
 		switch job.Status {
 		case ImportStatusCompleted, ImportStatusFailed, ImportStatusCanceled:
@@ -488,7 +522,23 @@ func (s *Service) waitImportJob(jobID string) (ImportJob, error) {
 		}
 		time.Sleep(refreshJobPollInterval)
 	}
-	return ImportJob{}, fmt.Errorf("等待导入任务 %s 超时", jobID)
+	return last, fmt.Errorf("等待导入任务 %s 超时", jobID)
+}
+
+func applyImportJobProgress(row *SourceRefreshURL, job ImportJob) {
+	if row == nil {
+		return
+	}
+	row.Total = job.Total
+	row.Done = min(job.Total, job.Passed+job.Failed)
+	row.Passed = job.Passed
+	row.Failed = job.Failed
+	row.Promoted = job.Promoted
+	row.Status = "testing"
+	if job.Status == ImportStatusRunning && job.Total > 0 && row.Done >= job.Total {
+		row.Status = "promoting"
+	}
+	row.UpdatedAt = time.Now()
 }
 
 func (s *Service) recalculateRefreshJob(job *SourceRefreshJob) {
@@ -499,6 +549,19 @@ func (s *Service) recalculateRefreshJob(job *SourceRefreshJob) {
 	job.DoneURLs = 0
 	job.Successful = 0
 	job.Failed = 0
+	job.TotalNodes = 0
+	job.DoneNodes = 0
+	job.Passed = 0
+	job.FailedNodes = 0
+	job.Promoted = 0
+	switch job.Status {
+	case SourceRefreshJobFinished:
+		job.Phase = "finished"
+	case SourceRefreshJobFailed:
+		job.Phase = "failed"
+	default:
+		job.Phase = "waiting"
+	}
 	for gi := range job.Groups {
 		group := &job.Groups[gi]
 		group.Total = len(group.URLs)
@@ -507,6 +570,25 @@ func (s *Service) recalculateRefreshJob(job *SourceRefreshJob) {
 		group.Failed = 0
 		for _, row := range group.URLs {
 			job.TotalURLs++
+			job.TotalNodes += row.Total
+			job.DoneNodes += min(row.Total, row.Done)
+			job.Passed += row.Passed
+			job.FailedNodes += row.Failed
+			job.Promoted += row.Promoted
+			if job.Status == SourceRefreshJobRunning {
+				switch row.Status {
+				case "promoting":
+					job.Phase = "promoting"
+				case "testing":
+					if job.Phase != "promoting" {
+						job.Phase = "testing"
+					}
+				case "pulling":
+					if job.Phase == "waiting" {
+						job.Phase = "pulling"
+					}
+				}
+			}
 			switch row.Status {
 			case "completed":
 				group.Done++
@@ -541,8 +623,10 @@ func (s *Service) finalizeRefreshJob(job *SourceRefreshJob) {
 		return
 	}
 	job.Status = SourceRefreshJobFinished
+	job.Phase = "finished"
 	if job.TotalURLs > 0 && job.Successful == 0 {
 		job.Status = SourceRefreshJobFailed
+		job.Phase = "failed"
 		job.Error = "全部订阅链接都未拉取到节点"
 		return
 	}

@@ -732,10 +732,17 @@ func buildShadowsocksOptions(u *url.URL) (option.ShadowsocksOutboundOptions, err
 	}
 
 	query := u.Query()
-	if plugin := query.Get("plugin"); plugin != "" {
-		// sing-box library mode doesn't support external plugins like v2ray-plugin
-		// These require the plugin binary to be installed separately
-		return option.ShadowsocksOutboundOptions{}, fmt.Errorf("shadowsocks plugin not supported: %s (requires external binary)", plugin)
+	if plugin := strings.ToLower(strings.TrimSpace(query.Get("plugin"))); plugin != "" {
+		switch plugin {
+		case "obfs", "obfs-local":
+			opts.Plugin = "obfs-local"
+			opts.PluginOptions = query.Get("plugin_opts")
+		default:
+			return option.ShadowsocksOutboundOptions{}, fmt.Errorf("unsupported shadowsocks plugin: %s", plugin)
+		}
+	}
+	if enabled, _ := strconv.ParseBool(query.Get("udp-over-tcp")); enabled {
+		opts.UDPOverTCP = &option.UDPOverTCPOptions{Enabled: true}
 	}
 
 	return opts, nil

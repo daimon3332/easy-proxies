@@ -293,7 +293,7 @@ const S={
   page:'import',
   importKind:'sub_url',
   importText:'',
-  tagPrefix:'local',
+  tagPrefix:'',
   importAutoPromote:localStorage.getItem('easy_proxies_import_auto_promote')!=='0',
   importSummary:null,
   nodes:[],
@@ -1150,7 +1150,7 @@ function renderImport(){
           <button class="btn green format-main" onclick="directImport()">导入并测试</button>
         </div>
         <div class="meta"><span class="pill green">${esc(importKindLabel())}</span><span class="pill">${S.importAutoPromote?'成功节点自动加入节点池':'成功节点进入候选池'}</span><span class="pill red">失败节点保留待重测</span></div>
-        <div class="field"><label>Tag 前缀</label><input id="tagPrefix" value="local" oninput="S.tagPrefix=this.value"></div>
+        <div class="field"><label>Tag 前缀</label><input id="tagPrefix" value="" placeholder="例如：Glados" oninput="S.tagPrefix=this.value"></div>
         <label class="row"><input id="importAutoPromote" type="checkbox" ${S.importAutoPromote?'checked':''} style="width:auto" onchange="setImportAutoPromote(this.checked)"> 测速成功后自动加入节点池 <span class="muted">默认开启；关闭后成功节点进入候选节点。</span></label>
         ${importFields()}
         <div class="progress"><div id="jobBar"></div></div>
@@ -1171,7 +1171,7 @@ function renderImport(){
        ${renderGeneratedPorts(S.portPreview||[],Number(dashboard.in_pool)||0)}
     </div></div>
   </div>`;
-  qs('#tagPrefix').value=S.tagPrefix||'local';
+  qs('#tagPrefix').value=S.tagPrefix||'';
   if(qs('#importContent'))qs('#importContent').value=S.importText||'';
 }
 function renderGeneratedPorts(ports,total=ports.length){
@@ -1214,7 +1214,7 @@ function importFields(){
   return `<div class="field"><label>${esc(importInputLabel())}</label><textarea id="importContent" placeholder="${esc(importPlaceholder())}" oninput="S.importText=this.value"></textarea></div>`;
 }
 function importPayload(){
-  S.tagPrefix=qs('#tagPrefix')?.value||'local';
+  S.tagPrefix=(qs('#tagPrefix')?.value||'').trim();
   S.importText=qs('#importContent')?.value||'';
   const body={mode:S.importKind==='sub_url'?'url':'content',tag_prefix:S.tagPrefix};
   if(body.mode==='url')body.url=S.importText.trim();else body.content=S.importText.trim();
@@ -1223,6 +1223,11 @@ function importPayload(){
 async function directImport(){
   try{
     const body=importPayload();
+    if(!body.tag_prefix){
+      openDialog('需要填写 Tag 前缀','<p>请先填写 Tag 前缀，再导入并测速节点。</p>');
+      requestAnimationFrame(()=>qs('#tagPrefix')?.focus());
+      return;
+    }
     if(S.importKind==='sub_url')return await importSubscriptionURLs(body);
     if(body.mode==='content'&&!body.content){toast('订阅内容不能为空','err');return}
     await importOne(body, importKindLabel());

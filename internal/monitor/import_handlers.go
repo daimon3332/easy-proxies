@@ -200,6 +200,11 @@ func (s *Server) handleImportParse(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]string{"error": "请求格式错误"})
 		return
 	}
+	if strings.TrimSpace(req.TagPrefix) == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "Tag 前缀不能为空"})
+		return
+	}
 	resp, err := s.importSvc.Parse(req)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

@@ -836,6 +836,7 @@ type clashProxy struct {
 	SNI               string                 `yaml:"sni"`
 	Flow              string                 `yaml:"flow"`
 	UDP               flexBool               `yaml:"udp"`
+	UDPOverTCP        flexBool               `yaml:"udp-over-tcp"`
 	WSOpts            *clashWSOptions        `yaml:"ws-opts"`
 	GrpcOpts          *clashGrpcOptions      `yaml:"grpc-opts"`
 	RealityOpts       *clashRealityOptions   `yaml:"reality-opts"`
@@ -1044,9 +1045,47 @@ func buildAnyTLSURI(p clashProxy) string {
 }
 
 func buildShadowsocksURI(p clashProxy) string {
-	// Encode method:password in base64
+	params := url.Values{}
+	plugin := strings.ToLower(strings.TrimSpace(p.Plugin))
+	if plugin == "obfs" {
+		plugin = "obfs-local"
+	}
+	if plugin != "" {
+		params.Set("plugin", plugin)
+		if plugin == "obfs-local" {
+			pluginOpts := make([]string, 0, 2)
+			if mode := clashPluginOption(p.PluginOpts, "mode"); mode != "" {
+				pluginOpts = append(pluginOpts, "obfs="+mode)
+			}
+			if host := clashPluginOption(p.PluginOpts, "host"); host != "" {
+				pluginOpts = append(pluginOpts, "obfs-host="+host)
+			}
+			if len(pluginOpts) > 0 {
+				params.Set("plugin_opts", strings.Join(pluginOpts, ";"))
+			}
+		}
+	}
+	if p.UDPOverTCP {
+		params.Set("udp-over-tcp", "1")
+	}
+
 	userInfo := base64.StdEncoding.EncodeToString([]byte(p.Cipher + ":" + p.Password))
-	return fmt.Sprintf("ss://%s@%s:%d#%s", userInfo, p.Server, int(p.Port), url.QueryEscape(p.Name))
+	query := ""
+	if len(params) > 0 {
+		query = "?" + params.Encode()
+	}
+	return fmt.Sprintf("ss://%s@%s:%d%s#%s", userInfo, p.Server, int(p.Port), query, url.QueryEscape(p.Name))
+}
+
+func clashPluginOption(options map[string]interface{}, key string) string {
+	if options == nil {
+		return ""
+	}
+	value, ok := options[key]
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
 }
 
 func buildHysteria2URI(p clashProxy) string {

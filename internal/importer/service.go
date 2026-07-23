@@ -636,11 +636,11 @@ func (s *Service) finalizeRefreshJob(job *SourceRefreshJob) {
 func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 	req.TagPrefix = strings.TrimSpace(req.TagPrefix)
 	req.URL = strings.TrimSpace(req.URL)
-	if req.TagPrefix == "" {
-		req.TagPrefix = "local"
-	}
 	if req.Mode != "url" && req.Mode != "content" {
 		return ParseResponse{}, fmt.Errorf("mode 必须为 url 或 content")
+	}
+	if req.TagPrefix == "" {
+		return ParseResponse{}, fmt.Errorf("Tag 前缀不能为空")
 	}
 
 	type parsedNode struct {

@@ -533,6 +533,13 @@ func TestCommitRejectsNonParsedNodes(t *testing.T) {
 	}
 }
 
+func TestParseRejectsEmptyTagPrefix(t *testing.T) {
+	svc, _ := newBatchServiceForTest(t, &batchNodeManagerStub{})
+	if _, err := svc.Parse(ParseRequest{Mode: "content", Content: "ss://example"}); err == nil {
+		t.Fatal("Parse() should reject an empty tag prefix")
+	}
+}
+
 func TestListAndDeleteImportSources(t *testing.T) {
 	mgr := &batchNodeManagerStub{}
 	svc, store := newBatchServiceForTest(t, mgr)

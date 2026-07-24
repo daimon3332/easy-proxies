@@ -124,6 +124,10 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 - [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies) — 上游專案
 - [SagerNet/sing-box](https://github.com/SagerNet/sing-box) — 代理平台與協定實作
 
+## 🔗 友情連結
+
+- [linux.do](https://linux.do)：**學AI，就上L站！！！**
+
 ## 授權條款
 
 本專案採用 [MIT License](./LICENSE)，並保留對上游專案及其 MIT 授權程式碼的歸屬說明。

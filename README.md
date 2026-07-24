@@ -129,6 +129,10 @@ The user guide covers startup errors, missing ports, browser-saved import option
 - [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies) — upstream project
 - [SagerNet/sing-box](https://github.com/SagerNet/sing-box) — proxy platform and protocol implementation
 
+## 🔗 Community
+
+- [linux.do](https://linux.do): **Learn AI at L-Site!!!**
+
 ## License
 
 Distributed under the [MIT License](./LICENSE). This project retains attribution for the upstream project and MIT-licensed portions on which it is based.

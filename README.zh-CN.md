@@ -124,6 +124,10 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 - [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies) — 上游项目
 - [SagerNet/sing-box](https://github.com/SagerNet/sing-box) — 代理平台与协议实现
 
+## 🔗 友情链接
+
+- [linux.do](https://linux.do)：**学AI，上L站！！！**
+
 ## 许可证
 
 本项目采用 [MIT License](./LICENSE)，并保留对上游项目及其 MIT 许可代码的归属说明。

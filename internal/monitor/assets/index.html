@@ -1612,13 +1612,13 @@ function renderSettings(){
             <div class="field"><label>分钟</label><input id="subMinutes" type="number" min="0" max="59" value="${interval.minutes}"></div>
           </div>
           <button class="btn secondary block" onclick="saveAutoRefresh()">保存自动刷新设置</button>
-          <button class="btn green block" data-refresh-action onclick="refreshAllImportSources()" ${refreshing?'disabled':''}>手动刷新全部订阅来源</button>
+          <button class="btn green block" data-refresh-action onclick="refreshAllImportSources()" ${refreshing?'disabled':''}>重新检测全部导入来源</button>
         </div>
       </section>
 
       <section class="settings-section">
         <div class="settings-section-head">
-          <div><h2>导入来源</h2><p>查看和刷新已经导入过的订阅或内容来源。</p></div>
+          <div><h2>导入来源</h2><p>按 Tag 重新拉取订阅或检测已保存的本地导入节点。</p></div>
           <button class="btn small danger" data-refresh-action onclick="deleteAllImportSources()" ${sources.length&&!refreshing?'':'disabled'}>删除全部</button>
         </div>
         <div class="settings-section-body">
@@ -1632,7 +1632,7 @@ function renderSettings(){
           <div style="word-break:break-all;margin-top:6px"><code class="muted">${esc(importSourceText(src))}</code></div>
           <div class="muted" style="margin-top:6px">更新：${esc(fmtDate(src.updated_at))}</div>
         </div>
-        ${src.mode==='url'&&src.source?`<button class="btn small green" data-refresh-action onclick="refreshImportSource(${i})" ${refreshing?'disabled':''}>手动刷新</button>`:''}
+        ${src.refreshable?`<button class="btn small green" data-refresh-action onclick="refreshImportSource(${i})" ${refreshing?'disabled':''}>重新检测</button>`:''}
         <button class="btn small danger" data-refresh-action onclick="deleteImportSource(${i})" ${refreshing?'disabled':''}>删除</button>
       </div>`).join('')}</div>`:`<div class="empty">还没有导入来源</div>`}
         </div>
@@ -1720,8 +1720,8 @@ async function saveAutoRefresh(){
 }
 function refreshPhaseText(job){
   const phase=String(job?.phase||'waiting');
-  if(job?.status==='failed'||phase==='failed')return '刷新失败';
-  if(job?.status==='finished'||phase==='finished')return '刷新完成';
+  if(job?.status==='failed'||phase==='failed')return '重新检测失败';
+  if(job?.status==='finished'||phase==='finished')return '重新检测完成';
   return {pulling:'正在拉取订阅',testing:'正在测试节点',promoting:'正在加入节点池',waiting:'等待开始'}[phase]||'正在刷新';
 }
 function refreshRowStatusText(status){
@@ -1757,7 +1757,7 @@ function refreshStatusHTML(job){
   return `<div class="refresh-status ${cls}">
     <div class="refresh-status-head"><div><strong>${esc(refreshPhaseText(job))}</strong><span class="muted">已耗时 ${esc(refreshElapsed(job))}</span></div><span class="pill ${job.status==='failed'?'red':running?'amber':'green'}">${running?'后台运行':job.status==='failed'?'失败':'完成'}</span></div>
     ${refreshProgressHTML(job)}
-    <div class="refresh-stats"><span>链接 ${esc(job.done_urls||0)}/${esc(job.total_urls||0)}</span><span>节点 ${esc(refreshNodeProgressText(job))}</span><span>成功 ${esc(job.passed||0)}</span><span>失败 ${esc(job.failed_nodes||0)}</span><span>入池 ${esc(job.promoted||0)}</span>${pollError}</div>
+    <div class="refresh-stats"><span>来源 ${esc(job.done_urls||0)}/${esc(job.total_urls||0)}</span><span>节点 ${esc(refreshNodeProgressText(job))}</span><span>成功 ${esc(job.passed||0)}</span><span>失败 ${esc(job.failed_nodes||0)}</span><span>入池 ${esc(job.promoted||0)}</span>${pollError}</div>
     <div class="refresh-actions"><button class="btn small secondary" onclick="openRefreshJobDetails()">查看详情</button></div>
   </div>`;
 }
@@ -1783,7 +1783,7 @@ function renderRefreshJobDialog(job){
   modal.classList.add('refresh-modal');
   dialog.className='dialog wide';
   if(!job){
-    dialog.innerHTML='<h2>订阅刷新</h2><div class="muted">正在读取任务状态...</div><div class="refresh-actions" style="margin-top:16px"><button class="btn" onclick="closeDialog()">收起</button></div>';
+    dialog.innerHTML='<h2>重新检测导入来源</h2><div class="muted">正在读取任务状态...</div><div class="refresh-actions" style="margin-top:16px"><button class="btn" onclick="closeDialog()">收起</button></div>';
     modal.classList.add('show');
     return;
   }
@@ -1793,11 +1793,14 @@ function renderRefreshJobDialog(job){
       const raw=String(r.status||'waiting').toLowerCase();
       const cls=raw==='completed'?'green':raw==='failed'?'red':'amber';
       const progress=raw==='pulling'?'正在获取节点':`进度 ${r.done||0}/${r.total||0} · 成功 ${r.passed||0} · 失败 ${r.failed||0} · 入池 ${r.promoted||0}`;
-      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>订阅 ${groupIdx+1}-${urlIdx+1}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span></div><div class="muted">${esc(maskedSubscriptionURL(r.url))}</div><div class="muted">${esc(progress)}</div>${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
+      const local=r.kind==='content';
+      const title=local?(r.label||'本地内容'):`订阅 ${groupIdx+1}-${urlIdx+1}`;
+      const source=local?'使用已保存的节点重新检测':maskedSubscriptionURL(r.url);
+      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>${esc(title)}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span></div><div class="muted">${esc(source)}</div><div class="muted">${esc(progress)}</div>${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
     }).join('');
-    return `<div class="stack" style="gap:10px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">链接 ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
+    return `<div class="stack" style="gap:10px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">来源 ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
   }).join('');
-  dialog.innerHTML=`<h2>${esc(refreshPhaseText(job))}</h2><div class="stack">${refreshProgressHTML(job)}<div class="refresh-stats"><span>链接 ${esc(job.done_urls||0)}/${esc(job.total_urls||0)}</span><span>节点 ${esc(refreshNodeProgressText(job))}</span><span>成功 ${esc(job.passed||0)}</span><span>失败 ${esc(job.failed_nodes||0)}</span><span>入池 ${esc(job.promoted||0)}</span><span>耗时 ${esc(refreshElapsed(job))}</span></div>${job.error?`<div style="color:#b94a48">${esc(job.error)}</div>`:''}<div class="refresh-detail-list">${list}</div></div><div class="refresh-actions" style="margin-top:16px"><button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button></div>`;
+  dialog.innerHTML=`<h2>${esc(refreshPhaseText(job))}</h2><div class="stack">${refreshProgressHTML(job)}<div class="refresh-stats"><span>来源 ${esc(job.done_urls||0)}/${esc(job.total_urls||0)}</span><span>节点 ${esc(refreshNodeProgressText(job))}</span><span>成功 ${esc(job.passed||0)}</span><span>失败 ${esc(job.failed_nodes||0)}</span><span>入池 ${esc(job.promoted||0)}</span><span>耗时 ${esc(refreshElapsed(job))}</span></div>${job.error?`<div style="color:#b94a48">${esc(job.error)}</div>`:''}<div class="refresh-detail-list">${list}</div></div><div class="refresh-actions" style="margin-top:16px"><button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button></div>`;
   modal.classList.add('show');
 }
 function openRefreshJobDetails(){
@@ -1841,7 +1844,7 @@ async function pollRefreshSourceJob(jobID){
     }
     S.activeRefreshJob='';
     localStorage.removeItem(ACTIVE_REFRESH_JOB_KEY);
-    toast(last.status==='failed'?'订阅刷新失败':'订阅刷新完成',last.status==='failed'?'err':'');
+    toast(last.status==='failed'?'重新检测失败':'重新检测完成',last.status==='failed'?'err':'');
     await refresh();
   }finally{
     S.refreshPollingJob='';
@@ -1865,8 +1868,8 @@ async function startRefreshSource(key){
   }catch(err){openDialog('刷新失败',`<p>${esc(err.message)}</p>`)}
 }
 async function refreshAllImportSources(){
-  const sources=(S.importSources||[]).filter(s=>s.mode==='url'&&s.source);
-  if(!sources.length){toast('没有可刷新的订阅来源','err');return}
+  const sources=(S.importSources||[]).filter(s=>s.refreshable);
+  if(!sources.length){toast('没有带 Tag 的导入来源','err');return}
   await startRefreshSource('');
 }
 async function deleteSubscription(idx){
@@ -1896,8 +1899,7 @@ async function deleteImportSource(idx){
 }
 async function refreshImportSource(idx){
   const src=(S.importSources||[])[idx];
-  const urls=(src?.source||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-  if(!src||src.mode!=='url'||!urls.length){toast('该来源不能刷新','err');return}
+  if(!src||!src.refreshable){toast('该来源没有可用的 Tag','err');return}
   await startRefreshSource(src.key);
 }
 async function removeSubscriptionURLs(urls){

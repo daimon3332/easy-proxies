@@ -106,9 +106,11 @@ func WithHTTPClient(c *http.Client) Option {
 }
 
 type sourceRefreshTarget struct {
-	Key       string
-	TagPrefix string
-	URLs      []string
+	Key          string
+	TagPrefix    string
+	URLs         []string
+	LocalNodeIDs []string
+	LocalFormats []string
 }
 
 func (s *Service) StartRefreshSources(key string) (string, error) {
@@ -131,12 +133,24 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 		group := SourceRefreshGroup{
 			Key:       target.Key,
 			TagPrefix: target.TagPrefix,
-			URLs:      make([]SourceRefreshURL, 0, len(target.URLs)),
+			URLs:      make([]SourceRefreshURL, 0, len(target.URLs)+1),
 		}
 		for _, rawURL := range target.URLs {
 			group.URLs = append(group.URLs, SourceRefreshURL{
 				URL:       rawURL,
+				Kind:      "url",
+				Label:     "订阅链接",
 				Status:    "waiting",
+				UpdatedAt: time.Now(),
+			})
+		}
+		if len(target.LocalNodeIDs) > 0 {
+			group.URLs = append(group.URLs, SourceRefreshURL{
+				Kind:      "content",
+				Label:     localRefreshLabel(target.LocalFormats),
+				Status:    "waiting",
+				Nodes:     len(target.LocalNodeIDs),
+				Total:     len(target.LocalNodeIDs),
 				UpdatedAt: time.Now(),
 			})
 		}
@@ -190,39 +204,92 @@ func (s *Service) GetRefreshJob(jobID string) (SourceRefreshJob, bool) {
 
 func (s *Service) sourceRefreshTargets(key string) ([]sourceRefreshTarget, error) {
 	key = strings.TrimSpace(key)
-	sources, err := s.ListImportSources()
-	if err != nil {
-		return nil, err
+	nodes := s.store.ListNodes()
+	selectedTags := make(map[string]struct{})
+	if key != "" {
+		for _, node := range nodes {
+			tagPrefix := strings.TrimSpace(node.TagPrefix)
+			if tagPrefix != "" && importSourceKey(node) == key {
+				selectedTags[tagPrefix] = struct{}{}
+			}
+		}
+		if tagPrefix, ok := strings.CutPrefix(key, "tag:"); ok && strings.TrimSpace(tagPrefix) != "" {
+			selectedTags[strings.TrimSpace(tagPrefix)] = struct{}{}
+		}
 	}
-	targets := make([]sourceRefreshTarget, 0, len(sources))
-	for _, source := range sources {
-		if key != "" && source.Key != key {
-			continue
-		}
-		if !source.Refreshable {
-			continue
-		}
-		urls := splitSubscriptionURLs(source.Source)
-		if len(urls) == 0 {
-			continue
-		}
-		tagPrefix := strings.TrimSpace(source.TagPrefix)
+
+	targetByTag := make(map[string]*sourceRefreshTarget)
+	urlSeen := make(map[string]map[string]struct{})
+	formatSeen := make(map[string]map[string]struct{})
+	for _, node := range nodes {
+		tagPrefix := strings.TrimSpace(node.TagPrefix)
 		if tagPrefix == "" {
-			tagPrefix = "local"
+			continue
 		}
-		targets = append(targets, sourceRefreshTarget{
-			Key:       source.Key,
-			TagPrefix: tagPrefix,
-			URLs:      urls,
-		})
+		if key != "" {
+			if _, ok := selectedTags[tagPrefix]; !ok {
+				continue
+			}
+		}
+		target := targetByTag[tagPrefix]
+		if target == nil {
+			target = &sourceRefreshTarget{Key: "tag:" + tagPrefix, TagPrefix: tagPrefix}
+			targetByTag[tagPrefix] = target
+			urlSeen[tagPrefix] = make(map[string]struct{})
+			formatSeen[tagPrefix] = make(map[string]struct{})
+		}
+		source := strings.TrimSpace(node.ImportSource)
+		if node.ImportMode == "url" && source != "" {
+			for _, rawURL := range splitSubscriptionURLs(source) {
+				if _, exists := urlSeen[tagPrefix][rawURL]; exists {
+					continue
+				}
+				urlSeen[tagPrefix][rawURL] = struct{}{}
+				target.URLs = append(target.URLs, rawURL)
+			}
+			continue
+		}
+		target.LocalNodeIDs = append(target.LocalNodeIDs, node.ID)
+		format := strings.TrimSpace(node.ImportFormat)
+		if format != "" {
+			if _, exists := formatSeen[tagPrefix][format]; !exists {
+				formatSeen[tagPrefix][format] = struct{}{}
+				target.LocalFormats = append(target.LocalFormats, format)
+			}
+		}
 	}
+
+	targets := make([]sourceRefreshTarget, 0, len(targetByTag))
+	for _, target := range targetByTag {
+		sort.Strings(target.URLs)
+		sort.Strings(target.LocalNodeIDs)
+		sort.Strings(target.LocalFormats)
+		targets = append(targets, *target)
+	}
+	sort.Slice(targets, func(i, j int) bool { return targets[i].TagPrefix < targets[j].TagPrefix })
 	if len(targets) == 0 {
 		if key != "" {
-			return nil, fmt.Errorf("未找到可刷新的订阅来源")
+			return nil, fmt.Errorf("未找到可重新检测的导入来源")
 		}
-		return nil, fmt.Errorf("没有可刷新的订阅来源")
+		return nil, fmt.Errorf("没有带 Tag 的导入来源")
 	}
 	return targets, nil
+}
+
+func localRefreshLabel(formats []string) string {
+	if len(formats) != 1 {
+		return "本地内容"
+	}
+	switch formats[0] {
+	case "base64":
+		return "Base64"
+	case "clash_yaml":
+		return "Clash YAML"
+	case "uri_list":
+		return "URI 列表"
+	default:
+		return "本地内容"
+	}
 }
 
 func (s *Service) runRefreshJob(jobID string, targets []sourceRefreshTarget) {
@@ -372,12 +439,102 @@ func (s *Service) runRefreshJob(jobID string, targets []sourceRefreshTarget) {
 				row.UpdatedAt = time.Now()
 			})
 		}
+
+		if len(target.LocalNodeIDs) > 0 {
+			rowIdx := len(target.URLs)
+			nodeIDs := s.existingLocalRefreshNodeIDs(target)
+			s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+				if groupIdx >= len(job.Groups) || rowIdx >= len(job.Groups[groupIdx].URLs) {
+					return
+				}
+				row := &job.Groups[groupIdx].URLs[rowIdx]
+				row.Status = "testing"
+				row.Error = ""
+				row.Nodes = len(nodeIDs)
+				row.Total = len(nodeIDs)
+				row.Done = 0
+				row.Passed = 0
+				row.Failed = 0
+				row.Promoted = 0
+				row.UpdatedAt = time.Now()
+			})
+			if len(nodeIDs) == 0 {
+				s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+					row := &job.Groups[groupIdx].URLs[rowIdx]
+					row.Status = "failed"
+					row.Error = "该 Tag 下没有可重新检测的本地节点"
+					row.UpdatedAt = time.Now()
+				})
+				continue
+			}
+
+			testJobID, err := s.StartBatchTest(BatchTestRequest{
+				NodeIDs:       nodeIDs,
+				Retest:        true,
+				PromotePassed: true,
+				AutoReload:    true,
+			})
+			if err != nil {
+				s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+					row := &job.Groups[groupIdx].URLs[rowIdx]
+					row.Status = "failed"
+					row.Error = err.Error()
+					row.UpdatedAt = time.Now()
+				})
+				continue
+			}
+
+			testJob, waitErr := s.waitTestJob(testJobID, func(testJob TestJob) {
+				s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+					if groupIdx >= len(job.Groups) || rowIdx >= len(job.Groups[groupIdx].URLs) {
+						return
+					}
+					applyTestJobProgress(&job.Groups[groupIdx].URLs[rowIdx], testJob)
+				})
+			})
+			failed := waitErr != nil || testJob.Status == TestJobCanceled || testJob.Status == TestJobFailed
+			s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
+				if groupIdx >= len(job.Groups) || rowIdx >= len(job.Groups[groupIdx].URLs) {
+					return
+				}
+				row := &job.Groups[groupIdx].URLs[rowIdx]
+				applyTestJobProgress(row, testJob)
+				row.Done = row.Total
+				row.Status = "completed"
+				if failed {
+					row.Status = "failed"
+					if waitErr != nil {
+						row.Error = waitErr.Error()
+					} else if strings.TrimSpace(testJob.Error) != "" {
+						row.Error = testJob.Error
+					} else {
+						row.Error = "重新检测任务被终止"
+					}
+				}
+				row.UpdatedAt = time.Now()
+			})
+		}
 	}
 
 	s.updateRefreshJob(jobID, func(job *SourceRefreshJob) {
 		s.finalizeRefreshJob(job)
 		job.UpdatedAt = time.Now()
 	})
+}
+
+func (s *Service) existingLocalRefreshNodeIDs(target sourceRefreshTarget) []string {
+	ids := make([]string, 0, len(target.LocalNodeIDs))
+	for _, id := range target.LocalNodeIDs {
+		node, ok := s.store.GetNode(id)
+		if !ok || strings.TrimSpace(node.TagPrefix) != target.TagPrefix {
+			continue
+		}
+		if node.ImportMode == "url" && strings.TrimSpace(node.ImportSource) != "" {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (s *Service) parseRefreshSubscriptionURL(tagPrefix, subURL string, maxWait time.Duration) (ParseResponse, error) {
@@ -525,6 +682,27 @@ func (s *Service) waitImportJob(jobID string, onProgress func(ImportJob)) (Impor
 	return last, fmt.Errorf("等待导入任务 %s 超时", jobID)
 }
 
+func (s *Service) waitTestJob(jobID string, onProgress func(TestJob)) (TestJob, error) {
+	deadline := time.Now().Add(refreshJobMaxWait)
+	var last TestJob
+	for time.Now().Before(deadline) {
+		job, ok := s.GetTestJob(jobID)
+		if !ok {
+			return TestJob{}, fmt.Errorf("测试任务 %s 不存在", jobID)
+		}
+		last = job
+		if onProgress != nil {
+			onProgress(job)
+		}
+		switch job.Status {
+		case TestJobFinished, TestJobFailed, TestJobCanceled:
+			return job, nil
+		}
+		time.Sleep(refreshJobPollInterval)
+	}
+	return last, fmt.Errorf("等待测试任务 %s 超时", jobID)
+}
+
 func applyImportJobProgress(row *SourceRefreshURL, job ImportJob) {
 	if row == nil {
 		return
@@ -536,6 +714,30 @@ func applyImportJobProgress(row *SourceRefreshURL, job ImportJob) {
 	row.Promoted = job.Promoted
 	row.Status = "testing"
 	if job.Status == ImportStatusRunning && job.Total > 0 && row.Done >= job.Total {
+		row.Status = "promoting"
+	}
+	row.UpdatedAt = time.Now()
+}
+
+func applyTestJobProgress(row *SourceRefreshURL, job TestJob) {
+	if row == nil {
+		return
+	}
+	if row.Nodes == 0 {
+		row.Nodes = job.Total
+		row.Total = job.Total
+	}
+	row.Passed = job.Passed
+	row.Failed = job.Failed
+	row.Promoted = job.Promoted
+	row.Status = "testing"
+	switch job.Phase {
+	case "country", "promote", "done":
+		row.Done = row.Total
+	case "probe":
+		row.Done = min(row.Total, job.Done)
+	}
+	if job.Phase == "promote" {
 		row.Status = "promoting"
 	}
 	row.UpdatedAt = time.Now()
@@ -627,7 +829,7 @@ func (s *Service) finalizeRefreshJob(job *SourceRefreshJob) {
 	if job.TotalURLs > 0 && job.Successful == 0 {
 		job.Status = SourceRefreshJobFailed
 		job.Phase = "failed"
-		job.Error = "全部订阅链接都未拉取到节点"
+		job.Error = "全部导入来源重新检测失败"
 		return
 	}
 	job.Error = ""
@@ -2071,7 +2273,7 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 				Format:      node.ImportFormat,
 				TagPrefix:   node.TagPrefix,
 				Source:      node.ImportSource,
-				Refreshable: node.ImportMode == "url" && strings.TrimSpace(node.ImportSource) != "",
+				Refreshable: strings.TrimSpace(node.TagPrefix) != "",
 				CreatedAt:   node.CreatedAt,
 				UpdatedAt:   node.UpdatedAt,
 			}
@@ -2079,6 +2281,9 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 		}
 		if group.TagPrefix == "" {
 			group.TagPrefix = node.TagPrefix
+		}
+		if strings.TrimSpace(node.TagPrefix) != "" {
+			group.Refreshable = true
 		}
 		if group.Format == "" {
 			group.Format = node.ImportFormat

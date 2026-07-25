@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"easy_proxies/internal/config"
+
+	"github.com/sagernet/sing-box/option"
 )
 
 type batchNodeManagerStub struct {
@@ -316,8 +319,104 @@ func TestFinalizeRefreshJobFailsWhenNoSuccessfulURLs(t *testing.T) {
 	if job.Phase != "failed" {
 		t.Fatalf("job.Phase = %q, want failed", job.Phase)
 	}
-	if job.Error != "全部订阅链接都未拉取到节点" {
+	if job.Error != "全部导入来源重新检测失败" {
 		t.Fatalf("job.Error = %q, want default failure message", job.Error)
+	}
+}
+
+func TestSourceRefreshTargetsIncludeEveryTaggedSource(t *testing.T) {
+	svc, store := newBatchServiceForTest(t, &batchNodeManagerStub{})
+	nodes := []ManagedNode{
+		{ID: "url", State: StatePassed, ImportMode: "url", ImportSource: "https://example.test/sub", TagPrefix: "shared"},
+		{ID: "failed", State: StateFailed, ImportID: "imp-1", ImportMode: "content", ImportSource: "content", ImportFormat: "clash_yaml", TagPrefix: "shared"},
+		{ID: "pool", State: StateInPool, InPool: true, ImportID: "imp-2", ImportMode: "content", ImportSource: "content", ImportFormat: "base64", TagPrefix: "shared"},
+		{ID: "legacy", State: StateParsed, TagPrefix: "legacy"},
+		{ID: "untagged", State: StateFailed, ImportID: "imp-3", ImportMode: "content", ImportSource: "content"},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	targets, err := svc.sourceRefreshTargets("")
+	if err != nil {
+		t.Fatalf("sourceRefreshTargets() error = %v", err)
+	}
+	if len(targets) != 2 || targets[0].TagPrefix != "legacy" || targets[1].TagPrefix != "shared" {
+		t.Fatalf("targets = %#v, want legacy and shared tags", targets)
+	}
+	shared := targets[1]
+	if !reflect.DeepEqual(shared.URLs, []string{"https://example.test/sub"}) {
+		t.Fatalf("shared URLs = %#v", shared.URLs)
+	}
+	if !reflect.DeepEqual(shared.LocalNodeIDs, []string{"failed", "pool"}) {
+		t.Fatalf("shared local nodes = %#v", shared.LocalNodeIDs)
+	}
+	if !reflect.DeepEqual(shared.LocalFormats, []string{"base64", "clash_yaml"}) {
+		t.Fatalf("shared local formats = %#v", shared.LocalFormats)
+	}
+
+	selected, err := svc.sourceRefreshTargets("import:imp-1")
+	if err != nil {
+		t.Fatalf("sourceRefreshTargets(import) error = %v", err)
+	}
+	if len(selected) != 1 || selected[0].TagPrefix != "shared" || len(selected[0].LocalNodeIDs) != 2 || len(selected[0].URLs) != 1 {
+		t.Fatalf("selected targets = %#v, want every source under the shared tag", selected)
+	}
+}
+
+func TestRefreshLocalSourceRetestsEveryTaggedState(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	tester := NewNodeTester(func(tag, uri string, skipCertVerify bool) (option.Outbound, error) {
+		return option.Outbound{}, errors.New("probe fixture failure")
+	})
+	svc := NewService(store, tester, &batchNodeManagerStub{})
+	nodes := []ManagedNode{
+		{ID: "parsed", URI: "trojan://parsed", State: StateParsed, ImportID: "imp", ImportMode: "content", ImportSource: "content", ImportFormat: "uri_list", TagPrefix: "local"},
+		{ID: "passed", URI: "trojan://passed", State: StatePassed, ImportID: "imp", ImportMode: "content", ImportSource: "content", ImportFormat: "uri_list", TagPrefix: "local"},
+		{ID: "failed", URI: "trojan://failed", State: StateFailed, ImportID: "imp", ImportMode: "content", ImportSource: "content", ImportFormat: "uri_list", TagPrefix: "local"},
+		{ID: "pool", URI: "trojan://pool", Name: "local-pool", State: StateInPool, InPool: true, Port: 24000, ImportID: "imp", ImportMode: "content", ImportSource: "content", ImportFormat: "uri_list", TagPrefix: "local"},
+		{ID: "excluded", URI: "trojan://excluded", State: StateExcluded, ImportID: "imp", ImportMode: "content", ImportSource: "content", ImportFormat: "uri_list", TagPrefix: "local"},
+		{ID: "untagged", URI: "trojan://untagged", State: StateFailed, ImportID: "other", ImportMode: "content", ImportSource: "content"},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	jobID, err := svc.StartRefreshSources("import:imp")
+	if err != nil {
+		t.Fatalf("StartRefreshSources() error = %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	var job SourceRefreshJob
+	for time.Now().Before(deadline) {
+		job, _ = svc.GetRefreshJob(jobID)
+		if job.Status != SourceRefreshJobRunning {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if job.Status != SourceRefreshJobFinished {
+		t.Fatalf("refresh job = %#v, want finished", job)
+	}
+	if len(job.Groups) != 1 || len(job.Groups[0].URLs) != 1 {
+		t.Fatalf("refresh groups = %#v", job.Groups)
+	}
+	row := job.Groups[0].URLs[0]
+	if row.Kind != "content" || row.Total != 5 || row.Done != 5 || row.Passed != 0 || row.Failed != 5 {
+		t.Fatalf("local refresh row = %#v, want complete 5-node progress", row)
+	}
+	for _, id := range []string{"parsed", "passed", "failed", "pool", "excluded"} {
+		node, _ := store.GetNode(id)
+		if node.LastTestAt.IsZero() {
+			t.Fatalf("node %s was not retested: %#v", id, node)
+		}
+	}
+	untagged, _ := store.GetNode("untagged")
+	if !untagged.LastTestAt.IsZero() {
+		t.Fatalf("untagged node was unexpectedly tested: %#v", untagged)
 	}
 }
 
@@ -568,7 +667,7 @@ func TestListAndDeleteImportSources(t *testing.T) {
 		t.Fatalf("url group = %#v", urlGroup)
 	}
 	contentGroup := byKey["import:imp-1"]
-	if contentGroup.Format != "base64" || contentGroup.Candidate != 1 || contentGroup.TagPrefix != "local" {
+	if !contentGroup.Refreshable || contentGroup.Format != "base64" || contentGroup.Candidate != 1 || contentGroup.TagPrefix != "local" {
 		t.Fatalf("content group = %#v", contentGroup)
 	}
 

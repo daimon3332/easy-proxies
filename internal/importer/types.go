@@ -254,6 +254,8 @@ const (
 
 type SourceRefreshURL struct {
 	URL       string    `json:"url"`
+	Kind      string    `json:"kind,omitempty"`
+	Label     string    `json:"label,omitempty"`
 	Status    string    `json:"status"`
 	Nodes     int       `json:"nodes"`
 	Done      int       `json:"done"`

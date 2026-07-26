@@ -12,6 +12,11 @@ import (
 
 const storeVersion = 1
 
+type StoreSnapshot struct {
+	Version int                    `json:"version"`
+	Nodes   map[string]ManagedNode `json:"nodes"`
+}
+
 type storeFile struct {
 	Version int                    `json:"version"`
 	Nodes   map[string]ManagedNode `json:"nodes"`
@@ -92,8 +97,12 @@ func (s *Store) saveSnapshot(sf storeFile) error {
 		return err
 	}
 	if err := os.Rename(tmp, s.path); err != nil {
-		os.Remove(s.path)
-		os.Rename(tmp, s.path)
+		if removeErr := os.Remove(s.path); removeErr != nil && !os.IsNotExist(removeErr) {
+			return fmt.Errorf("replace store: %w", err)
+		}
+		if retryErr := os.Rename(tmp, s.path); retryErr != nil {
+			return fmt.Errorf("replace store: %w", retryErr)
+		}
 	}
 	return nil
 }
@@ -138,6 +147,59 @@ func (s *Store) ListNodes() []ManagedNode {
 		return result[i].Order < result[j].Order
 	})
 	return result
+}
+
+func (s *Store) BackupSnapshot() StoreSnapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	nodes := make(map[string]ManagedNode, len(s.nodes))
+	for id, node := range s.nodes {
+		nodes[id] = node
+	}
+	return StoreSnapshot{Version: storeVersion, Nodes: nodes}
+}
+
+func DecodeStoreSnapshot(data []byte) (StoreSnapshot, error) {
+	var snapshot StoreSnapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return StoreSnapshot{}, fmt.Errorf("decode managed nodes: %w", err)
+	}
+	if snapshot.Version != storeVersion {
+		return StoreSnapshot{}, fmt.Errorf("unsupported managed nodes version %d", snapshot.Version)
+	}
+	if snapshot.Nodes == nil {
+		snapshot.Nodes = make(map[string]ManagedNode)
+	}
+	for id, node := range snapshot.Nodes {
+		if id == "" || node.ID == "" || id != node.ID || node.URI == "" {
+			return StoreSnapshot{}, fmt.Errorf("invalid managed node %q", id)
+		}
+	}
+	return snapshot, nil
+}
+
+func (s *Store) ReplaceSnapshot(snapshot StoreSnapshot) error {
+	if snapshot.Version != storeVersion {
+		return fmt.Errorf("unsupported managed nodes version %d", snapshot.Version)
+	}
+	nodes := make(map[string]ManagedNode, len(snapshot.Nodes))
+	for id, node := range snapshot.Nodes {
+		nodes[id] = node
+	}
+	s.mu.Lock()
+	previousNodes := s.nodes
+	previousJobs := s.jobs
+	s.nodes = nodes
+	s.jobs = make(map[string]ImportJob)
+	sf := s.snapshotLocked()
+	if err := s.saveSnapshot(sf); err != nil {
+		s.nodes = previousNodes
+		s.jobs = previousJobs
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Unlock()
+	return nil
 }
 
 func (s *Store) ListPoolNodes() []ManagedNode {

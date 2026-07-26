@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"easy_proxies/internal/backup"
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/geoip"
 	"easy_proxies/internal/importer"
@@ -95,6 +96,7 @@ type Server struct {
 	subRefresher SubscriptionRefresher
 	nodeMgr      NodeManager
 	importSvc    ImportService
+	backupSvc    *backup.Service
 }
 
 // NewServer constructs a server; it can be nil when disabled.
@@ -137,6 +139,16 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	mux.HandleFunc("/api/nodes/", s.withAuth(s.handleNodeAction))
 	mux.HandleFunc("/api/debug", s.withAuth(s.handleDebug))
 	mux.HandleFunc("/api/export", s.withAuth(s.handleExport))
+	mux.HandleFunc("/api/data-export/nodes", s.withAuth(s.handleDataExportNodes))
+	mux.HandleFunc("/api/data-export/subscriptions", s.withAuth(s.handleDataExportSubscriptions))
+	mux.HandleFunc("/api/data-export/tags", s.withAuth(s.handleDataExportTags))
+	mux.HandleFunc("/api/backup/local", s.withAuth(s.handleLocalBackup))
+	mux.HandleFunc("/api/backup/local/restore", s.withAuth(s.handleLocalRestore))
+	mux.HandleFunc("/api/backup/webdav/settings", s.withAuth(s.handleWebDAVSettings))
+	mux.HandleFunc("/api/backup/webdav/test", s.withAuth(s.handleWebDAVTest))
+	mux.HandleFunc("/api/backup/webdav/files", s.withAuth(s.handleWebDAVFiles))
+	mux.HandleFunc("/api/backup/webdav/create", s.withAuth(s.handleWebDAVCreate))
+	mux.HandleFunc("/api/backup/webdav/", s.withAuth(s.handleWebDAVFileAction))
 	mux.HandleFunc("/api/subscription/status", s.withAuth(s.handleSubscriptionStatus))
 	mux.HandleFunc("/api/subscription/refresh", s.withAuth(s.handleSubscriptionRefresh))
 	mux.HandleFunc("/api/subscription/config", s.withAuth(s.handleSubscriptionConfig))
@@ -181,6 +193,12 @@ func (s *Server) SetNodeManager(nm NodeManager) {
 func (s *Server) SetImportService(svc ImportService) {
 	if s != nil {
 		s.importSvc = svc
+	}
+}
+
+func (s *Server) SetBackupService(svc *backup.Service) {
+	if s != nil {
+		s.backupSvc = svc
 	}
 }
 

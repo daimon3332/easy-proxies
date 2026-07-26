@@ -56,6 +56,10 @@ button{cursor:pointer}
 .topbar{display:flex;gap:14px;align-items:center;justify-content:space-between}
 .title h1{margin:0;font-size:28px;letter-spacing:-.04em}
 .title p{margin:4px 0 0;color:var(--muted)}
+.topbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px}
+.github-link{width:44px;height:44px;display:inline-grid;place-items:center;flex:none;color:var(--text);background:#fff;border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 4px 12px rgba(20,30,40,.05);transition:.16s ease}
+.github-link:hover{color:var(--blue-deep);border-color:var(--blue);transform:translateY(-1px);box-shadow:0 8px 20px rgba(20,30,40,.09)}
+.github-link svg{width:23px;height:23px}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
 .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
@@ -141,8 +145,8 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .toggle-row input{margin-top:1px}
 .toggle-row strong{display:block}
 .toggle-row span{display:block;margin-top:2px;color:var(--muted);font-size:12px}
-.settings-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr);gap:20px;align-items:start}
-.settings-stack{display:grid;gap:20px}
+.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:stretch}
+.settings-wide{grid-column:1/-1}
 .settings-section{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
 .settings-section-head{padding:18px 20px;border-bottom:1px solid var(--line);background:#fbfdff;display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
 .settings-section-head h2{margin:0;font-size:18px}
@@ -153,6 +157,19 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .settings-highlight{border:1px solid #c6d7ff;background:#f3f7ff;border-radius:10px;padding:14px;display:grid;gap:6px}
 .settings-highlight strong{font-size:15px}
 .settings-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;padding-top:4px}
+.backup-file{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fbfdff}
+.backup-file-main{min-width:0;display:grid;gap:3px}
+.backup-file-main strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.subscription-export-list{display:grid;gap:8px;max-height:220px;overflow:auto}
+.subscription-export-item{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfdff;cursor:pointer}
+.subscription-export-item code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.export-tag-main{min-width:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.export-tag-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfdff}
+.backup-settings-grid{display:grid;grid-template-columns:minmax(260px,.7fr) minmax(0,1.3fr);gap:24px}
+.backup-pane{min-width:0;display:grid;align-content:start;gap:18px}
+.backup-pane+.backup-pane{border-left:1px solid var(--line);padding-left:24px}
+.backup-pane h3{margin:0;font-size:16px}
+.field-help{color:var(--muted);font-size:12px;line-height:1.5}
 .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .metric{border:1px solid var(--line);border-radius:10px;background:#fff;padding:12px}
 .metric span{display:block;color:var(--muted);font-size:12px}
@@ -227,7 +244,10 @@ pre.log-view{height:100%;max-height:none}
   .filters{grid-template-columns:1fr}
   .filters.compact select,.filters.compact input{width:100%}
   .settings-grid{grid-template-columns:1fr}
+  .settings-wide{grid-column:auto}
   .settings-form{grid-template-columns:1fr}
+  .backup-settings-grid{grid-template-columns:1fr}
+  .backup-pane+.backup-pane{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:22px}
   .metric-grid{grid-template-columns:1fr}
   .settings-actions{justify-content:stretch}
   .settings-actions .btn{width:100%}
@@ -237,6 +257,7 @@ pre.log-view{height:100%;max-height:none}
   .time-grid .field{width:100%}
   .import-format-card{align-items:flex-start;flex-direction:column}
   .topbar{align-items:flex-start;flex-direction:column}
+  .topbar-actions{width:100%;justify-content:space-between}
   .toolbar{justify-content:flex-start}
 }
 </style>
@@ -253,7 +274,7 @@ pre.log-view{height:100%;max-height:none}
   <main class="main">
     <div class="topbar">
       <div class="title"><h1 id="pageTitle">导入节点</h1><p id="pageDesc">支持订阅链接、URI、Base64 和 Clash YAML。</p></div>
-      <div id="globalRefreshStatus"></div>
+      <div class="topbar-actions"><div id="globalRefreshStatus"></div><a class="github-link" href="https://github.com/daimon3332/easy-proxies" target="_blank" rel="noopener noreferrer" title="打开 GitHub 仓库" aria-label="打开 Easy Proxies GitHub 仓库"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.4 4 5 5 0 0 0 19.3.5S18.2.1 15 1.8a13.4 13.4 0 0 0-7 0C4.8.1 3.7.5 3.7.5A5 5 0 0 0 3.6 4a5.4 5.4 0 0 0-1.4 3.7c0 5.3 3.5 6.5 6.8 6.9A4.8 4.8 0 0 0 8 18v4"/><path d="M8 19c-3 .9-3-1.5-4-2"/></svg></a></div>
     </div>
     <section id="view"></section>
   </main>
@@ -304,6 +325,10 @@ const S={
   settings:null,
   subConfig:null,
   importSources:[],
+  webdav:{address:'',username:'',password:'',folder:'/easy_proxies'},
+  webdavFiles:[],
+  webdavLoading:false,
+  selectedExportTags:new Set(),
   summary:null,
   portPreview:[],
   nodePage:null,
@@ -444,9 +469,10 @@ async function refresh(){
       if(!isCurrentPageRequest(request))return;
       renderLogs();
     }else if(S.page==='settings'){
-      await Promise.all([loadSettings(request),loadSubscriptionConfig(request),loadImportSources(request)]);
+      await Promise.all([loadSettings(request),loadSubscriptionConfig(request),loadImportSources(request),loadBackupData(request)]);
       if(!isCurrentPageRequest(request))return;
       renderSettings();
+	  if(S.webdav.address)loadWebDAVFiles(request);
 	}else if(S.page==='bulk'){
 	  await loadImportSummary(request);
 	  if(!isCurrentPageRequest(request))return;
@@ -543,6 +569,34 @@ async function loadImportSources(request){
   const sources=await api('/api/import/sources',{signal:request?.signal}).catch(err=>{if(isAbortError(err))throw err;return []});
   if(!isCurrentPageRequest(request))return null;
   S.importSources=Array.isArray(sources)?sources:[];
+}
+async function loadBackupData(request){
+  const webdav=await api('/api/backup/webdav/settings',{signal:request?.signal});
+  if(!isCurrentPageRequest(request))return null;
+  S.webdav=webdav||{address:'',username:'',password:'',folder:'/easy_proxies'};
+  if(!S.webdav.folder)S.webdav.folder='/easy_proxies';
+  S.webdavFiles=[];
+  S.webdavLoading=!!S.webdav.address;
+  return S.webdav;
+}
+async function loadWebDAVFiles(request,throwOnError=false){
+  S.webdavLoading=true;
+  try{
+    const data=await api('/api/backup/webdav/files',{signal:request?.signal});
+    if(!isCurrentPageRequest(request))return;
+    S.webdavFiles=Array.isArray(data.files)?data.files:[];
+  }catch(err){
+    if(isAbortError(err))return;
+    if(!isCurrentPageRequest(request))return;
+    S.webdavFiles=[];
+    if(throwOnError)throw err;
+  }finally{
+    if(isCurrentPageRequest(request)){
+      S.webdavLoading=false;
+      const host=qs('#webdavFiles');
+      if(host)host.innerHTML=webDAVFilesHTML(S.webdavFiles,false);
+    }
+  }
 }
 function renderManaged(kind){
   const preset=kind==='pool'?'pool':kind==='failed'?'failed':'candidate';
@@ -683,12 +737,13 @@ async function setListSort(target,mode){
 }
 function renderNodeActions(n,kind){
   const del=`<button class="btn small danger" onclick="deleteManagedNode('${esc(n.id)}')">删除</button>`;
-  if(kind==='pool')return `<div class="row"><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">测速</button><button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>${del}</div>`;
-  if(n.state==='failed')return `<div class="row"><button class="btn small primary" onclick="retestFailedNodes(['${esc(n.id)}'])">测速</button>${del}</div>`;
-  if(candidate(n))return `<div class="row"><button class="btn small green" onclick="managedAction('${esc(n.id)}','promote')">加入节点池</button><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">测速</button><button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>${del}</div>`;
-  if(n.state==='parsed')return `<div class="row"><button class="btn small primary" onclick="managedAction('${esc(n.id)}','retest')">测速</button>${del}</div>`;
+  const exportBtn=`<button class="btn small secondary" onclick="openNodeExportDialog(['${esc(n.id)}'])">导出</button>`;
+  if(kind==='pool')return `<div class="row"><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">测速</button><button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>${exportBtn}${del}</div>`;
+  if(n.state==='failed')return `<div class="row"><button class="btn small primary" onclick="retestFailedNodes(['${esc(n.id)}'])">测速</button>${exportBtn}${del}</div>`;
+  if(candidate(n))return `<div class="row"><button class="btn small green" onclick="managedAction('${esc(n.id)}','promote')">加入节点池</button><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">测速</button><button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>${exportBtn}${del}</div>`;
+  if(n.state==='parsed')return `<div class="row"><button class="btn small primary" onclick="managedAction('${esc(n.id)}','retest')">测速</button>${exportBtn}${del}</div>`;
   if(n.state==='excluded')return '';
-  return `<div class="row"><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">重新测速</button>${del}</div>`;
+  return `<div class="row"><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">重新测速</button>${exportBtn}${del}</div>`;
 }
 function inPool(n){return n.state==='in_pool'||n.in_pool}
 function candidate(n){return !inPool(n)&&n.state==='passed'}
@@ -1050,6 +1105,7 @@ function batchActionBar(items,kind){
       ${promoteButton}
       ${failedButton}
       ${speedButtons}
+      <button class="btn secondary" onclick="openNodeExportDialog([...S.selected])" ${S.selected.size?'':'disabled'}>导出选中 (${S.selected.size})</button>
       ${deleteButton}
       <button class="btn" onclick="clearSelection()">清空选择</button>
     </div>
@@ -1526,18 +1582,40 @@ function fmtDate(v){
   const d=new Date(v);
   return Number.isNaN(d.getTime())?'-':d.toLocaleString();
 }
+function webDAVFilesHTML(files,loading){
+  if(loading)return '<div class="empty">正在加载远程备份...</div>';
+  if(!files.length)return '<div class="empty">没有远程备份</div>';
+  return files.map(file=>`<div class="backup-file"><div class="backup-file-main"><strong>${esc(file.name)}</strong><span class="muted">${esc(formatBytes(file.size))} · ${esc(fmtDate(file.mod_time))}</span></div><div class="row"><button class="btn small" data-name="${esc(file.name)}" onclick="downloadWebDAVBackup(this.dataset.name)">下载</button><button class="btn small secondary" data-name="${esc(file.name)}" onclick="restoreWebDAVBackup(this.dataset.name)">恢复</button><button class="btn small danger" data-name="${esc(file.name)}" onclick="deleteWebDAVBackup(this.dataset.name)">删除</button></div></div>`).join('');
+}
+function exportTagGroups(sources){
+  const groups=new Map();
+  for(const source of sources||[]){
+    const tag=String(source?.tag_prefix||'').trim();
+    if(!tag)continue;
+    let group=groups.get(tag);
+    if(!group){group={tag,total:0,types:new Set()};groups.set(tag,group)}
+    group.total+=Number(source.total)||0;
+    group.types.add(importSourceType(source));
+  }
+  return [...groups.values()].map(group=>({...group,types:[...group.types]})).sort((a,b)=>a.tag.localeCompare(b.tag));
+}
 function renderSettings(){
   const s=S.settings||{};
   const listener=s.listener||{},multi=s.multi_port||{},pool=s.pool||{},management=s.management||{};
   const sub=S.subConfig||{subscriptions:[],enabled:true,interval:'24h'};
   const sources=S.importSources||[];
+  const webdav=S.webdav||{address:'',username:'',password:'',folder:'/easy_proxies'};
+  const webdavFiles=S.webdavFiles||[];
+  const webdavLoading=!!S.webdavLoading;
   const interval=durationParts(sub.interval||'24h');
   const probeTarget=allowedProbeTarget(s.probe_target);
   const blacklistSeconds=durationSeconds(pool.blacklist_duration,600);
   const rotationSeconds=durationSeconds(pool.rotation_interval,120);
   const refreshing=S.refreshJob?.status==='running'||!!S.activeRefreshJob;
+  const exportTags=exportTagGroups(sources);
+  const availableTags=new Set(exportTags.map(group=>group.tag));
+  for(const tag of S.selectedExportTags)if(!availableTags.has(tag))S.selectedExportTags.delete(tag);
   qs('#view').innerHTML=`<div class="settings-grid">
-    <div class="settings-stack">
       <section class="settings-section">
         <div class="settings-section-head">
           <div><h2>基础运行</h2><p>控制运行模式、测速目标和管理入口。</p></div>
@@ -1595,9 +1673,7 @@ function renderSettings(){
           <div class="settings-actions"><button class="btn primary" onclick="saveSettings()">保存运行设置并重载</button></div>
         </div>
       </section>
-    </div>
 
-    <div class="settings-stack">
       <section class="settings-section">
         <div class="settings-section-head">
           <div><h2>订阅刷新</h2><p>管理订阅定时刷新和手动刷新。</p></div>
@@ -1612,14 +1688,13 @@ function renderSettings(){
             <div class="field"><label>分钟</label><input id="subMinutes" type="number" min="0" max="59" value="${interval.minutes}"></div>
           </div>
           <button class="btn secondary block" onclick="saveAutoRefresh()">保存自动刷新设置</button>
-          <button class="btn green block" data-refresh-action onclick="refreshAllImportSources()" ${refreshing?'disabled':''}>重新检测全部导入来源</button>
         </div>
       </section>
 
-      <section class="settings-section">
+      <section class="settings-section settings-wide">
         <div class="settings-section-head">
           <div><h2>导入来源</h2><p>按 Tag 重新拉取订阅或检测已保存的本地导入节点。</p></div>
-          <button class="btn small danger" data-refresh-action onclick="deleteAllImportSources()" ${sources.length&&!refreshing?'':'disabled'}>删除全部</button>
+          <div class="row"><button class="btn small green" data-refresh-action onclick="refreshAllImportSources()" ${sources.length&&!refreshing?'':'disabled'}>重新检测全部</button><button class="btn small danger" data-refresh-action onclick="deleteAllImportSources()" ${sources.length&&!refreshing?'':'disabled'}>删除全部</button></div>
         </div>
         <div class="settings-section-body">
       ${sources.length?`<div class="stack">${sources.map((src,i)=>`<div class="source-row">
@@ -1637,7 +1712,46 @@ function renderSettings(){
       </div>`).join('')}</div>`:`<div class="empty">还没有导入来源</div>`}
         </div>
       </section>
-    </div>
+
+      <section class="settings-section settings-wide">
+        <div class="settings-section-head">
+          <div><h2>数据导出</h2><p>按 Tag 导出原始来源类型；多个 Tag 会自动打包为 ZIP。</p></div>
+          <span class="pill" id="exportTagCount">已选 ${esc(S.selectedExportTags.size)} / ${esc(exportTags.length)}</span>
+        </div>
+        <div class="settings-section-body">
+          <div class="row"><button class="btn small secondary" onclick="setAllExportTags(true)" ${exportTags.length?'':'disabled'}>选择全部 Tag</button><button class="btn small ghost" id="clearExportTags" onclick="setAllExportTags(false)" ${S.selectedExportTags.size?'':'disabled'}>清空选择</button><button class="btn" data-tag-export-selected onclick="exportSelectedTags()" ${S.selectedExportTags.size?'':'disabled'}>导出选中 (${esc(S.selectedExportTags.size)})</button></div>
+          ${exportTags.length?`<div class="subscription-export-list">${exportTags.map(group=>`<div class="export-tag-row"><input type="checkbox" data-export-tag data-tag="${esc(group.tag)}" aria-label="选择 ${esc(group.tag)}" ${S.selectedExportTags.has(group.tag)?'checked':''} onchange="toggleExportTag(this.dataset.tag,this.checked)"><div class="export-tag-main"><strong>${esc(group.tag)}</strong><span class="muted">${esc(group.types.join(' / '))} · ${esc(group.total)} 个节点</span></div><button class="btn small secondary" data-tag="${esc(group.tag)}" onclick="exportSourceTags([this.dataset.tag])">导出</button></div>`).join('')}</div>`:'<div class="empty">没有带 Tag 的导入来源</div>'}
+        </div>
+      </section>
+
+      <section class="settings-section settings-wide">
+        <div class="settings-section-head">
+          <div><h2>备份与恢复</h2><p>完整保存设置、订阅、导入节点和节点池状态。</p></div>
+          <span class="pill ${webdav.address?'green':''}">${webdav.address?'WebDAV 已配置':'仅本地'}</span>
+        </div>
+        <div class="settings-section-body">
+          <div class="backup-settings-grid">
+            <div class="backup-pane">
+              <h3>本地备份</h3>
+              <div class="field-help">备份文件保存在当前设备；恢复前会校验文件，运行中的任务结束后才能恢复。</div>
+              <button class="btn primary block" onclick="downloadLocalBackup()">导出完整备份</button>
+              <button class="btn secondary block" onclick="qs('#localBackupFile').click()">从本地备份恢复</button>
+              <input id="localBackupFile" type="file" accept=".zip,application/zip" onchange="restoreLocalBackup(this.files?.[0])" hidden>
+            </div>
+            <div class="backup-pane">
+              <div><h3>WebDAV 备份</h3><div class="field-help" style="margin-top:6px">地址、账号和密码明文显示并保存，远程文件只写入指定目录。</div></div>
+              <div class="field"><label>WebDAV 地址</label><input id="webdavAddress" type="text" value="${esc(webdav.address||'')}" placeholder="https://dav.example.com/remote.php/dav/files/user"></div>
+              <div class="field"><label>备份文件夹</label><input id="webdavFolder" type="text" value="${esc(webdav.folder||'/easy_proxies')}" placeholder="/easy_proxies"><div class="field-help">WebDAV 内的独立目录，默认 /easy_proxies；目录不存在时会自动创建。</div></div>
+              <div class="settings-form">
+                <div class="field"><label>账号</label><input id="webdavUsername" type="text" value="${esc(webdav.username||'')}"></div>
+                <div class="field"><label>密码</label><input id="webdavPassword" type="text" value="${esc(webdav.password||'')}"></div>
+              </div>
+              <div class="row"><button class="btn" onclick="saveWebDAV(false)">保存</button><button class="btn secondary" onclick="testWebDAV()">测试连接</button><button class="btn green" onclick="createWebDAVBackup()">立即备份</button></div>
+              <div class="stack" id="webdavFiles">${webDAVFilesHTML(webdavFiles,webdavLoading)}</div>
+            </div>
+          </div>
+        </div>
+      </section>
   </div>`;
   qs('#setMode').value=s.mode||'pool';
   qs('#setProbe').value=probeTarget;
@@ -1924,6 +2038,136 @@ async function deleteAllImportSources(){
 }
 async function reloadCore(){
   try{await api('/api/reload',{method:'POST'});openDialog('重载完成','<p>核心已重载。</p>')}catch(err){openDialog('重载失败',`<p>${esc(err.message)}</p>`)}
+}
+function openNodeExportDialog(ids){
+  ids=Array.isArray(ids)?ids.filter(Boolean):[];
+  if(!ids.length){toast('请先选择节点','err');return}
+  S.pendingExportNodeIDs=ids;
+  openDialog('导出节点',`<p>将导出 ${ids.length} 个节点，请选择格式。</p><div class="row"><button class="btn secondary" onclick="exportPendingNodes('uri')">URI</button><button class="btn secondary" onclick="exportPendingNodes('yaml')">YAML</button><button class="btn secondary" onclick="exportPendingNodes('base64')">Base64</button></div>`);
+}
+async function exportPendingNodes(format){
+  const ids=S.pendingExportNodeIDs||[];
+  closeDialog();
+  await exportNodes(format,ids,false);
+}
+async function exportNodes(format,ids=[],all=false){
+  try{
+    await downloadRequest('/api/data-export/nodes',{all,node_ids:ids,format});
+    toast(`节点已导出为 ${String(format).toUpperCase()}`);
+  }catch(err){openDialog('导出失败',`<p>${esc(err.message)}</p>`)}
+}
+function updateExportTagControls(){
+  const count=S.selectedExportTags.size;
+  const total=qsa('[data-export-tag]').length;
+  const badge=qs('#exportTagCount');
+  if(badge)badge.textContent=`已选 ${count} / ${total}`;
+  qsa('[data-tag-export-selected]').forEach(button=>{button.disabled=count===0;button.textContent=`导出选中 (${count})`});
+  const clear=qs('#clearExportTags');
+  if(clear)clear.disabled=count===0;
+}
+function toggleExportTag(tag,checked){
+  tag=String(tag||'').trim();
+  if(!tag)return;
+  if(checked)S.selectedExportTags.add(tag);else S.selectedExportTags.delete(tag);
+  updateExportTagControls();
+}
+function setAllExportTags(selected){
+  qsa('[data-export-tag]').forEach(input=>{
+    input.checked=selected;
+    const tag=String(input.dataset.tag||'').trim();
+    if(selected&&tag)S.selectedExportTags.add(tag);else S.selectedExportTags.delete(tag);
+  });
+  updateExportTagControls();
+}
+async function exportSelectedTags(){
+  await exportSourceTags([...S.selectedExportTags]);
+}
+async function exportSourceTags(tags){
+  tags=(tags||[]).map(tag=>String(tag||'').trim()).filter(Boolean);
+  if(!tags.length){toast('请先选择至少一个 Tag','err');return}
+  try{
+    await downloadRequest('/api/data-export/tags',{tags});
+    toast(tags.length===1?'Tag 数据已导出':`${tags.length} 个 Tag 已打包导出`);
+  }catch(err){openDialog('导出失败',`<p>${esc(err.message)}</p>`)}
+}
+async function downloadLocalBackup(){
+  try{await downloadResponse('/api/backup/local');toast('完整备份已导出')}catch(err){openDialog('备份失败',`<p>${esc(err.message)}</p>`)}
+}
+async function restoreLocalBackup(file){
+  if(!file)return;
+  if(!confirm(`确认恢复备份 ${file.name}？\n\n当前设置、订阅、节点和节点池状态将被替换。`)){qs('#localBackupFile').value='';return}
+  const form=new FormData();form.append('file',file);
+  try{
+    const res=await api('/api/backup/local/restore',{method:'POST',body:form});
+    const result=res.result||{};
+    const restart=result.restart_required?'<p><strong>部分管理监听或日志设置需要重启程序后完全生效。</strong></p>':'';
+    openDialog('恢复完成',`<p>节点 ${esc(result.node_count||0)} 个，池内 ${esc(result.pool_node_count||0)} 个，订阅 ${esc(result.subscriptions||0)} 个。</p>${restart}`);
+    await refresh();
+  }catch(err){openDialog('恢复失败',`<p>${esc(err.message)}</p>`)}
+  finally{const input=qs('#localBackupFile');if(input)input.value=''}
+}
+function webDAVPayload(){
+  return {address:qs('#webdavAddress')?.value.trim()||'',username:qs('#webdavUsername')?.value||'',password:qs('#webdavPassword')?.value||'',folder:qs('#webdavFolder')?.value.trim()||'/easy_proxies'};
+}
+async function saveWebDAV(silent=false){
+  const payload=webDAVPayload();
+  const res=await api('/api/backup/webdav/settings',{method:'PUT',body:JSON.stringify(payload)});
+  S.webdav=res.webdav||payload;
+  if(!silent)toast(res.message||'WebDAV 设置已保存');
+  return payload;
+}
+async function testWebDAV(){
+  try{await saveWebDAV(true);const res=await api('/api/backup/webdav/test',{method:'POST'});await loadWebDAVFiles(undefined,true);toast(`${res.message||'WebDAV 连接成功'}，发现 ${S.webdavFiles.length} 个备份`)}catch(err){openDialog('连接失败',`<p>${esc(err.message)}</p>`)}
+}
+async function createWebDAVBackup(){
+  try{await saveWebDAV(true);const res=await api('/api/backup/webdav/create',{method:'POST'});toast(res.message||'WebDAV 备份完成');await loadWebDAVFiles()}catch(err){openDialog('备份失败',`<p>${esc(err.message)}</p>`)}
+}
+async function downloadWebDAVBackup(name){
+  try{await downloadResponse(`/api/backup/webdav/${encodeURIComponent(name)}/download`);toast('远程备份已下载')}catch(err){openDialog('下载失败',`<p>${esc(err.message)}</p>`)}
+}
+async function restoreWebDAVBackup(name){
+  if(!confirm(`确认恢复远程备份 ${name}？\n\n当前设置、订阅、节点和节点池状态将被替换。`))return;
+  try{
+    const res=await api(`/api/backup/webdav/${encodeURIComponent(name)}/restore`,{method:'POST'});
+    const result=res.result||{};
+    const restart=result.restart_required?' 部分设置需要重启程序后完全生效。':'';
+    openDialog('恢复完成',`<p>节点 ${esc(result.node_count||0)} 个，池内 ${esc(result.pool_node_count||0)} 个，订阅 ${esc(result.subscriptions||0)} 个。${esc(restart)}</p>`);
+    await refresh();
+  }catch(err){openDialog('恢复失败',`<p>${esc(err.message)}</p>`)}
+}
+async function deleteWebDAVBackup(name){
+  if(!confirm(`确认删除远程备份 ${name}？`))return;
+  try{await api(`/api/backup/webdav/${encodeURIComponent(name)}/delete`,{method:'DELETE'});toast('远程备份已删除');await loadWebDAVFiles()}catch(err){openDialog('删除失败',`<p>${esc(err.message)}</p>`)}
+}
+async function downloadRequest(path,body){
+  const headers={'Content-Type':'application/json'};
+  if(S.token)headers.Authorization='Bearer '+S.token;
+  const res=await fetch(path,{method:'POST',headers,body:JSON.stringify(body)});
+  await consumeDownload(res);
+}
+async function downloadResponse(path){
+  const headers=S.token?{Authorization:'Bearer '+S.token}:{};
+  const res=await fetch(path,{headers});
+  await consumeDownload(res);
+}
+async function consumeDownload(res){
+  if(!res.ok){
+    const data=await res.json().catch(()=>({}));
+    throw new Error(data.error||`请求失败: ${res.status}`);
+  }
+  const blob=await res.blob();
+  const disposition=res.headers.get('content-disposition')||'';
+  const match=disposition.match(/filename="?([^";]+)"?/i);
+  const name=match?.[1]||'easy_proxies_export';
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function formatBytes(value){
+  const bytes=Number(value)||0;
+  if(bytes<1024)return `${bytes} B`;
+  if(bytes<1024*1024)return `${(bytes/1024).toFixed(1)} KiB`;
+  return `${(bytes/1024/1024).toFixed(1)} MiB`;
 }
 async function downloadExport(){
   try{

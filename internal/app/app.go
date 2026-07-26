@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"easy_proxies/internal/backup"
 	"easy_proxies/internal/boxmgr"
 	"easy_proxies/internal/builder"
 	"easy_proxies/internal/config"
@@ -117,6 +118,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	importSvc := importer.NewService(nodeStore, tester, boxMgr)
 	if server := boxMgr.MonitorServer(); server != nil {
 		server.SetImportService(importSvc)
+		server.SetBackupService(backup.NewService(cfg, nodeStore, boxMgr, subMgr, importSvc))
 	}
 
 	coreStarted := false

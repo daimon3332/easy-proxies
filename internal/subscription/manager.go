@@ -146,6 +146,30 @@ func (m *Manager) UpdateConfig(urls []string, enabled bool, interval time.Durati
 	}
 }
 
+func (m *Manager) ApplyRestoredConfig(restored *config.Config) {
+	if restored == nil {
+		return
+	}
+	m.mu.Lock()
+	previousCancel := m.cancel
+	m.baseCfg = restored
+	m.mu.Unlock()
+	if previousCancel != nil {
+		previousCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.mu.Lock()
+	m.ctx = ctx
+	m.cancel = cancel
+	m.manualRefresh = make(chan struct{}, 1)
+	interval := restored.SubscriptionRefresh.Interval
+	urls := len(restored.Subscriptions)
+	m.mu.Unlock()
+	if urls > 0 {
+		go m.refreshLoop(interval)
+	}
+}
+
 // UpdateConfigAndRefresh updates subscription config and synchronously waits for
 // the first refresh to complete before returning. This ensures the caller (WebUI API)
 // can confirm the update took effect.

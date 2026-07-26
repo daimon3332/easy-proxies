@@ -48,6 +48,12 @@ log:
   max_age: 7
   compress: false
 
+webdav:
+  address: ""
+  username: ""
+  password: ""
+  folder: /easy_proxies
+
 subscriptions: []
 nodes: []
 skip_cert_verify: false

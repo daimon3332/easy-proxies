@@ -31,6 +31,7 @@ type Config struct {
 	SubscriptionRefresh SubscriptionRefreshConfig `yaml:"subscription_refresh"`
 	GeoIP               GeoIPConfig               `yaml:"geoip"`
 	Log                 LogConfig                 `yaml:"log"`
+	WebDAV              WebDAVConfig              `yaml:"webdav"`
 	Nodes               []NodeConfig              `yaml:"nodes"`
 	NodesFile           string                    `yaml:"nodes_file"`    // 节点文件路径，每行一个 URI
 	Subscriptions       []string                  `yaml:"subscriptions"` // 订阅链接列表
@@ -40,6 +41,15 @@ type Config struct {
 
 	filePath string `yaml:"-"` // 配置文件路径，用于保存
 }
+
+type WebDAVConfig struct {
+	Address  string `yaml:"address" json:"address"`
+	Username string `yaml:"username" json:"username"`
+	Password string `yaml:"password" json:"password"`
+	Folder   string `yaml:"folder" json:"folder"`
+}
+
+const DefaultWebDAVFolder = "/easy_proxies"
 
 // Port allocator skip log. Populated when sequential allocation has to advance
 // past ports occupied by external processes. Process-wide singleton because
@@ -297,6 +307,9 @@ func (c *Config) normalize() error {
 	if c.SubscriptionRefresh.MinAvailableNodes <= 0 {
 		c.SubscriptionRefresh.MinAvailableNodes = 1
 	}
+	if strings.TrimSpace(c.WebDAV.Folder) == "" {
+		c.WebDAV.Folder = DefaultWebDAVFolder
+	}
 
 	// Mark inline nodes with source
 	for idx := range c.Nodes {
@@ -470,6 +483,9 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 	}
 	if c.SubscriptionRefresh.MinAvailableNodes <= 0 {
 		c.SubscriptionRefresh.MinAvailableNodes = 1
+	}
+	if strings.TrimSpace(c.WebDAV.Folder) == "" {
+		c.WebDAV.Folder = DefaultWebDAVFolder
 	}
 
 	// Build set of ports already assigned so we never duplicate ports in one config.
@@ -1192,6 +1208,64 @@ func (c *Config) SetFilePath(path string) {
 	}
 }
 
+func (c *Config) BackupYAML() ([]byte, error) {
+	if c == nil {
+		return nil, errors.New("config is nil")
+	}
+	backup := *c
+	backup.filePath = ""
+	backup.NodesFile = ""
+	backup.Subscriptions = append([]string(nil), c.Subscriptions...)
+	backup.Nodes = append([]NodeConfig(nil), c.Nodes...)
+	return yaml.Marshal(&backup)
+}
+
+func DecodeBackupYAML(data []byte, path string) (*Config, error) {
+	var restored Config
+	if err := yaml.Unmarshal(data, &restored); err != nil {
+		return nil, fmt.Errorf("decode backup config: %w", err)
+	}
+	nodes := append([]NodeConfig(nil), restored.Nodes...)
+	restored.Nodes = nil
+	restored.NodesFile = ""
+	restored.filePath = path
+	if err := restored.NormalizeWithPortMap(nil); err != nil {
+		return nil, fmt.Errorf("validate backup config: %w", err)
+	}
+	for i := range nodes {
+		nodes[i].Name = strings.TrimSpace(nodes[i].Name)
+		nodes[i].URI = strings.TrimSpace(nodes[i].URI)
+		if nodes[i].URI == "" {
+			return nil, fmt.Errorf("validate backup config: node %d is missing uri", i)
+		}
+		if nodes[i].Name == "" {
+			nodes[i].Name = ExtractNodeName(nodes[i].URI)
+		}
+		if nodes[i].Name == "" {
+			nodes[i].Name = fmt.Sprintf("node-%d", i)
+		}
+	}
+	restored.Nodes = nodes
+	return &restored, nil
+}
+
+func (c *Config) SaveFull() error {
+	if c == nil {
+		return errors.New("config is nil")
+	}
+	if c.filePath == "" {
+		return errors.New("config file path is unknown")
+	}
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("encode config: %w", err)
+	}
+	if err := writeFileWithLock(c.filePath, data, 0o644); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
+}
+
 // writeNodesToFile writes nodes to a file (one URI per line) with file locking.
 func writeNodesToFile(path string, nodes []NodeConfig) error {
 	var lines []string
@@ -1317,6 +1391,7 @@ func (c *Config) SaveSettings() error {
 	saveCfg.MultiPort = c.MultiPort
 	saveCfg.Pool = c.Pool
 	saveCfg.Management = c.Management
+	saveCfg.WebDAV = c.WebDAV
 
 	newData, err := yaml.Marshal(&saveCfg)
 	if err != nil {

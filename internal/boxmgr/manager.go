@@ -1081,6 +1081,53 @@ func (m *Manager) TriggerReload(ctx context.Context) error {
 	return m.Reload(cfgCopy)
 }
 
+func (m *Manager) ApplyRestoredConfig(ctx context.Context, restored *config.Config) error {
+	if restored == nil {
+		return errors.New("restored config is nil")
+	}
+	m.mu.RLock()
+	running := m.currentBox != nil
+	baseCtx := m.baseCtx
+	m.mu.RUnlock()
+	if len(restored.Nodes) > 0 {
+		if running {
+			return m.Reload(restored)
+		}
+		if baseCtx == nil {
+			baseCtx = context.Background()
+		}
+		m.mu.Lock()
+		m.cfg = restored
+		m.mu.Unlock()
+		return m.Start(baseCtx)
+	}
+
+	m.mu.RLock()
+	oldBox := m.currentBox
+	m.mu.RUnlock()
+	if oldBox != nil {
+		if err := oldBox.Close(); err != nil {
+			return fmt.Errorf("stop current instance: %w", err)
+		}
+	}
+	m.mu.Lock()
+	m.currentBox = nil
+	m.cfg = restored
+	m.applyConfigSettings(restored)
+	if m.geoRouter != nil {
+		m.geoRouter.Stop()
+		m.geoRouter = nil
+	}
+	m.mu.Unlock()
+	if m.monitorMgr != nil {
+		m.monitorMgr.ClearNodes()
+	}
+	if m.monitorServer != nil {
+		m.monitorServer.SetConfig(restored)
+	}
+	return nil
+}
+
 // ReloadWithPortMap is kept for compatibility.
 // Port assignments are recomputed from base_port during Reload so the runtime
 // ports always match the config file and the WebUI.
@@ -1096,6 +1143,12 @@ func (m *Manager) CurrentPortMap() map[string]uint16 {
 		return nil
 	}
 	return m.cfg.BuildPortMap()
+}
+
+func (m *Manager) CurrentConfig() *config.Config {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.copyConfigLocked()
 }
 
 // RebuildPortAssignments repacks multi-port assignments sequentially from

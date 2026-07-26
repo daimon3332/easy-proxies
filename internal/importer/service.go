@@ -97,6 +97,25 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 	return s
 }
 
+func (s *Service) HasActiveJobs() bool {
+	s.importCancelsMu.Lock()
+	imports := len(s.importCancels)
+	s.importCancelsMu.Unlock()
+	s.testCancelsMu.Lock()
+	tests := len(s.testCancels)
+	s.testCancelsMu.Unlock()
+	s.refreshJobsMu.RLock()
+	refreshing := false
+	for _, job := range s.refreshJobs {
+		if job != nil && job.Status == "running" {
+			refreshing = true
+			break
+		}
+	}
+	s.refreshJobsMu.RUnlock()
+	return imports > 0 || tests > 0 || refreshing
+}
+
 func WithHTTPClient(c *http.Client) Option {
 	return func(s *Service) {
 		if c != nil {

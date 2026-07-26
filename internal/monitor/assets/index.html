@@ -1834,12 +1834,13 @@ async function saveAutoRefresh(){
 }
 function refreshPhaseText(job){
   const phase=String(job?.phase||'waiting');
+  if(job?.status==='canceled'||phase==='canceled')return '重新检测已取消';
   if(job?.status==='failed'||phase==='failed')return '重新检测失败';
   if(job?.status==='finished'||phase==='finished')return '重新检测完成';
-  return {pulling:'正在拉取订阅',testing:'正在测试节点',promoting:'正在加入节点池',waiting:'等待开始'}[phase]||'正在刷新';
+  return {pulling:'正在拉取订阅',retrying:'正在重试失败来源',testing:'正在测试节点',promoting:'正在加入节点池',canceling:'正在取消',waiting:'等待开始'}[phase]||'正在刷新';
 }
 function refreshRowStatusText(status){
-  return {pulling:'拉取节点',testing:'测试节点',promoting:'加入节点池',completed:'完成',failed:'失败',waiting:'等待'}[String(status||'waiting')]||'等待';
+  return {pulling:'拉取节点',retrying:'最终重试',retry_waiting:'等待重试',testing:'测试节点',promoting:'加入节点池',completed:'完成',failed:'失败',canceled:'已取消',waiting:'等待'}[String(status||'waiting')]||'等待';
 }
 function refreshElapsed(job){
   const start=new Date(job?.started_at||0).getTime();
@@ -1869,10 +1870,10 @@ function refreshStatusHTML(job){
   const cls=job.status==='failed'?'failed':running?'':'done';
   const pollError=S.refreshPollError?`<span style="color:#b94a48">${esc(S.refreshPollError)}</span>`:'';
   return `<div class="refresh-status ${cls}">
-    <div class="refresh-status-head"><div><strong>${esc(refreshPhaseText(job))}</strong><span class="muted">已耗时 ${esc(refreshElapsed(job))}</span></div><span class="pill ${job.status==='failed'?'red':running?'amber':'green'}">${running?'后台运行':job.status==='failed'?'失败':'完成'}</span></div>
+    <div class="refresh-status-head"><div><strong>${esc(refreshPhaseText(job))}</strong><span class="muted">已耗时 ${esc(refreshElapsed(job))}</span></div><span class="pill ${job.status==='failed'||job.status==='canceled'?'red':running?'amber':'green'}">${running?'后台运行':job.status==='canceled'?'已取消':job.status==='failed'?'失败':'完成'}</span></div>
     ${refreshProgressHTML(job)}
     <div class="refresh-stats"><span>来源 ${esc(job.done_urls||0)}/${esc(job.total_urls||0)}</span><span>节点 ${esc(refreshNodeProgressText(job))}</span><span>成功 ${esc(job.passed||0)}</span><span>失败 ${esc(job.failed_nodes||0)}</span><span>入池 ${esc(job.promoted||0)}</span>${pollError}</div>
-    <div class="refresh-actions"><button class="btn small secondary" onclick="openRefreshJobDetails()">查看详情</button></div>
+    <div class="refresh-actions">${running?'<button class="btn small danger" onclick="cancelRefreshSourceJob()">取消检测</button>':''}<button class="btn small secondary" onclick="openRefreshJobDetails()">查看详情</button></div>
   </div>`;
 }
 function renderGlobalRefreshStatus(){
@@ -1905,16 +1906,18 @@ function renderRefreshJobDialog(job){
   const list=groups.map((g,groupIdx)=>{
     const rows=(Array.isArray(g.urls)?g.urls:[]).map((r,urlIdx)=>{
       const raw=String(r.status||'waiting').toLowerCase();
-      const cls=raw==='completed'?'green':raw==='failed'?'red':'amber';
-      const progress=raw==='pulling'?'正在获取节点':`进度 ${r.done||0}/${r.total||0} · 成功 ${r.passed||0} · 失败 ${r.failed||0} · 入池 ${r.promoted||0}`;
+      const cls=raw==='completed'?'green':raw==='failed'||raw==='canceled'?'red':'amber';
+      const counts=`进度 ${r.done||0}/${r.total||0} · 成功 ${r.passed||0} · 失败 ${r.failed||0} · 入池 ${r.promoted||0}`;
+      const progress=r.detail||((raw==='pulling'||raw==='retrying')?'正在获取节点':counts);
       const local=r.kind==='content';
       const title=local?(r.label||'本地内容'):`订阅 ${groupIdx+1}-${urlIdx+1}`;
       const source=local?'使用已保存的节点重新检测':maskedSubscriptionURL(r.url);
-      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>${esc(title)}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span></div><div class="muted">${esc(source)}</div><div class="muted">${esc(progress)}</div>${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
+      const attempt=r.attempt?` · 第 ${r.attempt}/${r.attempts||2} 轮`:'';
+      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>${esc(title)}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span>${r.cached?'<span class="pill amber">缓存节点</span>':''}</div><div class="muted">${esc(source+attempt)}</div><div class="muted">${esc(progress)}</div>${r.total?`<div class="muted">${esc(counts)}</div>`:''}${r.warning?`<div class="muted" style="color:#9a6700">${esc(r.warning)}</div>`:''}${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
     }).join('');
     return `<div class="stack" style="gap:10px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">来源 ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
   }).join('');
-  dialog.innerHTML=`<h2>${esc(refreshPhaseText(job))}</h2><div class="stack">${refreshProgressHTML(job)}<div class="refresh-stats"><span>来源 ${esc(job.done_urls||0)}/${esc(job.total_urls||0)}</span><span>节点 ${esc(refreshNodeProgressText(job))}</span><span>成功 ${esc(job.passed||0)}</span><span>失败 ${esc(job.failed_nodes||0)}</span><span>入池 ${esc(job.promoted||0)}</span><span>耗时 ${esc(refreshElapsed(job))}</span></div>${job.error?`<div style="color:#b94a48">${esc(job.error)}</div>`:''}<div class="refresh-detail-list">${list}</div></div><div class="refresh-actions" style="margin-top:16px"><button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button></div>`;
+  dialog.innerHTML=`<h2>${esc(refreshPhaseText(job))}</h2><div class="stack">${refreshProgressHTML(job)}<div class="refresh-stats"><span>来源 ${esc(job.done_urls||0)}/${esc(job.total_urls||0)}</span><span>节点 ${esc(refreshNodeProgressText(job))}</span><span>成功 ${esc(job.passed||0)}</span><span>失败 ${esc(job.failed_nodes||0)}</span><span>入池 ${esc(job.promoted||0)}</span><span>耗时 ${esc(refreshElapsed(job))}</span></div>${job.error?`<div style="color:#b94a48">${esc(job.error)}</div>`:''}<div class="refresh-detail-list">${list}</div></div><div class="refresh-actions" style="margin-top:16px">${job.status==='running'?'<button class="btn danger" onclick="cancelRefreshSourceJob()">取消检测</button>':''}<button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button></div>`;
   modal.classList.add('show');
 }
 function openRefreshJobDetails(){
@@ -1953,16 +1956,28 @@ async function pollRefreshSourceJob(jobID){
       S.refreshJob=last;
       renderRefreshStatusHost();
       if(S.refreshDialogOpen&&S.refreshDialogJob===jobID)renderRefreshJobDialog(last);
-      if(last.status==='finished'||last.status==='failed')break;
+      if(last.status==='finished'||last.status==='failed'||last.status==='canceled')break;
       await new Promise(resolve=>setTimeout(resolve,1000));
     }
     S.activeRefreshJob='';
     localStorage.removeItem(ACTIVE_REFRESH_JOB_KEY);
-    toast(last.status==='failed'?'重新检测失败':'重新检测完成',last.status==='failed'?'err':'');
+    const canceled=last.status==='canceled';
+    toast(canceled?'重新检测已取消':last.status==='failed'?'重新检测失败':'重新检测完成',last.status==='failed'?'err':'');
     await refresh();
   }finally{
     S.refreshPollingJob='';
   }
+}
+async function cancelRefreshSourceJob(){
+  const jobID=S.refreshJob?.id||S.activeRefreshJob;
+  if(!jobID)return;
+  if(!confirm('确认取消当前重新检测任务？\n\n已经完成的来源会保留结果。'))return;
+  try{
+    S.refreshJob=await api('/api/import/refresh/jobs/'+encodeURIComponent(jobID),{method:'DELETE'});
+    renderRefreshStatusHost();
+    if(S.refreshDialogOpen)renderRefreshJobDialog(S.refreshJob);
+    toast('正在取消重新检测');
+  }catch(err){toast(err.message,'err')}
 }
 function handleRefreshPollError(err){
   S.activeRefreshJob='';

@@ -53,9 +53,12 @@ func Fetch(ctx context.Context, rawURL string, opts Options) ([]byte, error) {
 	}
 	errs = append(errs, "direct: "+err.Error())
 
-	if resolvedBody, resolvedErr := fetchViaResolvedIP(ctx, rawURL, reqHeaders, resolvedTimeout, opts.SkipTLSVerify); resolvedErr == nil {
+	resolvedCtx, cancelResolved := context.WithTimeout(ctx, resolvedTimeout)
+	resolvedBody, resolvedErr := fetchViaResolvedIP(resolvedCtx, rawURL, reqHeaders, resolvedTimeout, opts.SkipTLSVerify)
+	cancelResolved()
+	if resolvedErr == nil {
 		return resolvedBody, nil
-	} else if resolvedErr != nil {
+	} else {
 		errs = append(errs, "resolved: "+resolvedErr.Error())
 	}
 

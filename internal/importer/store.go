@@ -126,6 +126,62 @@ func (s *Store) UpsertNodes(nodes []ManagedNode) error {
 	return s.saveSnapshot(sf)
 }
 
+func (s *Store) RestoreNodeStatesIfCurrent(states map[string]ManagedNodeState, current ManagedNodeState) error {
+	s.mu.Lock()
+	now := time.Now()
+	changed := false
+	for id, state := range states {
+		node, ok := s.nodes[id]
+		if !ok || node.State != current {
+			continue
+		}
+		node.State = state
+		node.UpdatedAt = now
+		s.nodes[id] = node
+		changed = true
+	}
+	if !changed {
+		s.mu.Unlock()
+		return nil
+	}
+	snapshot := s.snapshotLocked()
+	s.mu.Unlock()
+	return s.saveSnapshot(snapshot)
+}
+
+func (s *Store) RecoverStaleTestingNodes() (int, error) {
+	s.mu.Lock()
+	now := time.Now()
+	recovered := 0
+	for id, node := range s.nodes {
+		if node.State != StateTesting {
+			continue
+		}
+		switch {
+		case node.InPool:
+			node.State = StateInPool
+		case !node.Enabled:
+			node.State = StateExcluded
+		case node.LastTestAt.IsZero():
+			node.State = StateParsed
+		case node.LastError != "":
+			node.State = StateFailed
+		default:
+			node.State = StatePassed
+		}
+		node.UpdatedAt = now
+		s.nodes[id] = node
+		recovered++
+	}
+	if recovered == 0 {
+		s.mu.Unlock()
+		return 0, nil
+	}
+	snapshot := s.snapshotLocked()
+	s.mu.Unlock()
+	return recovered, s.saveSnapshot(snapshot)
+}
+
 func (s *Store) GetNode(id string) (ManagedNode, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

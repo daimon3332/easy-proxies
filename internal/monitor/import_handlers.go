@@ -31,6 +31,7 @@ type ImportService interface {
 	ListImportSources() ([]importer.ImportSourceSummary, error)
 	StartRefreshSources(key string) (string, error)
 	GetRefreshJob(jobID string) (importer.SourceRefreshJob, bool)
+	CancelRefreshJob(jobID string) (importer.SourceRefreshJob, error)
 	ListAll() ([]importer.ManagedNode, error)
 	ListPool() ([]importer.ManagedNode, error)
 	ListFailed() ([]importer.ManagedNode, error)
@@ -312,16 +313,28 @@ func (s *Server) handleImportAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.HasPrefix(path, "refresh/jobs/") && r.Method == http.MethodGet {
+	if strings.HasPrefix(path, "refresh/jobs/") {
 		jobID := strings.TrimRight(path[len("refresh/jobs/"):], "/")
-		job, found := s.importSvc.GetRefreshJob(jobID)
-		if !found {
-			w.WriteHeader(http.StatusNotFound)
-			writeJSON(w, map[string]string{"error": "refresh job not found"})
+		switch r.Method {
+		case http.MethodGet:
+			job, found := s.importSvc.GetRefreshJob(jobID)
+			if !found {
+				w.WriteHeader(http.StatusNotFound)
+				writeJSON(w, map[string]string{"error": "refresh job not found"})
+				return
+			}
+			writeJSON(w, job)
+			return
+		case http.MethodDelete:
+			job, err := s.importSvc.CancelRefreshJob(jobID)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				writeJSON(w, map[string]string{"error": err.Error()})
+				return
+			}
+			writeJSON(w, job)
 			return
 		}
-		writeJSON(w, job)
-		return
 	}
 
 	if strings.HasPrefix(path, "jobs/") && r.Method == http.MethodGet {

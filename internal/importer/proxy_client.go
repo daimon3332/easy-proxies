@@ -10,6 +10,9 @@ import (
 )
 
 func NewHTTPClientForURI(ctx context.Context, buildFn OutboundBuilder, nodeID, uri string, timeout time.Duration, skipCertVerify bool) (*http.Client, func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
@@ -17,6 +20,9 @@ func NewHTTPClientForURI(ctx context.Context, buildFn OutboundBuilder, nodeID, u
 	outbound, err := buildFn(tag, uri, skipCertVerify)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build outbound: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
 	}
 	instance, port, err := startProxyBox(ctx, tag, outbound)
 	if err != nil {

@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"easy_proxies/internal/config"
 
@@ -458,6 +460,203 @@ func TestStartRefreshSourcesReusesRunningJob(t *testing.T) {
 	}
 	if jobID != "active" {
 		t.Fatalf("jobID = %q, want active", jobID)
+	}
+}
+
+func TestRefreshSourcesDoesNotLetSlowFirstURLBlockHealthySources(t *testing.T) {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer slow.Close()
+	fast := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("trojan://pass@example.com:443#fast\n"))
+	}))
+	defer fast.Close()
+
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	tester := NewNodeTester(func(tag, uri string, skipCertVerify bool) (option.Outbound, error) {
+		return option.Outbound{}, errors.New("probe fixture failure")
+	})
+	svc := NewService(store, tester, &batchNodeManagerStub{})
+	svc.refreshConcurrency = 2
+	svc.refreshSourceTimeout = 300 * time.Millisecond
+	svc.refreshProxyCandidates = 1
+	if err := store.UpsertNodes([]ManagedNode{
+		{ID: "slow", URI: "trojan://slow", State: StateFailed, ImportMode: "url", ImportSource: slow.URL, TagPrefix: "A-slow"},
+		{ID: "fast", URI: "trojan://fast", State: StateFailed, ImportMode: "url", ImportSource: fast.URL, TagPrefix: "B-fast"},
+	}); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	jobID, err := svc.StartRefreshSources("")
+	if err != nil {
+		t.Fatalf("StartRefreshSources() error = %v", err)
+	}
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		job, _ := svc.GetRefreshJob(jobID)
+		if job.Groups[1].URLs[0].Status != "waiting" {
+			_, _ = svc.CancelRefreshJob(jobID)
+			for cancelDeadline := time.Now().Add(time.Second); time.Now().Before(cancelDeadline); {
+				canceled, _ := svc.GetRefreshJob(jobID)
+				if canceled.Status == SourceRefreshJobCanceled {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	job, _ := svc.GetRefreshJob(jobID)
+	t.Fatalf("healthy source stayed blocked behind slow source: %#v", job.Groups)
+}
+
+func TestCancelRefreshSourcesStopsPullingJob(t *testing.T) {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer slow.Close()
+	svc, store := newBatchServiceForTest(t, &batchNodeManagerStub{})
+	svc.refreshSourceTimeout = 10 * time.Second
+	if err := store.UpsertNode(ManagedNode{ID: "slow", URI: "trojan://slow", State: StateFailed, ImportMode: "url", ImportSource: slow.URL, TagPrefix: "slow"}); err != nil {
+		t.Fatalf("UpsertNode() error = %v", err)
+	}
+	jobID, err := svc.StartRefreshSources("")
+	if err != nil {
+		t.Fatalf("StartRefreshSources() error = %v", err)
+	}
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+		job, _ := svc.GetRefreshJob(jobID)
+		if job.Phase == "pulling" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := svc.CancelRefreshJob(jobID); err != nil {
+		t.Fatalf("CancelRefreshJob() error = %v", err)
+	}
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+		job, _ := svc.GetRefreshJob(jobID)
+		if job.Status == SourceRefreshJobCanceled {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	job, _ := svc.GetRefreshJob(jobID)
+	t.Fatalf("refresh job did not cancel promptly: %#v", job)
+}
+
+func TestCanceledImportRestoresUntestedNodes(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	tester := NewNodeTester(func(tag, uri string, skipCertVerify bool) (option.Outbound, error) {
+		return option.Outbound{}, errors.New("unexpected probe")
+	})
+	svc := NewService(store, tester, &batchNodeManagerStub{})
+	nodes := []ManagedNode{
+		{ID: "parsed-1", URI: "trojan://one", State: StateTesting},
+		{ID: "parsed-2", URI: "trojan://two", State: StateTesting},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+	jobID := "canceled-import"
+	if err := store.UpsertJob(ImportJob{ID: jobID, Status: ImportStatusRunning, Total: len(nodes)}); err != nil {
+		t.Fatalf("UpsertJob() error = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	svc.runPipeline(ctx, jobID, nodes, map[string]ManagedNodeState{
+		"parsed-1": StateParsed,
+		"parsed-2": StateParsed,
+	}, false)
+
+	for _, id := range []string{"parsed-1", "parsed-2"} {
+		node, _ := store.GetNode(id)
+		if node.State != StateParsed {
+			t.Fatalf("node %s state = %q, want %q", id, node.State, StateParsed)
+		}
+	}
+	job, _ := store.GetJob(jobID)
+	if job.Status != ImportStatusCanceled {
+		t.Fatalf("job status = %q, want %q", job.Status, ImportStatusCanceled)
+	}
+}
+
+func TestNewServiceRecoversPersistedTestingNodes(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	now := time.Now()
+	if err := store.UpsertNodes([]ManagedNode{
+		{ID: "new", URI: "trojan://new", State: StateTesting, Enabled: true},
+		{ID: "pool", URI: "trojan://pool", State: StateTesting, InPool: true},
+		{ID: "excluded", URI: "trojan://excluded", State: StateTesting, LastTestAt: now, Enabled: false},
+		{ID: "failed", URI: "trojan://failed", State: StateTesting, LastTestAt: now, LastError: "timeout", Enabled: true},
+		{ID: "passed", URI: "trojan://passed", State: StateTesting, LastTestAt: now, Enabled: true},
+	}); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+	NewService(store, nil, &batchNodeManagerStub{})
+
+	want := map[string]ManagedNodeState{
+		"new": StateParsed, "pool": StateInPool, "excluded": StateExcluded, "failed": StateFailed, "passed": StatePassed,
+	}
+	for id, state := range want {
+		node, _ := store.GetNode(id)
+		if node.State != state {
+			t.Fatalf("node %s state = %q, want %q", id, node.State, state)
+		}
+	}
+}
+
+func TestCompactRefreshSourceErrorRedactsURLAndPreservesUTF8(t *testing.T) {
+	const sourceURL = "https://example.test/sub?token=secret-token"
+	err := errors.New("Get \"" + sourceURL + "\": " + strings.Repeat("连接超时", 100))
+	message := compactRefreshSourceError(err, sourceURL)
+	if strings.Contains(message, sourceURL) || strings.Contains(message, "secret-token") {
+		t.Fatalf("message leaked source URL: %q", message)
+	}
+	if !strings.Contains(message, "订阅地址") || !utf8.ValidString(message) {
+		t.Fatalf("message was not safely compacted: %q", message)
+	}
+}
+
+func TestFetchSubscriptionViaPoolBoundsAndPrioritizesCandidates(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	attempted := make([]string, 0)
+	tester := NewNodeTester(func(tag, uri string, skipCertVerify bool) (option.Outbound, error) {
+		attempted = append(attempted, uri)
+		return option.Outbound{}, errors.New("fixture build failure")
+	})
+	svc := NewService(store, tester, &batchNodeManagerStub{})
+	svc.refreshProxyCandidates = 2
+	now := time.Now()
+	nodes := []ManagedNode{
+		{ID: "same", URI: "trojan://same", TagPrefix: "source", State: StateInPool, InPool: true, LatencyMs: 10, LastTestAt: now},
+		{ID: "older", URI: "trojan://older", TagPrefix: "other", State: StateInPool, InPool: true, LatencyMs: 30, LastTestAt: now.Add(-time.Minute)},
+		{ID: "newer", URI: "trojan://newer", TagPrefix: "other", State: StateInPool, InPool: true, LatencyMs: 80, LastTestAt: now},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+	_, err = svc.fetchSubscriptionViaPool(context.Background(), "https://example.test/sub", http.Header{}, "source", 0, nil)
+	if err == nil {
+		t.Fatal("fetchSubscriptionViaPool() unexpectedly succeeded")
+	}
+	want := []string{"trojan://newer", "trojan://older"}
+	if !reflect.DeepEqual(attempted, want) {
+		t.Fatalf("attempted = %#v, want bounded prioritized candidates %#v", attempted, want)
 	}
 }
 

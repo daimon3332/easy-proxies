@@ -250,6 +250,7 @@ const (
 	SourceRefreshJobRunning  SourceRefreshJobStatus = "running"
 	SourceRefreshJobFinished SourceRefreshJobStatus = "finished"
 	SourceRefreshJobFailed   SourceRefreshJobStatus = "failed"
+	SourceRefreshJobCanceled SourceRefreshJobStatus = "canceled"
 )
 
 type SourceRefreshURL struct {
@@ -263,6 +264,12 @@ type SourceRefreshURL struct {
 	Passed    int       `json:"passed"`
 	Failed    int       `json:"failed"`
 	Promoted  int       `json:"promoted"`
+	Stage     string    `json:"stage,omitempty"`
+	Detail    string    `json:"detail,omitempty"`
+	Warning   string    `json:"warning,omitempty"`
+	Attempt   int       `json:"attempt,omitempty"`
+	Attempts  int       `json:"attempts,omitempty"`
+	Cached    bool      `json:"cached,omitempty"`
 	Error     string    `json:"error,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

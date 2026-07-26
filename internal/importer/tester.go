@@ -12,7 +12,6 @@ import (
 	"net/netip"
 	"net/url"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -27,8 +26,12 @@ import (
 )
 
 const (
-	DefaultProbeTarget  = "https://www.gstatic.com/generate_204"
-	DefaultProbeTimeout = 5 * time.Second
+	DefaultProbeTarget      = "https://www.gstatic.com/generate_204"
+	AlternateProbeTarget    = "https://cp.cloudflare.com/generate_204"
+	DefaultProbeTimeout     = 5 * time.Second
+	probeRounds             = 3
+	defaultProbeConcurrency = 32
+	defaultProbeRetryDelay  = time.Second
 )
 
 type OutboundBuilder func(tag, uri string, skipCertVerify bool) (option.Outbound, error)
@@ -40,24 +43,21 @@ type NodeTester struct {
 	concurrency    int
 	skipCertVerify bool
 	buildOutbound  OutboundBuilder
+	retryDelay     time.Duration
+	probeOverride  func(context.Context, ManagedNode, string, time.Duration) TestResult
+	batchSem       chan struct{}
 }
 
 type TesterOption func(*NodeTester)
 
 func NewNodeTester(buildFn OutboundBuilder, opts ...TesterOption) *NodeTester {
-	concurrency := runtime.NumCPU() * 2
-	if concurrency > 16 {
-		concurrency = 16
-	}
-	if concurrency < 4 {
-		concurrency = 4
-	}
 	t := &NodeTester{
 		probeTarget:   DefaultProbeTarget,
 		ipinfoURL:     "https://ipinfo.io/json",
 		timeout:       DefaultProbeTimeout,
-		concurrency:   concurrency,
+		concurrency:   defaultProbeConcurrency,
 		buildOutbound: buildFn,
+		retryDelay:    defaultProbeRetryDelay,
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -65,6 +65,7 @@ func NewNodeTester(buildFn OutboundBuilder, opts ...TesterOption) *NodeTester {
 	if t.concurrency < 1 {
 		t.concurrency = 1
 	}
+	t.batchSem = make(chan struct{}, t.concurrency)
 	return t
 }
 
@@ -133,18 +134,13 @@ func (t *NodeTester) Test(ctx context.Context, node ManagedNode) (result TestRes
 
 func (t *NodeTester) Probe(ctx context.Context, node ManagedNode) (result TestResult) {
 	defer recoverTestResult(&result)
-
-	client, closeClient, err := t.clientForNode(ctx, node)
-	if err != nil {
+	for event := range t.ProbeBatchWithProgress(ctx, []ManagedNode{node}, nil) {
+		return event.Result
+	}
+	if err := ctx.Err(); err != nil {
 		return TestResult{Error: err}
 	}
-	defer closeClient()
-
-	start := time.Now()
-	if err := t.probeWithRetry(ctx, client); err != nil {
-		return TestResult{Error: err}
-	}
-	return TestResult{LatencyMs: time.Since(start).Milliseconds()}
+	return TestResult{Error: fmt.Errorf("probe ended without result")}
 }
 
 func (t *NodeTester) LookupCountry(ctx context.Context, node ManagedNode) (result TestResult) {
@@ -173,6 +169,10 @@ func recoverTestResult(result *TestResult) {
 }
 
 func (t *NodeTester) clientForNode(ctx context.Context, node ManagedNode) (*http.Client, func(), error) {
+	return t.clientForNodeWithTimeout(ctx, node, t.timeout)
+}
+
+func (t *NodeTester) clientForNodeWithTimeout(ctx context.Context, node ManagedNode, timeout time.Duration) (*http.Client, func(), error) {
 	tag := "test-" + safeTagPart(node.ID)
 	outbound, err := t.buildOutbound(tag, node.URI, t.skipCertVerify)
 	if err != nil {
@@ -190,7 +190,7 @@ func (t *NodeTester) clientForNode(ctx context.Context, node ManagedNode) (*http
 		return nil, nil, err
 	}
 	client := &http.Client{
-		Timeout: t.timeout,
+		Timeout: timeout,
 		Transport: &http.Transport{
 			Proxy: http.ProxyURL(proxyURL),
 			TLSClientConfig: &tls.Config{
@@ -206,7 +206,76 @@ func (t *NodeTester) TestBatch(ctx context.Context, nodes []ManagedNode) <-chan 
 }
 
 func (t *NodeTester) ProbeBatch(ctx context.Context, nodes []ManagedNode) <-chan NodeTestEvent {
-	return t.runBatch(ctx, nodes, t.Probe)
+	return t.ProbeBatchWithProgress(ctx, nodes, nil)
+}
+
+func (t *NodeTester) ProbeBatchWithProgress(ctx context.Context, nodes []ManagedNode, onRound func(ProbeRoundProgress)) <-chan NodeTestEvent {
+	events := make(chan NodeTestEvent)
+	go func() {
+		defer close(events)
+		pending := append([]ManagedNode(nil), nodes...)
+		primary := t.probeTarget
+		alternate := alternateProbeTarget(primary)
+		primaryTested, primaryPassed := 0, 0
+		alternateTested, alternatePassed := 0, 0
+		for round := 1; round <= probeRounds && len(pending) > 0; round++ {
+			if round > 1 {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(t.retryDelay):
+				}
+			}
+			target := primary
+			if round == 2 {
+				target = alternate
+			} else if round == 3 && betterProbeTarget(alternateTested, alternatePassed, primaryTested, primaryPassed) {
+				target = alternate
+			}
+			concurrency := probeRoundConcurrency(t.concurrency, round, len(pending))
+			timeout := probeRoundTimeout(t.timeout, round)
+			if onRound != nil {
+				onRound(ProbeRoundProgress{Round: round, Rounds: probeRounds, Pending: len(pending), Target: target, Concurrency: concurrency})
+			}
+			next := make([]ManagedNode, 0, len(pending))
+			byID := make(map[string]ManagedNode, len(pending))
+			for _, node := range pending {
+				byID[node.ID] = node
+			}
+			probe := t.probeOverride
+			if probe == nil {
+				probe = t.probeOnce
+			}
+			for event := range t.runBatchWithConcurrency(ctx, pending, concurrency, timeout, func(nodeCtx context.Context, node ManagedNode) TestResult {
+				return probe(nodeCtx, node, target, timeout)
+			}) {
+				if target == primary {
+					primaryTested++
+					if event.Result.Error == nil {
+						primaryPassed++
+					}
+				} else {
+					alternateTested++
+					if event.Result.Error == nil {
+						alternatePassed++
+					}
+				}
+				if event.Result.Error != nil && round < probeRounds {
+					if node, ok := byID[event.NodeID]; ok {
+						next = append(next, node)
+					}
+					continue
+				}
+				select {
+				case events <- event:
+				case <-ctx.Done():
+					return
+				}
+			}
+			pending = next
+		}
+	}()
+	return events
 }
 
 func (t *NodeTester) CountryBatch(ctx context.Context, nodes []ManagedNode) <-chan NodeTestEvent {
@@ -214,10 +283,17 @@ func (t *NodeTester) CountryBatch(ctx context.Context, nodes []ManagedNode) <-ch
 }
 
 func (t *NodeTester) runBatch(ctx context.Context, nodes []ManagedNode, fn func(context.Context, ManagedNode) TestResult) <-chan NodeTestEvent {
+	return t.runBatchWithConcurrency(ctx, nodes, t.concurrency, t.timeout, fn)
+}
+
+func (t *NodeTester) runBatchWithConcurrency(ctx context.Context, nodes []ManagedNode, concurrency int, timeout time.Duration, fn func(context.Context, ManagedNode) TestResult) <-chan NodeTestEvent {
 	events := make(chan NodeTestEvent)
 	go func() {
 		defer close(events)
-		sem := make(chan struct{}, t.concurrency)
+		if concurrency < 1 {
+			concurrency = 1
+		}
+		sem := make(chan struct{}, concurrency)
 		var wg sync.WaitGroup
 		for _, node := range nodes {
 			select {
@@ -230,7 +306,15 @@ func (t *NodeTester) runBatch(ctx context.Context, nodes []ManagedNode, fn func(
 			go func(node ManagedNode) {
 				defer wg.Done()
 				defer func() { <-sem }()
-				nodeCtx, cancel := context.WithTimeout(ctx, t.timeout*2+1500*time.Millisecond)
+				if t.batchSem != nil {
+					select {
+					case <-ctx.Done():
+						return
+					case t.batchSem <- struct{}{}:
+					}
+					defer func() { <-t.batchSem }()
+				}
+				nodeCtx, cancel := context.WithTimeout(ctx, timeout*2+1500*time.Millisecond)
 				defer cancel()
 				result := safeTestResult(func() TestResult {
 					return fn(nodeCtx, node)
@@ -245,6 +329,58 @@ func (t *NodeTester) runBatch(ctx context.Context, nodes []ManagedNode, fn func(
 		wg.Wait()
 	}()
 	return events
+}
+
+func (t *NodeTester) probeOnce(ctx context.Context, node ManagedNode, target string, timeout time.Duration) TestResult {
+	client, closeClient, err := t.clientForNodeWithTimeout(ctx, node, timeout)
+	if err != nil {
+		return TestResult{Error: err}
+	}
+	defer closeClient()
+	start := time.Now()
+	if err := t.probeTargetURL(ctx, client, target); err != nil {
+		return TestResult{Error: err}
+	}
+	return TestResult{LatencyMs: time.Since(start).Milliseconds()}
+}
+
+func alternateProbeTarget(primary string) string {
+	if strings.EqualFold(strings.TrimSpace(primary), AlternateProbeTarget) {
+		return DefaultProbeTarget
+	}
+	return AlternateProbeTarget
+}
+
+func betterProbeTarget(candidateTested, candidatePassed, currentTested, currentPassed int) bool {
+	if candidateTested == 0 {
+		return false
+	}
+	if currentTested == 0 {
+		return true
+	}
+	return candidatePassed*currentTested > currentPassed*candidateTested
+}
+
+func probeRoundConcurrency(base, round, pending int) int {
+	if base < 1 {
+		base = 1
+	}
+	if pending >= base*4 {
+		return base
+	}
+	for i := 1; i < round; i++ {
+		if base > 2 {
+			base = max(2, base/2)
+		}
+	}
+	return base
+}
+
+func probeRoundTimeout(base time.Duration, _ int) time.Duration {
+	if base <= 0 {
+		base = DefaultProbeTimeout
+	}
+	return base
 }
 
 func safeTestResult(fn func() TestResult) (result TestResult) {
@@ -289,7 +425,11 @@ func startProxyBox(ctx context.Context, outboundTag string, outbound option.Outb
 }
 
 func (t *NodeTester) probe(ctx context.Context, client *http.Client) error {
-	u, err := normalizeProbeURL(t.probeTarget)
+	return t.probeTargetURL(ctx, client, t.probeTarget)
+}
+
+func (t *NodeTester) probeTargetURL(ctx context.Context, client *http.Client, target string) error {
+	u, err := normalizeProbeURL(target)
 	if err != nil {
 		return err
 	}

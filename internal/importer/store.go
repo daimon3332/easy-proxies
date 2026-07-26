@@ -215,6 +215,28 @@ func (s *Store) BackupSnapshot() StoreSnapshot {
 	return StoreSnapshot{Version: storeVersion, Nodes: nodes}
 }
 
+func (s *Store) RestoreNodesSnapshot(snapshot StoreSnapshot) error {
+	if snapshot.Version != storeVersion {
+		return fmt.Errorf("unsupported managed nodes version %d", snapshot.Version)
+	}
+	nodes := make(map[string]ManagedNode, len(snapshot.Nodes))
+	for id, node := range snapshot.Nodes {
+		nodes[id] = node
+	}
+	s.mu.Lock()
+	previous := s.nodes
+	s.nodes = nodes
+	fileSnapshot := s.snapshotLocked()
+	s.mu.Unlock()
+	if err := s.saveSnapshot(fileSnapshot); err != nil {
+		s.mu.Lock()
+		s.nodes = previous
+		s.mu.Unlock()
+		return err
+	}
+	return nil
+}
+
 func DecodeStoreSnapshot(data []byte) (StoreSnapshot, error) {
 	var snapshot StoreSnapshot
 	if err := json.Unmarshal(data, &snapshot); err != nil {

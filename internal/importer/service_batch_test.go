@@ -3,12 +3,14 @@ package importer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -24,6 +26,7 @@ type batchNodeManagerStub struct {
 	reloadCount    int
 	nextPort       uint16
 	configNodes    []config.NodeConfig
+	restoreCount   int
 }
 
 func (m *batchNodeManagerStub) CreateNode(ctx context.Context, node config.NodeConfig) (config.NodeConfig, error) {
@@ -57,6 +60,64 @@ func (m *batchNodeManagerStub) ListConfigNodes(ctx context.Context) ([]config.No
 	return out, nil
 }
 
+func (m *batchNodeManagerStub) RestoreConfigNodes(ctx context.Context, nodes []config.NodeConfig) error {
+	_ = ctx
+	m.restoreCount++
+	m.configNodes = append([]config.NodeConfig(nil), nodes...)
+	return nil
+}
+
+func TestCancelRefreshUsesSingleParentSnapshotRestore(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	tester := NewNodeTester(nil, WithTesterConcurrency(2))
+	tester.retryDelay = time.Millisecond
+	tester.probeOverride = func(ctx context.Context, _ ManagedNode, _ string, _ time.Duration) TestResult {
+		<-ctx.Done()
+		return TestResult{Error: ctx.Err()}
+	}
+	nodes := []ManagedNode{
+		{ID: "a", Name: "a", URI: "trojan://a", TagPrefix: "A", ImportMode: "uri", State: StateInPool, InPool: true, Enabled: true, Port: 24000},
+		{ID: "b", Name: "b", URI: "trojan://b", TagPrefix: "B", ImportMode: "uri", State: StateInPool, InPool: true, Enabled: true, Port: 24001},
+	}
+	for _, node := range nodes {
+		mgr.configNodes = append(mgr.configNodes, node.ToConfigNode())
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+	svc := NewService(store, tester, mgr)
+	jobID, err := svc.StartRefreshSources("")
+	if err != nil {
+		t.Fatalf("StartRefreshSources() error = %v", err)
+	}
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+		job, _ := svc.GetRefreshJob(jobID)
+		if job.Phase == "testing" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := svc.CancelRefreshJob(jobID); err != nil {
+		t.Fatalf("CancelRefreshJob() error = %v", err)
+	}
+	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+		job, _ := svc.GetRefreshJob(jobID)
+		if job.Status == SourceRefreshJobCanceled {
+			if mgr.restoreCount != 1 || len(store.ListPoolNodes()) != 2 {
+				t.Fatalf("restoreCount=%d pool=%d job=%#v", mgr.restoreCount, len(store.ListPoolNodes()), job)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	job, _ := svc.GetRefreshJob(jobID)
+	t.Fatalf("refresh job did not cancel: %#v", job)
+}
+
 func (m *batchNodeManagerStub) DeleteNode(ctx context.Context, name string) error {
 	return m.DeleteNodes(ctx, []string{name})
 }
@@ -80,6 +141,115 @@ func newBatchServiceForTest(t *testing.T, mgr *batchNodeManagerStub) (*Service, 
 		t.Fatalf("NewStore() error = %v", err)
 	}
 	return NewService(store, nil, mgr), store
+}
+
+func waitTestJobTerminal(t *testing.T, svc *Service, jobID string) TestJob {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		job, ok := svc.GetTestJob(jobID)
+		if ok && job.Status != TestJobRunning {
+			return job
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	job, _ := svc.GetTestJob(jobID)
+	t.Fatalf("test job did not finish: %#v", job)
+	return TestJob{}
+}
+
+func TestBatchRetestRemovesPoolNodeOnlyAfterThreeFailedRounds(t *testing.T) {
+	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{{Name: "tag-node", URI: "trojan://node", Port: 24000}}}
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	tester := NewNodeTester(nil, WithTesterConcurrency(2))
+	tester.retryDelay = time.Millisecond
+	attempts := 0
+	var mu sync.Mutex
+	tester.probeOverride = func(context.Context, ManagedNode, string, time.Duration) TestResult {
+		mu.Lock()
+		attempts++
+		mu.Unlock()
+		return TestResult{Error: errors.New("fixture failure")}
+	}
+	svc := NewService(store, tester, mgr)
+	if err := store.UpsertNode(ManagedNode{ID: "node", Name: "tag-node", OriginalName: "node", URI: "trojan://node", State: StateInPool, InPool: true, Enabled: true, Port: 24000}); err != nil {
+		t.Fatalf("UpsertNode() error = %v", err)
+	}
+	jobID, err := svc.StartBatchTest(BatchTestRequest{NodeIDs: []string{"node"}, Retest: true, PromotePassed: true, AutoReload: true})
+	if err != nil {
+		t.Fatalf("StartBatchTest() error = %v", err)
+	}
+	job := waitTestJobTerminal(t, svc, jobID)
+	node, _ := store.GetNode("node")
+	if attempts != 3 || job.Failed != 1 || !job.Applied || node.State != StateFailed || node.InPool || node.Port != 0 {
+		t.Fatalf("attempts=%d job=%#v node=%#v", attempts, job, node)
+	}
+}
+
+func TestBatchRetestKeepsPoolNodeWhenSecondRoundPasses(t *testing.T) {
+	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{{Name: "tag-node", URI: "trojan://node", Port: 24000}}}
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	tester := NewNodeTester(nil, WithTesterConcurrency(2))
+	tester.retryDelay = time.Millisecond
+	attempts := 0
+	tester.probeOverride = func(context.Context, ManagedNode, string, time.Duration) TestResult {
+		attempts++
+		if attempts == 1 {
+			return TestResult{Error: errors.New("first round failure")}
+		}
+		return TestResult{LatencyMs: 12}
+	}
+	svc := NewService(store, tester, mgr)
+	if err := store.UpsertNode(ManagedNode{ID: "node", Name: "tag-node", URI: "trojan://node", State: StateInPool, InPool: true, Enabled: true, Port: 24000}); err != nil {
+		t.Fatalf("UpsertNode() error = %v", err)
+	}
+	jobID, err := svc.StartBatchTest(BatchTestRequest{NodeIDs: []string{"node"}, Retest: true, PromotePassed: true, AutoReload: true})
+	if err != nil {
+		t.Fatalf("StartBatchTest() error = %v", err)
+	}
+	job := waitTestJobTerminal(t, svc, jobID)
+	node, _ := store.GetNode("node")
+	if attempts != 2 || job.Passed != 1 || !job.Applied || node.State != StateInPool || !node.InPool || len(mgr.deletedBatches) != 0 {
+		t.Fatalf("attempts=%d job=%#v node=%#v deleted=%#v", attempts, job, node, mgr.deletedBatches)
+	}
+}
+
+func TestBatchRetestProtectsPoolWhenAllControlNodesFail(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	tester := NewNodeTester(nil, WithTesterConcurrency(8))
+	tester.retryDelay = time.Millisecond
+	tester.probeOverride = func(context.Context, ManagedNode, string, time.Duration) TestResult {
+		return TestResult{Error: errors.New("systemic fixture failure")}
+	}
+	nodes := make([]ManagedNode, 20)
+	ids := make([]string, 20)
+	for i := range nodes {
+		ids[i] = fmt.Sprintf("node-%02d", i)
+		nodes[i] = ManagedNode{ID: ids[i], Name: ids[i], URI: "trojan://" + ids[i], State: StateInPool, InPool: true, Enabled: true, Port: uint16(24000 + i)}
+		mgr.configNodes = append(mgr.configNodes, nodes[i].ToConfigNode())
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+	svc := NewService(store, tester, mgr)
+	jobID, err := svc.StartBatchTest(BatchTestRequest{NodeIDs: ids, Retest: true, PromotePassed: true, AutoReload: true})
+	if err != nil {
+		t.Fatalf("StartBatchTest() error = %v", err)
+	}
+	job := waitTestJobTerminal(t, svc, jobID)
+	if !job.Protected || job.Applied || job.Phase != "protected" || len(store.ListPoolNodes()) != len(nodes) || len(mgr.deletedBatches) != 0 {
+		t.Fatalf("job=%#v pool=%d deleted=%#v", job, len(store.ListPoolNodes()), mgr.deletedBatches)
+	}
 }
 
 func TestPromoteManyUsesSingleConfigBatchAndReload(t *testing.T) {
@@ -719,6 +889,52 @@ func TestParseRefreshSubscriptionURLOnceReplacesSameSourceOnly(t *testing.T) {
 	newNode, ok := store.GetNode(nodeID(newURI))
 	if !ok || newNode.State != StateParsed || newNode.ImportSource != ts.URL || newNode.TagPrefix != "sub" {
 		t.Fatalf("newNode = %#v found=%v, want parsed replacement node", newNode, ok)
+	}
+}
+
+func TestRefreshStageKeepsOldPoolUntilResultsAreApplied(t *testing.T) {
+	mgr := &batchNodeManagerStub{nextPort: 25000}
+	svc, store := newBatchServiceForTest(t, mgr)
+	const newURI = "trojan://pass@example.com:443#New"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(newURI + "\n"))
+	}))
+	defer ts.Close()
+	old := ManagedNode{ID: "old", Name: "sub-Old", URI: "trojan://old", State: StateInPool, InPool: true, Enabled: true, Port: 24000, ImportMode: "url", ImportSource: ts.URL, TagPrefix: "sub"}
+	mgr.configNodes = append(mgr.configNodes, old.ToConfigNode())
+	if err := store.UpsertNode(old); err != nil {
+		t.Fatalf("UpsertNode() error = %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	parsed, err := svc.parseRefreshSubscriptionURLContext(ctx, "sub", ts.URL, 0, nil)
+	if err != nil {
+		t.Fatalf("parseRefreshSubscriptionURLContext() error = %v", err)
+	}
+	if oldNode, ok := store.GetNode("old"); !ok || !oldNode.InPool {
+		t.Fatalf("old pool node changed during staging: %#v found=%v", oldNode, ok)
+	}
+	if len(parsed.Nodes) != 1 || parsed.Nodes[0].ImportMode != "refresh_stage" {
+		t.Fatalf("parsed = %#v", parsed)
+	}
+	staged, _ := store.GetNode(parsed.Nodes[0].ID)
+	staged.State = StatePassed
+	if err := store.UpsertNode(staged); err != nil {
+		t.Fatalf("UpsertNode(staged) error = %v", err)
+	}
+	promoted, err := svc.applyStagedRefreshNodes(ts.URL, []string{staged.ID})
+	if err != nil {
+		t.Fatalf("applyStagedRefreshNodes() error = %v", err)
+	}
+	if promoted != 1 {
+		t.Fatalf("promoted = %d, want 1", promoted)
+	}
+	if _, ok := store.GetNode("old"); ok {
+		t.Fatal("old node still exists after apply")
+	}
+	newNode, ok := store.GetNode(nodeID(newURI))
+	if !ok || newNode.State != StateInPool || !newNode.InPool || newNode.Port == 0 {
+		t.Fatalf("new node = %#v found=%v", newNode, ok)
 	}
 }
 

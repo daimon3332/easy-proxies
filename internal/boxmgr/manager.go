@@ -783,6 +783,28 @@ func (m *Manager) ListConfigNodes(ctx context.Context) ([]config.NodeConfig, err
 	return cloneNodes(m.cfg.Nodes), nil
 }
 
+func (m *Manager) RestoreConfigNodes(ctx context.Context, nodes []config.NodeConfig) error {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+	m.mu.Lock()
+	if m.cfg == nil {
+		m.mu.Unlock()
+		return errConfigUnavailable
+	}
+	backup := cloneNodes(m.cfg.Nodes)
+	m.cfg.Nodes = cloneNodes(nodes)
+	if err := m.cfg.Save(); err != nil {
+		m.cfg.Nodes = backup
+		m.mu.Unlock()
+		return fmt.Errorf("save restored nodes: %w", err)
+	}
+	m.mu.Unlock()
+	return m.TriggerReload(ctx)
+}
+
 // CreateNode adds a new node to the config and saves it.
 func (m *Manager) CreateNode(ctx context.Context, node config.NodeConfig) (config.NodeConfig, error) {
 	nodes, err := m.CreateNodes(ctx, []config.NodeConfig{node})

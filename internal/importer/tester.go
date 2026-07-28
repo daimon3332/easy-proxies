@@ -234,9 +234,18 @@ func (t *NodeTester) ProbeBatchWithProgress(ctx context.Context, nodes []Managed
 			}
 			concurrency := probeRoundConcurrency(t.concurrency, round, len(pending))
 			timeout := probeRoundTimeout(t.timeout, round)
-			if onRound != nil {
-				onRound(ProbeRoundProgress{Round: round, Rounds: probeRounds, Pending: len(pending), Target: target, Concurrency: concurrency})
+			roundTotal := len(pending)
+			roundCompleted := 0
+			progressStep := max(1, (roundTotal+19)/20)
+			reportProgress := func() {
+				if onRound != nil {
+					onRound(ProbeRoundProgress{
+						Round: round, Rounds: probeRounds, Completed: roundCompleted, Total: roundTotal,
+						Pending: roundTotal - roundCompleted, Target: target, Concurrency: concurrency,
+					})
+				}
 			}
+			reportProgress()
 			next := make([]ManagedNode, 0, len(pending))
 			byID := make(map[string]ManagedNode, len(pending))
 			for _, node := range pending {
@@ -249,6 +258,10 @@ func (t *NodeTester) ProbeBatchWithProgress(ctx context.Context, nodes []Managed
 			for event := range t.runBatchWithConcurrency(ctx, pending, concurrency, timeout, func(nodeCtx context.Context, node ManagedNode) TestResult {
 				return probe(nodeCtx, node, target, timeout)
 			}) {
+				roundCompleted++
+				if roundCompleted == roundTotal || roundCompleted%progressStep == 0 {
+					reportProgress()
+				}
 				if target == primary {
 					primaryTested++
 					if event.Result.Error == nil {

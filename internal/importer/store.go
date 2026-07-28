@@ -24,11 +24,12 @@ type storeFile struct {
 }
 
 type Store struct {
-	mu     sync.RWMutex
-	saveMu sync.Mutex
-	path   string
-	nodes  map[string]ManagedNode
-	jobs   map[string]ImportJob
+	mu         sync.RWMutex
+	mutationMu sync.Mutex
+	saveMu     sync.Mutex
+	path       string
+	nodes      map[string]ManagedNode
+	jobs       map[string]ImportJob
 }
 
 func NewStore(path string) (*Store, error) {
@@ -112,9 +113,14 @@ func (s *Store) UpsertNode(node ManagedNode) error {
 }
 
 func (s *Store) UpsertNodes(nodes []ManagedNode) error {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
 	now := time.Now()
+	previous := make(map[string]ManagedNode, len(nodes))
+	existed := make(map[string]bool, len(nodes))
 	for i := range nodes {
+		previous[nodes[i].ID], existed[nodes[i].ID] = s.nodes[nodes[i].ID]
 		if nodes[i].CreatedAt.IsZero() {
 			nodes[i].CreatedAt = now
 		}
@@ -123,18 +129,34 @@ func (s *Store) UpsertNodes(nodes []ManagedNode) error {
 	}
 	sf := s.snapshotLocked()
 	s.mu.Unlock()
-	return s.saveSnapshot(sf)
+	if err := s.saveSnapshot(sf); err != nil {
+		s.mu.Lock()
+		for id, node := range previous {
+			if existed[id] {
+				s.nodes[id] = node
+			} else {
+				delete(s.nodes, id)
+			}
+		}
+		s.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (s *Store) RestoreNodeStatesIfCurrent(states map[string]ManagedNodeState, current ManagedNodeState) error {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
 	now := time.Now()
 	changed := false
+	previous := make(map[string]ManagedNode, len(states))
 	for id, state := range states {
 		node, ok := s.nodes[id]
 		if !ok || node.State != current {
 			continue
 		}
+		previous[id] = node
 		node.State = state
 		node.UpdatedAt = now
 		s.nodes[id] = node
@@ -146,17 +168,29 @@ func (s *Store) RestoreNodeStatesIfCurrent(states map[string]ManagedNodeState, c
 	}
 	snapshot := s.snapshotLocked()
 	s.mu.Unlock()
-	return s.saveSnapshot(snapshot)
+	if err := s.saveSnapshot(snapshot); err != nil {
+		s.mu.Lock()
+		for id, node := range previous {
+			s.nodes[id] = node
+		}
+		s.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (s *Store) RecoverStaleTestingNodes() (int, error) {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
 	now := time.Now()
 	recovered := 0
+	previous := make(map[string]ManagedNode)
 	for id, node := range s.nodes {
 		if node.State != StateTesting {
 			continue
 		}
+		previous[id] = node
 		switch {
 		case node.InPool:
 			node.State = StateInPool
@@ -179,7 +213,15 @@ func (s *Store) RecoverStaleTestingNodes() (int, error) {
 	}
 	snapshot := s.snapshotLocked()
 	s.mu.Unlock()
-	return recovered, s.saveSnapshot(snapshot)
+	if err := s.saveSnapshot(snapshot); err != nil {
+		s.mu.Lock()
+		for id, node := range previous {
+			s.nodes[id] = node
+		}
+		s.mu.Unlock()
+		return 0, err
+	}
+	return recovered, nil
 }
 
 func (s *Store) GetNode(id string) (ManagedNode, bool) {
@@ -223,6 +265,8 @@ func (s *Store) RestoreNodesSnapshot(snapshot StoreSnapshot) error {
 	for id, node := range snapshot.Nodes {
 		nodes[id] = node
 	}
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
 	previous := s.nodes
 	s.nodes = nodes
@@ -264,19 +308,22 @@ func (s *Store) ReplaceSnapshot(snapshot StoreSnapshot) error {
 	for id, node := range snapshot.Nodes {
 		nodes[id] = node
 	}
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
 	previousNodes := s.nodes
 	previousJobs := s.jobs
 	s.nodes = nodes
 	s.jobs = make(map[string]ImportJob)
 	sf := s.snapshotLocked()
+	s.mu.Unlock()
 	if err := s.saveSnapshot(sf); err != nil {
+		s.mu.Lock()
 		s.nodes = previousNodes
 		s.jobs = previousJobs
 		s.mu.Unlock()
 		return err
 	}
-	s.mu.Unlock()
 	return nil
 }
 
@@ -306,12 +353,15 @@ func (s *Store) ListFailedNodes() []ManagedNode {
 }
 
 func (s *Store) UpdateNodeState(id string, state ManagedNodeState, lastErr string) (ManagedNode, error) {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
 	n, ok := s.nodes[id]
 	if !ok {
 		s.mu.Unlock()
 		return ManagedNode{}, fmt.Errorf("node %s not found", id)
 	}
+	previous := n
 	n.State = state
 	n.LastError = lastErr
 	n.LastTestAt = time.Now()
@@ -319,7 +369,13 @@ func (s *Store) UpdateNodeState(id string, state ManagedNodeState, lastErr strin
 	s.nodes[id] = n
 	sf := s.snapshotLocked()
 	s.mu.Unlock()
-	return n, s.saveSnapshot(sf)
+	if err := s.saveSnapshot(sf); err != nil {
+		s.mu.Lock()
+		s.nodes[id] = previous
+		s.mu.Unlock()
+		return ManagedNode{}, err
+	}
+	return n, nil
 }
 
 func (s *Store) MarkInPool(id string, port uint16) (ManagedNode, error) {
@@ -334,6 +390,8 @@ func (s *Store) MarkInPool(id string, port uint16) (ManagedNode, error) {
 }
 
 func (s *Store) MarkInPoolMany(ports map[string]uint16) ([]ManagedNode, error) {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
 	now := time.Now()
 	maxOrder := -1
@@ -344,11 +402,13 @@ func (s *Store) MarkInPoolMany(ports map[string]uint16) ([]ManagedNode, error) {
 	}
 
 	updated := make([]ManagedNode, 0, len(ports))
+	previous := make(map[string]ManagedNode, len(ports))
 	for id, port := range ports {
 		n, ok := s.nodes[id]
 		if !ok {
 			continue
 		}
+		previous[id] = n
 		wasInPool := n.InPool && n.State == StateInPool
 		n.State = StateInPool
 		n.InPool = true
@@ -368,13 +428,25 @@ func (s *Store) MarkInPoolMany(ports map[string]uint16) ([]ManagedNode, error) {
 	}
 	sf := s.snapshotLocked()
 	s.mu.Unlock()
-	return updated, s.saveSnapshot(sf)
+	if err := s.saveSnapshot(sf); err != nil {
+		s.mu.Lock()
+		for id, node := range previous {
+			s.nodes[id] = node
+		}
+		s.mu.Unlock()
+		return nil, err
+	}
+	return updated, nil
 }
 
 func (s *Store) SetOrder(ids []string) error {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
+	previous := make(map[string]ManagedNode, len(ids))
 	for order, id := range ids {
 		if n, ok := s.nodes[id]; ok {
+			previous[id] = n
 			n.Order = order
 			n.UpdatedAt = time.Now()
 			s.nodes[id] = n
@@ -382,15 +454,36 @@ func (s *Store) SetOrder(ids []string) error {
 	}
 	sf := s.snapshotLocked()
 	s.mu.Unlock()
-	return s.saveSnapshot(sf)
+	if err := s.saveSnapshot(sf); err != nil {
+		s.mu.Lock()
+		for id, node := range previous {
+			s.nodes[id] = node
+		}
+		s.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (s *Store) UpsertJob(job ImportJob) error {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
+	previous, existed := s.jobs[job.ID]
 	s.jobs[job.ID] = job
 	sf := s.snapshotLocked()
 	s.mu.Unlock()
-	return s.saveSnapshot(sf)
+	if err := s.saveSnapshot(sf); err != nil {
+		s.mu.Lock()
+		if existed {
+			s.jobs[job.ID] = previous
+		} else {
+			delete(s.jobs, job.ID)
+		}
+		s.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (s *Store) GetJob(id string) (ImportJob, bool) {
@@ -401,17 +494,26 @@ func (s *Store) GetJob(id string) (ImportJob, bool) {
 }
 
 func (s *Store) UpdateJob(id string, fn func(*ImportJob)) error {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
 	j, ok := s.jobs[id]
 	if !ok {
 		s.mu.Unlock()
 		return fmt.Errorf("job %s not found", id)
 	}
+	previous := j
 	fn(&j)
 	s.jobs[id] = j
 	sf := s.snapshotLocked()
 	s.mu.Unlock()
-	return s.saveSnapshot(sf)
+	if err := s.saveSnapshot(sf); err != nil {
+		s.mu.Lock()
+		s.jobs[id] = previous
+		s.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 func (s *Store) DeleteNode(id string) error {
@@ -419,11 +521,26 @@ func (s *Store) DeleteNode(id string) error {
 }
 
 func (s *Store) DeleteNodes(ids []string) error {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 	s.mu.Lock()
+	previous := make(map[string]ManagedNode, len(ids))
+	existed := make(map[string]bool, len(ids))
 	for _, id := range ids {
+		previous[id], existed[id] = s.nodes[id]
 		delete(s.nodes, id)
 	}
 	sf := s.snapshotLocked()
 	s.mu.Unlock()
-	return s.saveSnapshot(sf)
+	if err := s.saveSnapshot(sf); err != nil {
+		s.mu.Lock()
+		for id, node := range previous {
+			if existed[id] {
+				s.nodes[id] = node
+			}
+		}
+		s.mu.Unlock()
+		return err
+	}
+	return nil
 }

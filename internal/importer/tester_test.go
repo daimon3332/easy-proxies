@@ -70,14 +70,30 @@ func TestProbeBatchDefersFailuresAcrossThreeRounds(t *testing.T) {
 	if results["first"].Error != nil || results["second"].Error != nil || results["failed"].Error == nil {
 		t.Fatalf("results = %#v", results)
 	}
-	if len(progress) != 3 || progress[0].Pending != 3 || progress[1].Pending != 2 || progress[2].Pending != 1 {
-		t.Fatalf("progress = %#v", progress)
+	starts := make([]ProbeRoundProgress, 0, probeRounds)
+	completed := make(map[int]ProbeRoundProgress, probeRounds)
+	for _, item := range progress {
+		if item.Completed == 0 {
+			starts = append(starts, item)
+		}
+		if item.Pending == 0 {
+			completed[item.Round] = item
+		}
 	}
-	if progress[0].Target != DefaultProbeTarget || progress[1].Target != AlternateProbeTarget || progress[2].Target != AlternateProbeTarget {
-		t.Fatalf("targets = %#v", progress)
+	if len(starts) != 3 || starts[0].Pending != 3 || starts[1].Pending != 2 || starts[2].Pending != 1 {
+		t.Fatalf("progress starts = %#v", starts)
 	}
-	if progress[0].Concurrency != 8 || progress[1].Concurrency != 4 || progress[2].Concurrency != 2 {
-		t.Fatalf("concurrency = %#v", progress)
+	if starts[0].Target != DefaultProbeTarget || starts[1].Target != AlternateProbeTarget || starts[2].Target != AlternateProbeTarget {
+		t.Fatalf("targets = %#v", starts)
+	}
+	if starts[0].Concurrency != 8 || starts[1].Concurrency != 4 || starts[2].Concurrency != 2 {
+		t.Fatalf("concurrency = %#v", starts)
+	}
+	for round, total := range map[int]int{1: 3, 2: 2, 3: 1} {
+		item, ok := completed[round]
+		if !ok || item.Completed != total || item.Total != total {
+			t.Fatalf("round %d completion = %#v", round, item)
+		}
 	}
 	failedTimes := times["failed"]
 	if len(failedTimes) != 3 || failedTimes[1].Sub(failedTimes[0]) < tester.retryDelay || failedTimes[2].Sub(failedTimes[1]) < tester.retryDelay {

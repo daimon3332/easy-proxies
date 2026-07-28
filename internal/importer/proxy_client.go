@@ -13,6 +13,9 @@ func NewHTTPClientForURI(ctx context.Context, buildFn OutboundBuilder, nodeID, u
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
+	if buildFn == nil {
+		return nil, nil, fmt.Errorf("outbound builder is not initialized")
+	}
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}

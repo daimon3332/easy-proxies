@@ -73,6 +73,8 @@ type ImportJob struct {
 	Promoted         int          `json:"promoted"`
 	ProbeRound       int          `json:"probe_round,omitempty"`
 	ProbeRounds      int          `json:"probe_rounds,omitempty"`
+	ProbeRoundDone   int          `json:"probe_round_done,omitempty"`
+	ProbeRoundTotal  int          `json:"probe_round_total,omitempty"`
 	ProbePending     int          `json:"probe_pending,omitempty"`
 	ProbeTarget      string       `json:"probe_target,omitempty"`
 	ProbeConcurrency int          `json:"probe_concurrency,omitempty"`
@@ -225,6 +227,8 @@ type NodeTestEvent struct {
 type ProbeRoundProgress struct {
 	Round       int
 	Rounds      int
+	Completed   int
+	Total       int
 	Pending     int
 	Target      string
 	Concurrency int
@@ -254,6 +258,8 @@ type TestJob struct {
 	Promoted         int           `json:"promoted"`
 	ProbeRound       int           `json:"probe_round,omitempty"`
 	ProbeRounds      int           `json:"probe_rounds,omitempty"`
+	ProbeRoundDone   int           `json:"probe_round_done,omitempty"`
+	ProbeRoundTotal  int           `json:"probe_round_total,omitempty"`
 	ProbePending     int           `json:"probe_pending,omitempty"`
 	ProbeTarget      string        `json:"probe_target,omitempty"`
 	ProbeConcurrency int           `json:"probe_concurrency,omitempty"`
@@ -294,6 +300,8 @@ type SourceRefreshURL struct {
 	Cached           bool      `json:"cached,omitempty"`
 	ProbeRound       int       `json:"probe_round,omitempty"`
 	ProbeRounds      int       `json:"probe_rounds,omitempty"`
+	ProbeRoundDone   int       `json:"probe_round_done,omitempty"`
+	ProbeRoundTotal  int       `json:"probe_round_total,omitempty"`
 	ProbePending     int       `json:"probe_pending,omitempty"`
 	ProbeTarget      string    `json:"probe_target,omitempty"`
 	ProbeConcurrency int       `json:"probe_concurrency,omitempty"`

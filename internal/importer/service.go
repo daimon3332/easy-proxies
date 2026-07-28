@@ -77,6 +77,7 @@ type Service struct {
 	refreshSourceTimeout   time.Duration
 	refreshProxyTimeout    time.Duration
 	refreshProxyCandidates int
+	refreshJobMaxWait      time.Duration
 	applyMu                sync.Mutex
 }
 
@@ -111,6 +112,7 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 		refreshSourceTimeout:   defaultRefreshSourceTimeout,
 		refreshProxyTimeout:    defaultRefreshProxyTimeout,
 		refreshProxyCandidates: defaultRefreshProxyCandidates,
+		refreshJobMaxWait:      refreshJobMaxWait,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -167,6 +169,10 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	snapshot, err := s.captureSourceRefreshSnapshot()
+	if err != nil {
+		return "", fmt.Errorf("创建刷新回滚点: %w", err)
+	}
 	jobID := randomHex(12)
 	job := &SourceRefreshJob{
 		ID:               jobID,
@@ -222,7 +228,7 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 	s.refreshCancelsMu.Lock()
 	s.refreshCancels[jobID] = cancel
 	s.refreshCancelsMu.Unlock()
-	go s.runRefreshJob(ctx, jobID, targets, s.captureSourceRefreshSnapshot())
+	go s.runRefreshJob(ctx, jobID, targets, snapshot)
 	return jobID, nil
 }
 
@@ -380,6 +386,7 @@ type sourceRefreshWork struct {
 
 func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sourceRefreshTarget, snapshot sourceRefreshSnapshot) {
 	defer s.unregisterRefreshCancel(jobID)
+	defer cleanupRefreshStageNodes(s.store)
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			restoreErr := s.restoreSourceRefreshSnapshot(snapshot)
@@ -445,15 +452,25 @@ func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sou
 	})
 }
 
-func (s *Service) captureSourceRefreshSnapshot() sourceRefreshSnapshot {
+func (s *Service) captureSourceRefreshSnapshot() (sourceRefreshSnapshot, error) {
 	snapshot := sourceRefreshSnapshot{store: s.store.BackupSnapshot()}
-	if lister, ok := s.nodeMgr.(NodeLister); ok {
-		if nodes, err := lister.ListConfigNodes(context.Background()); err == nil {
-			snapshot.configNodes = nodes
-			snapshot.hasConfig = true
-		}
+	if s.nodeMgr == nil {
+		return sourceRefreshSnapshot{}, fmt.Errorf("节点管理器未初始化")
 	}
-	return snapshot
+	lister, ok := s.nodeMgr.(NodeLister)
+	if !ok {
+		return sourceRefreshSnapshot{}, fmt.Errorf("节点管理器不支持配置快照")
+	}
+	if _, ok := s.nodeMgr.(NodeSnapshotRestorer); !ok {
+		return sourceRefreshSnapshot{}, fmt.Errorf("节点管理器不支持配置恢复")
+	}
+	nodes, err := lister.ListConfigNodes(context.Background())
+	if err != nil {
+		return sourceRefreshSnapshot{}, fmt.Errorf("读取运行配置: %w", err)
+	}
+	snapshot.configNodes = nodes
+	snapshot.hasConfig = true
+	return snapshot, nil
 }
 
 func (s *Service) restoreSourceRefreshSnapshot(snapshot sourceRefreshSnapshot) error {
@@ -502,12 +519,7 @@ func (s *Service) runRefreshWorkBatch(ctx context.Context, jobID string, works [
 				if ctx.Err() != nil {
 					return
 				}
-				var err error
-				if work.rawURL == "" {
-					err = s.refreshExistingNodes(ctx, jobID, work, s.existingLocalRefreshNodeIDs(work.target), false, "")
-				} else {
-					err = s.refreshURLSource(ctx, jobID, work, finalAttempt)
-				}
+				err := s.runRefreshWork(ctx, jobID, work, finalAttempt)
 				if err != nil && work.rawURL != "" && !finalAttempt && ctx.Err() == nil {
 					failed <- work
 				}
@@ -532,6 +544,19 @@ func (s *Service) runRefreshWorkBatch(ctx context.Context, jobID string, works [
 		deferred = append(deferred, work)
 	}
 	return deferred
+}
+
+func (s *Service) runRefreshWork(ctx context.Context, jobID string, work sourceRefreshWork, finalAttempt bool) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("刷新来源异常: %v", recovered)
+			s.protectRefreshRow(jobID, work, 0, err.Error())
+		}
+	}()
+	if work.rawURL == "" {
+		return s.refreshExistingNodes(ctx, jobID, work, s.existingLocalRefreshNodeIDs(work.target), false, "")
+	}
+	return s.refreshURLSource(ctx, jobID, work, finalAttempt)
 }
 
 func (s *Service) refreshURLSource(ctx context.Context, jobID string, work sourceRefreshWork, finalAttempt bool) error {
@@ -620,14 +645,14 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 	})
 	commit, err := s.Commit(parsed.ImportID, CommitRequest{NodeIDs: nodeIDs, AutoReload: false, PromotePassed: false})
 	if err != nil {
-		s.failRefreshRow(jobID, work, len(parsed.Nodes), "启动节点测试失败: "+compactRefreshError(err))
+		s.protectRefreshRow(jobID, work, len(parsed.Nodes), "启动节点测试失败: "+compactRefreshError(err))
 		return err
 	}
 	importJob, waitErr := s.waitImportJob(ctx, commit.JobID, func(importJob ImportJob) {
 		s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) { applyImportJobProgress(row, importJob) })
 	})
 	if waitErr != nil || importJob.Status == ImportStatusCanceled || importJob.Status == ImportStatusFailed {
-		s.cleanupStagedNodes(nodeIDs)
+		_ = s.cleanupStagedNodes(nodeIDs)
 		msg := compactRefreshError(waitErr)
 		if msg == "" {
 			msg = strings.TrimSpace(importJob.Error)
@@ -635,13 +660,13 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 		if msg == "" {
 			msg = "节点测试任务失败"
 		}
-		s.failRefreshRow(jobID, work, len(parsed.Nodes), msg)
+		s.protectRefreshRow(jobID, work, len(parsed.Nodes), msg)
 		return fmt.Errorf("%s", msg)
 	}
 	promoted, err := s.applyStagedRefreshNodes(work.rawURL, nodeIDs)
 	if err != nil {
-		s.cleanupStagedNodes(nodeIDs)
-		s.failRefreshRow(jobID, work, len(parsed.Nodes), "应用订阅检测结果失败: "+compactRefreshError(err))
+		_ = s.cleanupStagedNodes(nodeIDs)
+		s.protectRefreshRow(jobID, work, len(parsed.Nodes), "应用订阅检测结果失败: "+compactRefreshError(err))
 		return err
 	}
 	s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
@@ -655,7 +680,7 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 	return nil
 }
 
-func (s *Service) cleanupStagedNodes(nodeIDs []string) {
+func (s *Service) cleanupStagedNodes(nodeIDs []string) error {
 	ids := make([]string, 0, len(nodeIDs))
 	for _, id := range nodeIDs {
 		if node, ok := s.store.GetNode(id); ok && node.ImportMode == "refresh_stage" {
@@ -663,8 +688,9 @@ func (s *Service) cleanupStagedNodes(nodeIDs []string) {
 		}
 	}
 	if len(ids) > 0 {
-		_ = s.store.DeleteNodes(ids)
+		return s.store.DeleteNodes(ids)
 	}
+	return nil
 }
 
 func (s *Service) applyStagedRefreshNodes(sourceURL string, nodeIDs []string) (int, error) {
@@ -686,6 +712,9 @@ func (s *Service) applyStagedRefreshNodes(sourceURL string, nodeIDs []string) (i
 			passedIDs = append(passedIDs, node.ID)
 		}
 	}
+	if len(staged) != len(nodeIDs) {
+		return 0, fmt.Errorf("临时节点状态不完整：期望 %d，实际 %d", len(nodeIDs), len(staged))
+	}
 	if _, err := s.deleteBySubscription(sourceURL, false); err != nil {
 		return 0, err
 	}
@@ -700,7 +729,9 @@ func (s *Service) applyStagedRefreshNodes(sourceURL string, nodeIDs []string) (i
 		}
 		promoted = len(created)
 	}
-	s.cleanupStagedNodes(nodeIDs)
+	if err := s.cleanupStagedNodes(nodeIDs); err != nil {
+		return 0, fmt.Errorf("清理临时节点: %w", err)
+	}
 	return promoted, s.nodeMgr.TriggerReload(context.Background())
 }
 
@@ -748,6 +779,8 @@ func (s *Service) refreshExistingNodes(ctx context.Context, jobID string, work s
 			if row.Error == "" {
 				row.Error = "节点检测任务失败"
 			}
+			row.Warning = "节点检测子任务异常，父任务将恢复检测前节点池"
+			row.Protected = true
 		}
 	})
 	if failed {
@@ -777,6 +810,14 @@ func (s *Service) failRefreshRow(jobID string, work sourceRefreshWork, nodes int
 		if row.Total == 0 {
 			row.Total = nodes
 		}
+	})
+}
+
+func (s *Service) protectRefreshRow(jobID string, work sourceRefreshWork, nodes int, message string) {
+	s.failRefreshRow(jobID, work, nodes, message)
+	s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
+		row.Warning = message
+		row.Protected = true
 	})
 }
 
@@ -975,7 +1016,7 @@ func (s *Service) parseRefreshSubscriptionURLWithContextMode(ctx context.Context
 	}, nil
 }
 
-func cleanupRefreshStageNodes(store *Store) {
+func cleanupRefreshStageNodes(store *Store) error {
 	ids := make([]string, 0)
 	for _, node := range store.ListNodes() {
 		if node.ImportMode == "refresh_stage" {
@@ -983,12 +1024,17 @@ func cleanupRefreshStageNodes(store *Store) {
 		}
 	}
 	if len(ids) > 0 {
-		_ = store.DeleteNodes(ids)
+		return store.DeleteNodes(ids)
 	}
+	return nil
 }
 
 func (s *Service) waitImportJob(ctx context.Context, jobID string, onProgress func(ImportJob)) (ImportJob, error) {
-	deadline := time.Now().Add(refreshJobMaxWait)
+	maxWait := s.refreshJobMaxWait
+	if maxWait <= 0 {
+		maxWait = refreshJobMaxWait
+	}
+	deadline := time.Now().Add(maxWait)
 	var last ImportJob
 	for time.Now().Before(deadline) {
 		if ctx.Err() != nil {
@@ -1014,11 +1060,16 @@ func (s *Service) waitImportJob(ctx context.Context, jobID string, onProgress fu
 		case <-time.After(refreshJobPollInterval):
 		}
 	}
-	return last, fmt.Errorf("等待导入任务 %s 超时", jobID)
+	_, _ = s.CancelImportJob(jobID)
+	return s.waitImportJobStopped(jobID, last), fmt.Errorf("等待导入任务 %s 超时", jobID)
 }
 
 func (s *Service) waitTestJob(ctx context.Context, jobID string, onProgress func(TestJob)) (TestJob, error) {
-	deadline := time.Now().Add(refreshJobMaxWait)
+	maxWait := s.refreshJobMaxWait
+	if maxWait <= 0 {
+		maxWait = refreshJobMaxWait
+	}
+	deadline := time.Now().Add(maxWait)
 	var last TestJob
 	for time.Now().Before(deadline) {
 		if ctx.Err() != nil {
@@ -1044,7 +1095,8 @@ func (s *Service) waitTestJob(ctx context.Context, jobID string, onProgress func
 		case <-time.After(refreshJobPollInterval):
 		}
 	}
-	return last, fmt.Errorf("等待测试任务 %s 超时", jobID)
+	_, _ = s.CancelTestJob(jobID)
+	return s.waitTestJobStopped(jobID, last), fmt.Errorf("等待测试任务 %s 超时", jobID)
 }
 
 func (s *Service) waitImportJobStopped(jobID string, last ImportJob) ImportJob {
@@ -1090,11 +1142,13 @@ func applyImportJobProgress(row *SourceRefreshURL, job ImportJob) {
 	row.Promoted = job.Promoted
 	row.ProbeRound = job.ProbeRound
 	row.ProbeRounds = job.ProbeRounds
+	row.ProbeRoundDone = job.ProbeRoundDone
+	row.ProbeRoundTotal = job.ProbeRoundTotal
 	row.ProbePending = job.ProbePending
 	row.ProbeTarget = job.ProbeTarget
 	row.ProbeConcurrency = job.ProbeConcurrency
 	if job.ProbeRound > 0 {
-		row.Detail = fmt.Sprintf("第 %d/%d 轮，待检测 %d 个节点", job.ProbeRound, job.ProbeRounds, job.ProbePending)
+		row.Detail = fmt.Sprintf("第 %d/%d 轮，本轮 %d/%d，剩余 %d 个节点", job.ProbeRound, job.ProbeRounds, job.ProbeRoundDone, job.ProbeRoundTotal, job.ProbePending)
 	}
 	row.Status = "testing"
 	if job.Status == ImportStatusRunning && job.Total > 0 && row.Done >= job.Total {
@@ -1116,6 +1170,8 @@ func applyTestJobProgress(row *SourceRefreshURL, job TestJob) {
 	row.Promoted = job.Promoted
 	row.ProbeRound = job.ProbeRound
 	row.ProbeRounds = job.ProbeRounds
+	row.ProbeRoundDone = job.ProbeRoundDone
+	row.ProbeRoundTotal = job.ProbeRoundTotal
 	row.ProbePending = job.ProbePending
 	row.ProbeTarget = job.ProbeTarget
 	row.ProbeConcurrency = job.ProbeConcurrency
@@ -1124,7 +1180,7 @@ func applyTestJobProgress(row *SourceRefreshURL, job TestJob) {
 		row.Warning = job.ProtectionReason
 	}
 	if job.ProbeRound > 0 {
-		row.Detail = fmt.Sprintf("第 %d/%d 轮，待检测 %d 个节点", job.ProbeRound, job.ProbeRounds, job.ProbePending)
+		row.Detail = fmt.Sprintf("第 %d/%d 轮，本轮 %d/%d，剩余 %d 个节点", job.ProbeRound, job.ProbeRounds, job.ProbeRoundDone, job.ProbeRoundTotal, job.ProbePending)
 	}
 	row.Status = "testing"
 	switch job.Phase {
@@ -1160,7 +1216,11 @@ func (s *Service) recalculateRefreshJob(job *SourceRefreshJob) {
 	canceling := job.Phase == "canceling"
 	switch job.Status {
 	case SourceRefreshJobFinished:
-		job.Phase = "finished"
+		if job.Protected {
+			job.Phase = "protected"
+		} else if job.Phase != "partial" {
+			job.Phase = "finished"
+		}
 	case SourceRefreshJobFailed:
 		job.Phase = "failed"
 	case SourceRefreshJobCanceled:
@@ -1253,6 +1313,11 @@ func (s *Service) finalizeRefreshJob(job *SourceRefreshJob) {
 		job.Status = SourceRefreshJobFailed
 		job.Phase = "failed"
 		job.Error = "全部导入来源重新检测失败"
+		return
+	}
+	if job.Failed > 0 {
+		job.Phase = "partial"
+		job.Error = fmt.Sprintf("%d 个导入来源重新检测失败，其余结果已应用", job.Failed)
 		return
 	}
 	job.Error = ""
@@ -1616,6 +1681,9 @@ func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, er
 		UpdatedAt: time.Now(),
 	}
 	if err := s.store.UpsertJob(job); err != nil {
+		if restoreErr := s.store.RestoreNodeStatesIfCurrent(originalStates, StateTesting); restoreErr != nil {
+			return CommitResponse{}, fmt.Errorf("保存导入任务: %w; 恢复节点状态: %v", err, restoreErr)
+		}
 		return CommitResponse{}, err
 	}
 
@@ -1685,10 +1753,12 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 			_ = s.store.UpdateJob(jobID, func(job *ImportJob) {
 				job.ProbeRound = progress.Round
 				job.ProbeRounds = progress.Rounds
+				job.ProbeRoundDone = progress.Completed
+				job.ProbeRoundTotal = progress.Total
 				job.ProbePending = progress.Pending
 				job.ProbeTarget = progress.Target
 				job.ProbeConcurrency = progress.Concurrency
-				job.Detail = fmt.Sprintf("第 %d/%d 轮，待检测 %d 个节点", progress.Round, progress.Rounds, progress.Pending)
+				job.Detail = fmt.Sprintf("第 %d/%d 轮，本轮 %d/%d，剩余 %d 个节点", progress.Round, progress.Rounds, progress.Completed, progress.Total, progress.Pending)
 				job.UpdatedAt = time.Now()
 			})
 		}) {
@@ -1713,7 +1783,15 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 		}
 	}
 	if len(updates) > 0 {
-		_ = s.store.UpsertNodes(updates)
+		if err := s.store.UpsertNodes(updates); err != nil {
+			_ = s.store.UpdateJob(jobID, func(j *ImportJob) {
+				j.Status = ImportStatusFailed
+				j.Error = "保存测速结果: " + err.Error()
+				j.ProbePending = 0
+				j.UpdatedAt = time.Now()
+			})
+			return
+		}
 	}
 	canceled := ctx.Err() != nil
 	if canceled {
@@ -1730,10 +1808,13 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 			promoted = len(promotedNodes)
 			s.updateImportProgress(jobID, passed, failed, promoted)
 		} else {
-			s.store.UpdateJob(jobID, func(j *ImportJob) {
-				j.Error = err.Error()
+			_ = s.store.UpdateJob(jobID, func(j *ImportJob) {
+				j.Status = ImportStatusFailed
+				j.Error = "节点入池失败: " + err.Error()
+				j.ProbePending = 0
 				j.UpdatedAt = time.Now()
 			})
+			return
 		}
 	}
 
@@ -2066,11 +2147,20 @@ func (s *Service) CancelTestJob(jobID string) (TestJob, error) {
 
 func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTestRequest) {
 	defer s.unregisterTestCancel(jobID)
+	var snapshot sourceRefreshSnapshot
+	hasSnapshot := false
 	defer func() {
 		if r := recover(); r != nil {
+			message := fmt.Sprintf("测试任务异常: %v", r)
+			if hasSnapshot {
+				if err := s.restoreSourceRefreshSnapshot(snapshot); err != nil {
+					message += "; 恢复节点池失败: " + err.Error()
+				}
+			}
 			s.updateJob(jobID, func(j *TestJob) {
 				j.Status = TestJobFailed
-				j.Error = fmt.Sprintf("panic: %v", r)
+				j.Phase = "failed"
+				j.Error = message
 			})
 		}
 	}()
@@ -2088,22 +2178,35 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 		})
 		return
 	}
-	snapshot := s.captureSourceRefreshSnapshot()
+	if !req.ParentRefresh {
+		var err error
+		snapshot, err = s.captureSourceRefreshSnapshot()
+		if err != nil {
+			s.updateJob(jobID, func(j *TestJob) {
+				j.Status = TestJobFailed
+				j.Phase = "failed"
+				j.Error = "创建测试回滚点失败: " + err.Error()
+			})
+			return
+		}
+		hasSnapshot = true
+	}
 
 	changed := false
 	needReload := false
 	finish := func(status TestJobStatus, phase, errText string) {
-		if status == TestJobCanceled && !req.ParentRefresh {
+		rollback := status == TestJobCanceled || phase == "protected"
+		if rollback && hasSnapshot {
 			if err := s.restoreSourceRefreshSnapshot(snapshot); err != nil {
 				status = TestJobFailed
 				phase = "failed"
-				errText = "取消后恢复节点池失败: " + err.Error()
+				errText += "; 恢复检测前节点池失败: " + err.Error()
 			}
 		}
-		if needReload || (changed && (req.AutoReload || req.PromotePassed)) {
+		if !rollback && (needReload || changed && (req.AutoReload || req.PromotePassed)) {
 			if err := s.nodeMgr.TriggerReload(context.Background()); err != nil {
 				var restoreErr error
-				if !req.ParentRefresh {
+				if hasSnapshot {
 					restoreErr = s.restoreSourceRefreshSnapshot(snapshot)
 				}
 				status = TestJobFinished
@@ -2140,6 +2243,8 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 			s.updateJob(jobID, func(job *TestJob) {
 				job.ProbeRound = progress.Round
 				job.ProbeRounds = progress.Rounds
+				job.ProbeRoundDone = progress.Completed
+				job.ProbeRoundTotal = progress.Total
 				job.ProbePending = progress.Pending
 				job.ProbeTarget = progress.Target
 				job.ProbeConcurrency = progress.Concurrency
@@ -2179,10 +2284,16 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 		s.applyMu.Lock()
 		defer s.applyMu.Unlock()
 		if len(poolNamesToDelete) > 0 {
-			s.deleteConfigNodes(poolNamesToDelete)
+			if err := s.deleteConfigNodesStrict(poolNamesToDelete); err != nil {
+				finish(TestJobFinished, "protected", "移除失效节点配置失败，已保留检测前节点池: "+err.Error())
+				return
+			}
 		}
 		if len(updates) > 0 {
-			_ = s.store.UpsertNodes(updates)
+			if err := s.store.UpsertNodes(updates); err != nil {
+				finish(TestJobFinished, "protected", "保存测速结果失败，已保留检测前节点池: "+err.Error())
+				return
+			}
 		}
 	}
 	if ctx.Err() != nil {
@@ -2253,15 +2364,15 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 					}
 				}
 			} else {
-				s.updateJob(jobID, func(j *TestJob) {
-					j.Status = TestJobFailed
-					j.Error = err.Error()
-				})
+				finish(TestJobFinished, "protected", "更新节点配置失败，已保留检测前节点池: "+err.Error())
 				return
 			}
 		}
 		if len(updates) > 0 {
-			_ = s.store.UpsertNodes(updates)
+			if err := s.store.UpsertNodes(updates); err != nil {
+				finish(TestJobFinished, "protected", "保存国家检测结果失败，已保留检测前节点池: "+err.Error())
+				return
+			}
 		}
 	}
 	if ctx.Err() != nil {
@@ -2273,7 +2384,11 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 	if req.PromotePassed {
 		s.updateJob(jobID, func(j *TestJob) { j.Phase = "promote" })
 		promoted, err := s.PromoteMany(req.NodeIDs, false)
-		if err == nil && len(promoted) > 0 {
+		if err != nil {
+			finish(TestJobFinished, "protected", "节点入池失败，已保留检测前节点池: "+err.Error())
+			return
+		}
+		if len(promoted) > 0 {
 			changed = true
 			needReload = true
 			s.updateJob(jobID, func(j *TestJob) { j.Promoted += len(promoted) })
@@ -2687,9 +2802,13 @@ func (s *Service) deleteBySubscription(url string, reload bool) (int, error) {
 		}
 	}
 	if len(poolNames) > 0 {
-		s.deleteConfigNodes(poolNames)
+		if err := s.deleteConfigNodesStrict(poolNames); err != nil {
+			return 0, err
+		}
 		if reload {
-			_ = s.nodeMgr.TriggerReload(context.Background())
+			if err := s.nodeMgr.TriggerReload(context.Background()); err != nil {
+				return 0, err
+			}
 		}
 	}
 	if len(ids) == 0 {
@@ -2921,6 +3040,10 @@ func sourceListContains(list, source string) bool {
 }
 
 func (s *Service) deleteConfigNodes(names []string) {
+	_ = s.deleteConfigNodesStrict(names)
+}
+
+func (s *Service) deleteConfigNodesStrict(names []string) error {
 	clean := make([]string, 0, len(names))
 	seen := make(map[string]struct{}, len(names))
 	for _, name := range names {
@@ -2935,17 +3058,20 @@ func (s *Service) deleteConfigNodes(names []string) {
 		clean = append(clean, name)
 	}
 	if len(clean) == 0 {
-		return
+		return nil
 	}
 	if remover, ok := s.nodeMgr.(NodeBatchRemover); ok {
-		_ = remover.DeleteNodes(context.Background(), clean)
-		return
+		return remover.DeleteNodes(context.Background(), clean)
 	}
 	if remover, ok := s.nodeMgr.(NodeRemover); ok {
 		for _, name := range clean {
-			_ = remover.DeleteNode(context.Background(), name)
+			if err := remover.DeleteNode(context.Background(), name); err != nil {
+				return err
+			}
 		}
+		return nil
 	}
+	return fmt.Errorf("节点管理器不支持删除配置节点")
 }
 
 func (s *Service) updateConfigNodes(nodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {

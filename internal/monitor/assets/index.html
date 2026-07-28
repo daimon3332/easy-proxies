@@ -867,7 +867,9 @@ async function pollBatchJob(jobId,label){
       if(last.status!=='running')break;
       await new Promise(r=>setTimeout(r,500));
     }
-    if(last?.status==='canceled')toast('测速已终止');
+    if(last?.status==='canceled')throw new Error('测速已终止，检测前节点池已恢复');
+    if(last?.status==='failed')throw new Error(last.error||'测速任务失败');
+    if(last?.protected||last?.phase==='protected')throw new Error(last.error||last.protection_reason||'检测异常，检测前节点池已恢复');
     setTimeout(closeProgress,400);
     return last;
   }catch(e){
@@ -902,8 +904,12 @@ function updateProgress(job,title){
   const t=qs('#progressTitle');if(t)t.textContent=title;
   const body=qs('#progressBody');if(!body)return;
   const total=job.total||0,done=job.done||0;
-  const pct=total>0?Math.min(100,Math.round(done/total*100)):0;
-  const phaseLabel={probe:'测速中',country:'测试国家',promote:'入池',done:'完成',queued:'排队中',empty:'空',canceling:'正在终止',canceled:'已终止'}[job.phase]||job.phase||'';
+  const probing=job.phase==='probe'&&Number(job.probe_round)>0;
+  const progressDone=probing?Number(job.probe_round_done||0):done;
+  const progressTotal=probing?Number(job.probe_round_total||0):total;
+  const pct=progressTotal>0?Math.min(100,Math.round(progressDone/progressTotal*100)):0;
+  const phaseLabel={probe:'测速中',country:'测试国家',promote:'入池',done:'完成',protected:'已回滚',failed:'失败',queued:'排队中',empty:'空',canceling:'正在终止',canceled:'已终止'}[job.phase]||job.phase||'';
+  const progressText=probing?`第 ${job.probe_round}/${job.probe_rounds||3} 轮 · 本轮 ${progressDone}/${progressTotal} (${pct}%) · 剩余 ${job.probe_pending||0}`:`${done}/${total} (${pct}%)`;
   const stats=[];
   if(job.passed!=null)stats.push(`成功 ${job.passed}`);
   if(job.failed!=null)stats.push(`失败 ${job.failed}`);
@@ -911,9 +917,10 @@ function updateProgress(job,title){
   if(job.country_bad)stats.push(`国家失败 ${job.country_bad}`);
   if(job.promoted)stats.push(`已入池 ${job.promoted}`);
   body.innerHTML=`
-    <div><strong>${esc(phaseLabel)}</strong> · ${esc(done)}/${esc(total)} (${pct}%)</div>
+    <div><strong>${esc(phaseLabel)}</strong> · ${esc(progressText)}</div>
     <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
     <div class="muted">${stats.map(esc).join(' · ')||'-'}</div>
+    ${job.error?`<div class="action-status err">${esc(job.error)}</div>`:''}
     <div class="row" style="justify-content:flex-end">
       ${job.status==='running'?(job.phase==='canceling'?'<button class="btn danger" disabled>正在终止</button>':'<button class="btn danger" onclick="cancelActiveBatchTest()">终止</button>'):'<button class="btn" onclick="closeProgress()">关闭</button>'}
     </div>
@@ -1018,6 +1025,7 @@ async function managedAction(id,action){
   try{
     const cur=S.nodes.find(n=>n.id===id);
     if(action==='retest'&&cur&&cur.state==='failed')return await retestFailedNodes([id]);
+    if(action==='retest')return await retestNodes([id]);
     const n=await api('/api/managed-nodes/'+encodeURIComponent(id)+'/'+action,{method:'POST'});
     let msg='操作完成';
     if(action==='retest')msg=(candidate(n)||inPool(n))?'测速完成':(n.state==='failed'?'测速失败，已进入失败节点':'测速完成');
@@ -1834,9 +1842,10 @@ async function saveAutoRefresh(){
 }
 function refreshPhaseText(job){
   const phase=String(job?.phase||'waiting');
-  if(job?.protected||phase==='protected')return '检测异常，已保留原节点池';
-  if(job?.status==='canceled'||phase==='canceled')return '重新检测已取消';
   if(job?.status==='failed'||phase==='failed')return '重新检测失败';
+  if(job?.status==='canceled'||phase==='canceled')return '重新检测已取消';
+  if(job?.protected||phase==='protected')return '检测异常，已恢复原节点池';
+  if(phase==='partial')return '重新检测部分完成';
   if(job?.status==='finished'||phase==='finished')return '重新检测完成';
   return {pulling:'正在拉取订阅',retrying:'正在重试失败来源',testing:'正在分轮测试节点',promoting:'正在加入节点池',canceling:'正在取消',waiting:'等待开始'}[phase]||'正在刷新';
 }
@@ -1855,10 +1864,18 @@ function refreshElapsed(job){
 function maskedSubscriptionURL(raw){
   try{return new URL(String(raw||'')).host||'订阅地址'}catch(e){return '订阅地址'}
 }
+function activeRefreshProbe(job){
+  for(const group of Array.isArray(job?.groups)?job.groups:[]){
+    for(const row of Array.isArray(group?.urls)?group.urls:[]){
+      if(row?.status==='testing'&&Number(row?.probe_round)>0)return row;
+    }
+  }
+  return null;
+}
 function refreshProgressHTML(job){
   const total=Number(job?.total_nodes)||0,done=Number(job?.done_nodes)||0;
   const pct=total?Math.min(100,Math.round(done*100/total)):0;
-  const indeterminate=job?.status==='running'&&!total;
+  const indeterminate=job?.status==='running'&&(!total||(!done&&activeRefreshProbe(job)));
   return `<div class="refresh-progress"><span class="${indeterminate?'indeterminate':''}" style="${indeterminate?'':`width:${pct}%`}"></span></div>`;
 }
 function refreshNodeProgressText(job){
@@ -1874,6 +1891,8 @@ function probeTargetLabel(target){
 function refreshStatsHTML(job){
   const terminal=job?.status!=='running';
   const parts=[`<span>来源 ${esc(job?.done_urls||0)}/${esc(job?.total_urls||0)}</span>`,`<span>节点 ${esc(refreshNodeProgressText(job))}</span>`];
+  const probe=activeRefreshProbe(job);
+  if(probe)parts.push(`<span>第 ${esc(probe.probe_round||0)}/${esc(probe.probe_rounds||3)} 轮 · 本轮 ${esc(probe.probe_round_done||0)}/${esc(probe.probe_round_total||0)} · 剩余 ${esc(probe.probe_pending||0)}</span>`);
   if(terminal){
     parts.push(`<span>成功/可用端口 ${esc(job?.pool_count||0)}</span>`);
     parts.push(`<span>测速通过 ${esc(job?.probe_passed||0)}</span>`);
@@ -1887,13 +1906,14 @@ function refreshStatsHTML(job){
 function refreshStatusHTML(job){
   if(!job)return '';
   const running=job.status==='running';
-  const cls=job.status==='failed'?'failed':running?'':'done';
+  const partial=job.phase==='partial',protectedResult=job.phase==='protected'||(!!job.protected&&job.status!=='failed');
+  const cls=job.status==='failed'||partial||protectedResult?'failed':running?'':'done';
   const pollError=S.refreshPollError?`<span style="color:#b94a48">${esc(S.refreshPollError)}</span>`:'';
   return `<div class="refresh-status ${cls}">
-    <div class="refresh-status-head"><div><strong>${esc(refreshPhaseText(job))}</strong><span class="muted">已耗时 ${esc(refreshElapsed(job))}</span></div><span class="pill ${job.status==='failed'||job.status==='canceled'?'red':running?'amber':'green'}">${running?'后台运行':job.status==='canceled'?'已取消':job.status==='failed'?'失败':'完成'}</span></div>
+    <div class="refresh-status-head"><div><strong>${esc(refreshPhaseText(job))}</strong><span class="muted">已耗时 ${esc(refreshElapsed(job))}</span></div><span class="pill ${job.status==='failed'||job.status==='canceled'||partial||protectedResult?'red':running?'amber':'green'}">${running?'后台运行':job.status==='canceled'?'已取消':job.status==='failed'?'失败':protectedResult?'已回滚':partial?'部分完成':'完成'}</span></div>
     ${refreshProgressHTML(job)}
     <div class="refresh-stats">${refreshStatsHTML(job)}${pollError}</div>
-    ${job.protected?`<div class="action-status err">${esc(job.protection_reason||'检测结果异常，本轮结果未应用，已保留原节点池。')}</div>`:''}
+    ${job.protected?`<div class="action-status err">${esc(job.protection_reason||'检测结果异常，本轮结果未应用，已恢复原节点池。')}</div>`:''}
     <div class="refresh-actions">${running?'<button class="btn small danger" onclick="cancelRefreshSourceJob()">取消检测</button>':''}<button class="btn small secondary" onclick="openRefreshJobDetails()">查看详情</button></div>
   </div>`;
 }
@@ -1904,7 +1924,9 @@ function renderGlobalRefreshStatus(){
   if(!job){host.innerHTML='';return}
   const total=Number(job.total_nodes)||0,done=Number(job.done_nodes)||0;
   const pct=total?Math.min(100,Math.round(done*100/total)):0;
-  host.innerHTML=`<button class="refresh-top" onclick="openRefreshJobDetails()"><span><strong>${esc(refreshPhaseText(job))}</strong><span class="muted"> ${esc(total?`${done}/${total}`:'准备中')}</span></span><span class="progress"><div style="width:${pct}%"></div></span></button>`;
+  const probe=activeRefreshProbe(job);
+  const detail=probe?`第 ${probe.probe_round||0}/${probe.probe_rounds||3} 轮 · ${probe.probe_round_done||0}/${probe.probe_round_total||0}`:(total?`${done}/${total}`:'准备中');
+  host.innerHTML=`<button class="refresh-top" onclick="openRefreshJobDetails()"><span><strong>${esc(refreshPhaseText(job))}</strong><span class="muted"> ${esc(detail)}</span></span><span class="progress"><div style="width:${pct}%"></div></span></button>`;
 }
 function renderRefreshStatusHost(){
   const host=qs('#refreshStatusHost');
@@ -1934,12 +1956,12 @@ function renderRefreshJobDialog(job){
       const title=local?(r.label||'本地内容'):`订阅 ${groupIdx+1}-${urlIdx+1}`;
       const source=local?'使用已保存的节点重新检测':maskedSubscriptionURL(r.url);
       const attempt=r.attempt?` · 第 ${r.attempt}/${r.attempts||2} 轮`:'';
-      const probe=r.probe_round?`节点检测第 ${r.probe_round}/${r.probe_rounds||3} 轮 · ${probeTargetLabel(r.probe_target)} · 并发 ${r.probe_concurrency||'-'} · 待检测 ${r.probe_pending||0}`:'';
+      const probe=r.probe_round?`节点检测第 ${r.probe_round}/${r.probe_rounds||3} 轮 · 本轮 ${r.probe_round_done||0}/${r.probe_round_total||0} · 剩余 ${r.probe_pending||0} · ${probeTargetLabel(r.probe_target)} · 并发 ${r.probe_concurrency||'-'}`:'';
       return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>${esc(title)}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span>${r.cached?'<span class="pill amber">缓存节点</span>':''}${r.protected?'<span class="pill red">结果未应用</span>':''}</div><div class="muted">${esc(source+attempt)}</div><div class="muted">${esc(progress)}</div>${probe?`<div class="muted">${esc(probe)}</div>`:''}${r.total?`<div class="muted">${esc(counts)}</div>`:''}${r.warning?`<div class="muted" style="color:#9a6700">${esc(r.warning)}</div>`:''}${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
     }).join('');
     return `<div class="stack" style="gap:10px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">来源 ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
   }).join('');
-  dialog.innerHTML=`<h2>${esc(refreshPhaseText(job))}</h2><div class="stack">${refreshProgressHTML(job)}<div class="refresh-stats">${refreshStatsHTML(job)}<span>耗时 ${esc(refreshElapsed(job))}</span></div>${job.protected?`<div class="action-status err">${esc(job.protection_reason||'检测结果异常，本轮结果未应用，已保留原节点池。')}</div>`:''}${job.error&&!job.protected?`<div style="color:#b94a48">${esc(job.error)}</div>`:''}<div class="refresh-detail-list">${list}</div></div><div class="refresh-actions" style="margin-top:16px">${job.status==='running'?'<button class="btn danger" onclick="cancelRefreshSourceJob()">取消检测</button>':''}<button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button></div>`;
+  dialog.innerHTML=`<h2>${esc(refreshPhaseText(job))}</h2><div class="stack">${refreshProgressHTML(job)}<div class="refresh-stats">${refreshStatsHTML(job)}<span>耗时 ${esc(refreshElapsed(job))}</span></div>${job.protected&&job.status!=='failed'?`<div class="action-status err">${esc(job.protection_reason||'检测结果异常，本轮结果未应用，已恢复原节点池。')}</div>`:''}${job.error&&(job.status==='failed'||!job.protected)?`<div style="color:#b94a48">${esc(job.error)}</div>`:''}<div class="refresh-detail-list">${list}</div></div><div class="refresh-actions" style="margin-top:16px">${job.status==='running'?'<button class="btn danger" onclick="cancelRefreshSourceJob()">取消检测</button>':''}<button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button></div>`;
   modal.classList.add('show');
 }
 function openRefreshJobDetails(){
@@ -1984,7 +2006,8 @@ async function pollRefreshSourceJob(jobID){
     S.activeRefreshJob='';
     localStorage.removeItem(ACTIVE_REFRESH_JOB_KEY);
     const canceled=last.status==='canceled';
-    toast(canceled?'重新检测已取消':last.status==='failed'?'重新检测失败':'重新检测完成',last.status==='failed'?'err':'');
+    const protectedResult=last.phase==='protected'||(!!last.protected&&last.status!=='failed'),partial=last.phase==='partial';
+    toast(canceled?'重新检测已取消，原节点池已恢复':last.status==='failed'?'重新检测失败':protectedResult?'检测异常，已恢复原节点池':partial?'重新检测部分完成':'重新检测完成',last.status==='failed'||protectedResult||partial?'err':'');
     await refresh();
   }finally{
     S.refreshPollingJob='';
@@ -1993,7 +2016,7 @@ async function pollRefreshSourceJob(jobID){
 async function cancelRefreshSourceJob(){
   const jobID=S.refreshJob?.id||S.activeRefreshJob;
   if(!jobID)return;
-  if(!confirm('确认取消当前重新检测任务？\n\n已经完成的来源会保留结果。'))return;
+  if(!confirm('确认取消当前重新检测任务？\n\n取消后会停止子任务并恢复检测前节点池。'))return;
   try{
     S.refreshJob=await api('/api/import/refresh/jobs/'+encodeURIComponent(jobID),{method:'DELETE'});
     renderRefreshStatusHost();

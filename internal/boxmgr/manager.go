@@ -51,7 +51,8 @@ func WithLogger(l Logger) Option {
 
 // Manager owns the lifecycle of the active sing-box instance.
 type Manager struct {
-	mu sync.RWMutex
+	mu       sync.RWMutex
+	reloadMu sync.Mutex
 
 	currentBox    *box.Box
 	monitorMgr    *monitor.Manager
@@ -159,6 +160,12 @@ func (m *Manager) Start(ctx context.Context) error {
 // Reload gracefully switches to a new configuration.
 // For multi-port mode, we must stop the old instance first to release ports.
 func (m *Manager) Reload(newCfg *config.Config) error {
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
+	return m.reloadLocked(newCfg)
+}
+
+func (m *Manager) reloadLocked(newCfg *config.Config) error {
 	if newCfg == nil {
 		return errors.New("new config is nil")
 	}
@@ -774,6 +781,8 @@ var errConfigUnavailable = errors.New("config is not initialized")
 // ListConfigNodes returns a copy of all configured nodes.
 func (m *Manager) ListConfigNodes(ctx context.Context) ([]config.NodeConfig, error) {
 	_ = ctx
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -784,6 +793,8 @@ func (m *Manager) ListConfigNodes(ctx context.Context) ([]config.NodeConfig, err
 }
 
 func (m *Manager) RestoreConfigNodes(ctx context.Context, nodes []config.NodeConfig) error {
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -802,7 +813,7 @@ func (m *Manager) RestoreConfigNodes(ctx context.Context, nodes []config.NodeCon
 		return fmt.Errorf("save restored nodes: %w", err)
 	}
 	m.mu.Unlock()
-	return m.TriggerReload(ctx)
+	return m.triggerReloadLocked(ctx)
 }
 
 // CreateNode adds a new node to the config and saves it.
@@ -819,6 +830,8 @@ func (m *Manager) CreateNode(ctx context.Context, node config.NodeConfig) (confi
 
 // CreateNodes adds multiple nodes to the config and saves once.
 func (m *Manager) CreateNodes(ctx context.Context, nodes []config.NodeConfig) ([]config.NodeConfig, error) {
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -865,6 +878,8 @@ func (m *Manager) CreateNodes(ctx context.Context, nodes []config.NodeConfig) ([
 
 // UpdateNode updates an existing node by name and saves the config.
 func (m *Manager) UpdateNode(ctx context.Context, name string, node config.NodeConfig) (config.NodeConfig, error) {
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return config.NodeConfig{}, err
@@ -903,6 +918,8 @@ func (m *Manager) UpdateNode(ctx context.Context, name string, node config.NodeC
 
 // UpdateNodes updates multiple existing nodes by old name and saves once.
 func (m *Manager) UpdateNodes(ctx context.Context, nodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -958,6 +975,8 @@ func (m *Manager) DeleteNode(ctx context.Context, name string) error {
 
 // DeleteNodes removes multiple nodes by name and saves once.
 func (m *Manager) DeleteNodes(ctx context.Context, names []string) error {
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -1007,6 +1026,8 @@ func (m *Manager) DeleteNodes(ctx context.Context, names []string) error {
 // the config. In multi-port/hybrid mode it also reassigns sequential ports so
 // group ordering in the WebUI maps to visible port ranges.
 func (m *Manager) ReorderNodes(ctx context.Context, names []string) error {
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -1067,6 +1088,12 @@ func (m *Manager) ReorderNodes(ctx context.Context, names []string) error {
 
 // TriggerReload reloads the sing-box instance with current config.
 func (m *Manager) TriggerReload(ctx context.Context) error {
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
+	return m.triggerReloadLocked(ctx)
+}
+
+func (m *Manager) triggerReloadLocked(ctx context.Context) error {
 	if ctx != nil {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -1100,10 +1127,12 @@ func (m *Manager) TriggerReload(ctx context.Context) error {
 		m.mu.Unlock()
 		return m.Start(ctx)
 	}
-	return m.Reload(cfgCopy)
+	return m.reloadLocked(cfgCopy)
 }
 
 func (m *Manager) ApplyRestoredConfig(ctx context.Context, restored *config.Config) error {
+	m.reloadMu.Lock()
+	defer m.reloadMu.Unlock()
 	if restored == nil {
 		return errors.New("restored config is nil")
 	}
@@ -1113,7 +1142,7 @@ func (m *Manager) ApplyRestoredConfig(ctx context.Context, restored *config.Conf
 	m.mu.RUnlock()
 	if len(restored.Nodes) > 0 {
 		if running {
-			return m.Reload(restored)
+			return m.reloadLocked(restored)
 		}
 		if baseCtx == nil {
 			baseCtx = context.Background()

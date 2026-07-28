@@ -253,7 +253,7 @@ func TestBatchRetestKeepsPoolNodeWhenSecondRoundPasses(t *testing.T) {
 	}
 }
 
-func TestBatchRetestProtectsPoolWhenAllControlNodesFail(t *testing.T) {
+func TestBatchRetestAppliesAllFailedResults(t *testing.T) {
 	mgr := &batchNodeManagerStub{}
 	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
@@ -280,7 +280,7 @@ func TestBatchRetestProtectsPoolWhenAllControlNodesFail(t *testing.T) {
 		t.Fatalf("StartBatchTest() error = %v", err)
 	}
 	job := waitTestJobTerminal(t, svc, jobID)
-	if !job.Protected || job.Applied || job.Phase != "protected" || len(store.ListPoolNodes()) != len(nodes) || len(mgr.deletedBatches) != 0 {
+	if job.Protected || !job.Applied || job.Phase != "done" || job.Failed != len(nodes) || len(store.ListPoolNodes()) != 0 || len(mgr.deletedBatches) != 1 {
 		t.Fatalf("job=%#v pool=%d deleted=%#v", job, len(store.ListPoolNodes()), mgr.deletedBatches)
 	}
 }
@@ -716,6 +716,113 @@ func TestRefreshSourcesDoesNotLetSlowFirstURLBlockHealthySources(t *testing.T) {
 	}
 	job, _ := svc.GetRefreshJob(jobID)
 	t.Fatalf("healthy source stayed blocked behind slow source: %#v", job.Groups)
+}
+
+func TestSourceRefreshQueueRetriesBeforeUnrelatedLongWorkFinishes(t *testing.T) {
+	works := []sourceRefreshWork{
+		{rowIdx: 0, rawURL: "https://retry.invalid"},
+		{rowIdx: 1, rawURL: "https://slow.invalid"},
+	}
+	retryStarted := make(chan time.Time, 1)
+	longDone := make(chan time.Time, 1)
+	startedAt := time.Now()
+	runSourceRefreshQueue(context.Background(), works, 2, 20*time.Millisecond, func(ctx context.Context, work sourceRefreshWork, finalAttempt bool) error {
+		if work.rowIdx == 0 {
+			if !finalAttempt {
+				return errors.New("first fetch failed")
+			}
+			retryStarted <- time.Now()
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(120 * time.Millisecond):
+			longDone <- time.Now()
+			return nil
+		}
+	})
+	retriedAt := <-retryStarted
+	if retriedAt.Sub(startedAt) < 15*time.Millisecond {
+		t.Fatalf("retry started too early after %s", retriedAt.Sub(startedAt))
+	}
+	longFinishedAt := <-longDone
+	if !retriedAt.Before(longFinishedAt) {
+		t.Fatalf("retry at %s waited for unrelated source finishing at %s", retriedAt, longFinishedAt)
+	}
+}
+
+func TestSourceRefreshQueueRetriesOnceAndBoundsConcurrency(t *testing.T) {
+	works := make([]sourceRefreshWork, 5)
+	for i := range works {
+		works[i] = sourceRefreshWork{rowIdx: i, rawURL: fmt.Sprintf("https://source-%d.invalid", i)}
+	}
+	var mu sync.Mutex
+	active := 0
+	maxActive := 0
+	attempts := make(map[int]int)
+	runSourceRefreshQueue(context.Background(), works, 2, time.Millisecond, func(_ context.Context, work sourceRefreshWork, finalAttempt bool) error {
+		mu.Lock()
+		active++
+		maxActive = max(maxActive, active)
+		attempts[work.rowIdx]++
+		mu.Unlock()
+		time.Sleep(3 * time.Millisecond)
+		mu.Lock()
+		active--
+		mu.Unlock()
+		if work.rowIdx == 0 && !finalAttempt {
+			return errors.New("retry fixture")
+		}
+		return nil
+	})
+	if maxActive > 2 {
+		t.Fatalf("max concurrency = %d, want <= 2", maxActive)
+	}
+	if attempts[0] != 2 {
+		t.Fatalf("source 0 attempts = %d, want 2", attempts[0])
+	}
+	for i := 1; i < len(works); i++ {
+		if attempts[i] != 1 {
+			t.Fatalf("source %d attempts = %d, want 1", i, attempts[i])
+		}
+	}
+}
+
+func TestSourceRefreshQueueCancellationStopsDispatch(t *testing.T) {
+	works := make([]sourceRefreshWork, 6)
+	for i := range works {
+		works[i] = sourceRefreshWork{rowIdx: i, rawURL: fmt.Sprintf("https://source-%d.invalid", i)}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{}, len(works))
+	done := make(chan struct{})
+	var mu sync.Mutex
+	starts := 0
+	go func() {
+		runSourceRefreshQueue(ctx, works, 2, time.Millisecond, func(ctx context.Context, _ sourceRefreshWork, _ bool) error {
+			mu.Lock()
+			starts++
+			mu.Unlock()
+			started <- struct{}{}
+			<-ctx.Done()
+			return ctx.Err()
+		})
+		close(done)
+	}()
+	<-started
+	<-started
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("queue did not stop after cancellation")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if starts != 2 {
+		t.Fatalf("started %d works after cancellation, want 2", starts)
+	}
 }
 
 func TestCancelRefreshSourcesStopsPullingJob(t *testing.T) {
@@ -1309,7 +1416,7 @@ func TestRefreshApplyFailureRestoresParentSnapshot(t *testing.T) {
 	}
 }
 
-func TestRefreshAllFailedStagedNodesKeepOldSource(t *testing.T) {
+func TestRefreshAllFailedStagedNodesRetestsOldSource(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("trojan://failed@example.com:443#Failed\n"))
 	}))
@@ -1321,8 +1428,11 @@ func TestRefreshAllFailedStagedNodesKeepOldSource(t *testing.T) {
 	}
 	tester := NewNodeTester(nil, WithTesterConcurrency(2))
 	tester.retryDelay = time.Millisecond
-	tester.probeOverride = func(context.Context, ManagedNode, string, time.Duration) TestResult {
-		return TestResult{Error: errors.New("probe failed")}
+	tester.probeOverride = func(_ context.Context, node ManagedNode, _ string, _ time.Duration) TestResult {
+		if node.ImportMode == "refresh_stage" {
+			return TestResult{Error: errors.New("new node failed")}
+		}
+		return TestResult{LatencyMs: 1}
 	}
 	old := ManagedNode{ID: "old", Name: "sub-Old", URI: "trojan://old", State: StateInPool, InPool: true, Enabled: true, Port: 24000, ImportMode: "url", ImportSource: server.URL, TagPrefix: "sub"}
 	mgr.configNodes = []config.NodeConfig{old.ToConfigNode()}
@@ -1335,9 +1445,57 @@ func TestRefreshAllFailedStagedNodesKeepOldSource(t *testing.T) {
 		t.Fatalf("StartRefreshSources() error = %v", err)
 	}
 	job := waitRefreshJobTerminal(t, svc, jobID)
-	restored, ok := store.GetNode("old")
-	if !job.Protected || job.Applied || !ok || !restored.InPool || len(store.ListNodes()) != 1 {
-		t.Fatalf("job=%#v restored=%#v found=%v nodes=%#v", job, restored, ok, store.ListNodes())
+	retested, ok := store.GetNode("old")
+	if job.Protected || !job.Applied || job.Phase != "finished" || job.PoolCount != 1 || !ok || !retested.InPool || retested.LastTestAt.IsZero() || len(store.ListNodes()) != 1 {
+		t.Fatalf("job=%#v retested=%#v found=%v nodes=%#v", job, retested, ok, store.ListNodes())
+	}
+}
+
+func TestRefreshAppliesHealthySourceWhenLargeLocalSourceFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("trojan://pass@example.com:443#Pass\n"))
+	}))
+	defer server.Close()
+	mgr := &batchNodeManagerStub{nextPort: 25000}
+	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	nodes := make([]ManagedNode, 0, 21)
+	for i := range 20 {
+		node := ManagedNode{
+			ID: fmt.Sprintf("local-%02d", i), Name: fmt.Sprintf("local-%02d", i), URI: fmt.Sprintf("trojan://local-%02d", i),
+			State: StateInPool, InPool: true, Enabled: true, Port: uint16(24000 + i), ImportMode: "content", ImportSource: "content", ImportFormat: "uri_list", TagPrefix: "local",
+		}
+		nodes = append(nodes, node)
+		mgr.configNodes = append(mgr.configNodes, node.ToConfigNode())
+	}
+	oldURLNode := ManagedNode{ID: "old-url", Name: "remote-old", URI: "trojan://old-url", State: StateInPool, InPool: true, Enabled: true, Port: 24100, ImportMode: "url", ImportSource: server.URL, ImportFormat: "uri_list", TagPrefix: "remote"}
+	nodes = append(nodes, oldURLNode)
+	mgr.configNodes = append(mgr.configNodes, oldURLNode.ToConfigNode())
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+	tester := NewNodeTester(nil, WithTesterConcurrency(4))
+	tester.retryDelay = time.Millisecond
+	tester.probeOverride = func(_ context.Context, node ManagedNode, _ string, _ time.Duration) TestResult {
+		if node.TagPrefix == "local" {
+			return TestResult{Error: errors.New("local source expired")}
+		}
+		return TestResult{LatencyMs: 1}
+	}
+	svc := NewService(store, tester, mgr)
+	jobID, err := svc.StartRefreshSources("")
+	if err != nil {
+		t.Fatalf("StartRefreshSources() error = %v", err)
+	}
+	job := waitRefreshJobTerminal(t, svc, jobID)
+	if job.Protected || !job.Applied || job.Status != SourceRefreshJobFinished || job.PoolCount != 1 || job.Passed != 1 || job.ProbePassed != 1 {
+		t.Fatalf("job=%#v, want one applied passing port", job)
+	}
+	pool := store.ListPoolNodes()
+	if len(pool) != 1 || pool[0].TagPrefix != "remote" {
+		t.Fatalf("pool=%#v, want only the healthy remote source", pool)
 	}
 }
 

@@ -74,6 +74,7 @@ type Service struct {
 	refreshCancels   map[string]context.CancelFunc
 
 	refreshConcurrency     int
+	refreshRetryDelay      time.Duration
 	refreshSourceTimeout   time.Duration
 	refreshProxyTimeout    time.Duration
 	refreshProxyCandidates int
@@ -85,6 +86,7 @@ type Option func(*Service)
 
 const (
 	defaultRefreshConcurrency     = 3
+	defaultRefreshRetryDelay      = time.Second
 	defaultRefreshSourceTimeout   = 60 * time.Second
 	defaultRefreshProxyTimeout    = 8 * time.Second
 	defaultRefreshProxyCandidates = 5
@@ -109,6 +111,7 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 		refreshJobs:            make(map[string]*SourceRefreshJob),
 		refreshCancels:         make(map[string]context.CancelFunc),
 		refreshConcurrency:     defaultRefreshConcurrency,
+		refreshRetryDelay:      defaultRefreshRetryDelay,
 		refreshSourceTimeout:   defaultRefreshSourceTimeout,
 		refreshProxyTimeout:    defaultRefreshProxyTimeout,
 		refreshProxyCandidates: defaultRefreshProxyCandidates,
@@ -411,16 +414,9 @@ func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sou
 		}
 	}
 
-	deferred := s.runRefreshWorkBatch(ctx, jobID, works, false)
-	if ctx.Err() == nil && len(deferred) > 0 {
-		s.runRefreshWorkBatch(ctx, jobID, deferred, true)
-	}
+	s.runRefreshWorkQueue(ctx, jobID, works)
 	job, _ := s.GetRefreshJob(jobID)
-	protect, reason := shouldProtectRefreshResult(job.InitialPoolCount, job.PoolCount)
-	if ctx.Err() != nil || protect || job.Protected {
-		if job.Protected && reason == "" {
-			reason = job.ProtectionReason
-		}
+	if ctx.Err() != nil || job.Protected {
 		if err := s.restoreSourceRefreshSnapshot(snapshot); err != nil {
 			s.updateRefreshJob(jobID, func(active *SourceRefreshJob) {
 				active.Status = SourceRefreshJobFailed
@@ -436,14 +432,11 @@ func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sou
 			active.Applied = false
 			return
 		}
-		if protect || active.Protected {
+		if active.Protected {
 			active.Status = SourceRefreshJobFinished
 			active.Phase = "protected"
 			active.Protected = true
 			active.Applied = false
-			if reason != "" {
-				active.ProtectionReason = reason
-			}
 			active.Error = active.ProtectionReason
 			return
 		}
@@ -487,63 +480,133 @@ func (s *Service) restoreSourceRefreshSnapshot(snapshot sourceRefreshSnapshot) e
 	return restorer.RestoreConfigNodes(context.Background(), snapshot.configNodes)
 }
 
-func shouldProtectRefreshResult(initialPool, finalPool int) (bool, string) {
-	if initialPool < 20 {
-		return false, ""
-	}
-	if finalPool == 0 || finalPool*20 < initialPool {
-		return true, fmt.Sprintf("检测结果异常：可用端口从 %d 降至 %d，已保留检测前节点池", initialPool, finalPool)
-	}
-	return false, ""
+type sourceRefreshAttempt struct {
+	work         sourceRefreshWork
+	finalAttempt bool
+	readyAt      time.Time
 }
 
-func (s *Service) runRefreshWorkBatch(ctx context.Context, jobID string, works []sourceRefreshWork, finalAttempt bool) []sourceRefreshWork {
-	if len(works) == 0 {
-		return nil
-	}
+type sourceRefreshResult struct {
+	attempt sourceRefreshAttempt
+	err     error
+}
+
+func (s *Service) runRefreshWorkQueue(ctx context.Context, jobID string, works []sourceRefreshWork) {
 	limit := s.refreshConcurrency
+	if limit <= 0 {
+		limit = defaultRefreshConcurrency
+	}
+	retryDelay := s.refreshRetryDelay
+	if retryDelay <= 0 {
+		retryDelay = defaultRefreshRetryDelay
+	}
+	runSourceRefreshQueue(ctx, works, limit, retryDelay, func(ctx context.Context, work sourceRefreshWork, finalAttempt bool) error {
+		return s.runRefreshWork(ctx, jobID, work, finalAttempt)
+	})
+}
+
+func runSourceRefreshQueue(ctx context.Context, works []sourceRefreshWork, limit int, retryDelay time.Duration, run func(context.Context, sourceRefreshWork, bool) error) {
+	if len(works) == 0 || run == nil {
+		return
+	}
 	if limit <= 0 {
 		limit = defaultRefreshConcurrency
 	}
 	if limit > len(works) {
 		limit = len(works)
 	}
-	queue := make(chan sourceRefreshWork)
-	failed := make(chan sourceRefreshWork, len(works))
+	if retryDelay <= 0 {
+		retryDelay = defaultRefreshRetryDelay
+	}
+	results := make(chan sourceRefreshResult, limit)
 	var workers sync.WaitGroup
-	for range limit {
+	active := 0
+	nextFirst := 0
+	retries := make([]sourceRefreshAttempt, 0)
+	launch := func(attempt sourceRefreshAttempt) {
+		active++
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			for work := range queue {
-				if ctx.Err() != nil {
-					return
-				}
-				err := s.runRefreshWork(ctx, jobID, work, finalAttempt)
-				if err != nil && work.rawURL != "" && !finalAttempt && ctx.Err() == nil {
-					failed <- work
-				}
+			result := sourceRefreshResult{
+				attempt: attempt,
+				err:     run(ctx, attempt.work, attempt.finalAttempt),
 			}
+			results <- result
 		}()
 	}
-	for _, work := range works {
+
+	for nextFirst < len(works) || len(retries) > 0 || active > 0 {
+		if ctx.Err() != nil {
+			workers.Wait()
+			return
+		}
+		for active < limit && nextFirst < len(works) {
+			launch(sourceRefreshAttempt{work: works[nextFirst]})
+			nextFirst++
+		}
+		if nextFirst == len(works) {
+			for active < limit {
+				now := time.Now()
+				ready := -1
+				for i := range retries {
+					if !retries[i].readyAt.After(now) {
+						ready = i
+						break
+					}
+				}
+				if ready < 0 {
+					break
+				}
+				attempt := retries[ready]
+				retries = append(retries[:ready], retries[ready+1:]...)
+				launch(attempt)
+			}
+		}
+
+		if active == 0 && nextFirst == len(works) && len(retries) == 0 {
+			break
+		}
+		var timer *time.Timer
+		var timerC <-chan time.Time
+		if active < limit && nextFirst == len(works) && len(retries) > 0 {
+			nextReady := retries[0].readyAt
+			for _, retry := range retries[1:] {
+				if retry.readyAt.Before(nextReady) {
+					nextReady = retry.readyAt
+				}
+			}
+			wait := time.Until(nextReady)
+			if wait <= 0 {
+				continue
+			}
+			timer = time.NewTimer(wait)
+			timerC = timer.C
+		}
+
 		select {
 		case <-ctx.Done():
-			close(queue)
+			if timer != nil {
+				timer.Stop()
+			}
 			workers.Wait()
-			close(failed)
-			return nil
-		case queue <- work:
+			return
+		case result := <-results:
+			if timer != nil {
+				timer.Stop()
+			}
+			active--
+			if result.err != nil && result.attempt.work.rawURL != "" && !result.attempt.finalAttempt && ctx.Err() == nil {
+				retries = append(retries, sourceRefreshAttempt{
+					work:         result.attempt.work,
+					finalAttempt: true,
+					readyAt:      time.Now().Add(retryDelay),
+				})
+			}
+		case <-timerC:
 		}
 	}
-	close(queue)
 	workers.Wait()
-	close(failed)
-	deferred := make([]sourceRefreshWork, 0, len(failed))
-	for work := range failed {
-		deferred = append(deferred, work)
-	}
-	return deferred
 }
 
 func (s *Service) runRefreshWork(ctx context.Context, jobID string, work sourceRefreshWork, finalAttempt bool) (err error) {
@@ -610,7 +673,7 @@ func (s *Service) refreshURLSource(ctx context.Context, jobID string, work sourc
 			s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
 				row.Status = "retry_waiting"
 				row.Stage = "waiting"
-				row.Detail = "其他来源完成后将自动重试"
+				row.Detail = "已进入重试队列，将在空闲并发槽位中自动重试"
 				row.Warning = msg
 			})
 			return err
@@ -651,7 +714,8 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 	importJob, waitErr := s.waitImportJob(ctx, commit.JobID, func(importJob ImportJob) {
 		s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) { applyImportJobProgress(row, importJob) })
 	})
-	if waitErr != nil || importJob.Status == ImportStatusCanceled || importJob.Status == ImportStatusFailed {
+	allNodesFailed := importJob.Total > 0 && importJob.Failed == importJob.Total && importJob.Passed == 0 && strings.TrimSpace(importJob.Error) == ""
+	if waitErr != nil || importJob.Status == ImportStatusCanceled || importJob.Status == ImportStatusFailed && !allNodesFailed {
 		_ = s.cleanupStagedNodes(nodeIDs)
 		msg := compactRefreshError(waitErr)
 		if msg == "" {
@@ -662,6 +726,26 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 		}
 		s.protectRefreshRow(jobID, work, len(parsed.Nodes), msg)
 		return fmt.Errorf("%s", msg)
+	}
+	if importJob.Passed == 0 {
+		if err := s.cleanupStagedNodes(nodeIDs); err != nil {
+			s.protectRefreshRow(jobID, work, len(parsed.Nodes), "清理无效订阅节点失败: "+compactRefreshError(err))
+			return err
+		}
+		existingIDs := s.existingURLRefreshNodeIDs(work.target.TagPrefix, work.rawURL)
+		warning := fmt.Sprintf("订阅新节点 %d 个三轮检测全部失败", len(parsed.Nodes))
+		if len(existingIDs) > 0 {
+			return s.refreshExistingNodes(ctx, jobID, work, existingIDs, true, warning+"，已改为检测保存节点")
+		}
+		s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
+			applyImportJobProgress(row, importJob)
+			row.Status = "completed"
+			row.Stage = "completed"
+			row.Detail = "订阅节点检测完成，未发现可用节点"
+			row.Warning = warning
+			row.Error = ""
+		})
+		return nil
 	}
 	promoted, err := s.applyStagedRefreshNodes(work.rawURL, nodeIDs)
 	if err != nil {
@@ -2237,8 +2321,6 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 		s.updateJob(jobID, func(j *TestJob) { j.Phase = "probe"; j.Done = 0 })
 		updates := make([]ManagedNode, 0, len(nodes))
 		poolNamesToDelete := make([]string, 0)
-		poolTested := 0
-		poolPassed := 0
 		for event := range s.tester.ProbeBatchWithProgress(ctx, nodes, func(progress ProbeRoundProgress) {
 			s.updateJob(jobID, func(job *TestJob) {
 				job.ProbeRound = progress.Round
@@ -2255,10 +2337,6 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 				s.updateJob(jobID, func(j *TestJob) { j.Done++ })
 				continue
 			}
-			wasInPool := node.InPool || node.State == StateInPool
-			if wasInPool {
-				poolTested++
-			}
 			if event.Result.Error != nil {
 				updated, poolName := finalFailedNodeUpdate(node, event.Result.Error.Error())
 				updates = append(updates, updated)
@@ -2270,16 +2348,8 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 				s.updateJob(jobID, func(j *TestJob) { j.Done++; j.Failed++ })
 				continue
 			}
-			if wasInPool {
-				poolPassed++
-			}
 			updates = append(updates, probePassedNodeUpdate(node, event.Result))
 			s.updateJob(jobID, func(j *TestJob) { j.Done++; j.Passed++ })
-		}
-		if poolTested >= 20 && poolPassed == 0 {
-			reason := fmt.Sprintf("%d 个原池内节点三轮检测全部失败，已保留检测前节点池", poolTested)
-			finish(TestJobFinished, "protected", reason)
-			return
 		}
 		s.applyMu.Lock()
 		defer s.applyMu.Unlock()

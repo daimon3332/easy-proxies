@@ -189,6 +189,7 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .pill.green{background:#dcf7ec;color:#087a55}
 .pill.red{background:#ffe9e7;color:#bd352f}
 .pill.amber{background:#fff4d8;color:#9c6500}
+.source-value{display:inline-block;max-width:100%;padding:5px 10px;border:1px solid #bce2f3;border-radius:8px;background:#eaf7ff;color:#0f78aa;font-family:var(--mono);font-size:12px;line-height:1.45;overflow-wrap:anywhere}
 .action-status{margin:0 0 12px;padding:12px 14px;border:1px solid #a8e4cc;border-radius:14px;background:#e8f8f2;color:#087a55;font-weight:800}
 .action-status.err{border-color:#f2bab5;background:#fff0ef;color:#bd352f}
 .group-list{display:grid;gap:9px}
@@ -543,6 +544,7 @@ function openDialog(title, html){
   S.refreshDialogOpen=false;
   modal.classList.remove('refresh-modal');
   dialog.className='dialog';
+  delete dialog.dataset.refreshShell;
   dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div><div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn primary" onclick="closeDialog()">确定</button></div>`;
   modal.classList.add('show');
 }
@@ -1708,11 +1710,14 @@ function renderSettings(){
       ${sources.length?`<div class="stack">${sources.map((src,i)=>`<div class="source-row">
         <div style="flex:1;min-width:0">
           <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
-            <strong>${esc(importSourceType(src))}</strong>
             <span class="pill green">${esc(src.tag_prefix||'local')}</span>
-            <span class="muted">总数 ${esc(src.total||0)} / 池内 ${esc(src.pool||0)} / 候选 ${esc(src.candidate||0)} / 失败 ${esc(src.failed||0)}</span>
+            <span class="pill">${esc(importSourceType(src))}</span>
+            <span class="value-pill muted">总数 ${esc(src.total||0)}</span>
+            <span class="value-pill green">池内 ${esc(src.pool||0)}</span>
+            <span class="value-pill red">失败 ${esc(src.failed||0)}</span>
+            <span class="value-pill amber">候选 ${esc(src.candidate||0)}</span>
           </div>
-          <div style="word-break:break-all;margin-top:6px"><code class="muted">${esc(importSourceText(src))}</code></div>
+          <div style="margin-top:6px"><code class="source-value">${esc(importSourceText(src))}</code></div>
           <div class="muted" style="margin-top:6px">更新：${esc(fmtDate(src.updated_at))}</div>
         </div>
         ${src.refreshable?`<button class="btn small green" data-refresh-action onclick="refreshImportSource(${i})" ${refreshing?'disabled':''}>重新检测</button>`:''}
@@ -1940,8 +1945,18 @@ function renderRefreshJobDialog(job){
   if(!modal||!dialog)return;
   modal.classList.add('refresh-modal');
   dialog.className='dialog wide';
+  if(dialog.dataset.refreshShell!=='1'){
+    dialog.innerHTML='<h2 id="refreshDialogTitle"></h2><div class="stack"><div id="refreshDialogProgress"></div><div class="refresh-stats" id="refreshDialogStats"></div><div id="refreshDialogNotice"></div><div class="refresh-detail-list" id="refreshDialogList"></div></div><div class="refresh-actions" id="refreshDialogActions" style="margin-top:16px"></div>';
+    dialog.dataset.refreshShell='1';
+  }
+  const titleHost=qs('#refreshDialogTitle'),progressHost=qs('#refreshDialogProgress'),statsHost=qs('#refreshDialogStats'),noticeHost=qs('#refreshDialogNotice'),listHost=qs('#refreshDialogList'),actionsHost=qs('#refreshDialogActions');
   if(!job){
-    dialog.innerHTML='<h2>重新检测导入来源</h2><div class="muted">正在读取任务状态...</div><div class="refresh-actions" style="margin-top:16px"><button class="btn" onclick="closeDialog()">收起</button></div>';
+    titleHost.textContent='重新检测导入来源';
+    progressHost.innerHTML='';
+    statsHost.innerHTML='<span>正在读取任务状态...</span>';
+    noticeHost.innerHTML='';
+    listHost.innerHTML='';
+    actionsHost.innerHTML='<button class="btn" onclick="closeDialog()">收起</button>';
     modal.classList.add('show');
     return;
   }
@@ -1955,13 +1970,20 @@ function renderRefreshJobDialog(job){
       const local=r.kind==='content';
       const title=local?(r.label||'本地内容'):`订阅 ${groupIdx+1}-${urlIdx+1}`;
       const source=local?'使用已保存的节点重新检测':maskedSubscriptionURL(r.url);
-      const attempt=r.attempt?` · 第 ${r.attempt}/${r.attempts||2} 轮`:'';
+      const attempt=r.attempt?` · 拉取尝试 ${r.attempt}/${r.attempts||2}`:'';
       const probe=r.probe_round?`节点检测第 ${r.probe_round}/${r.probe_rounds||3} 轮 · 本轮 ${r.probe_round_done||0}/${r.probe_round_total||0} · 剩余 ${r.probe_pending||0} · ${probeTargetLabel(r.probe_target)} · 并发 ${r.probe_concurrency||'-'}`:'';
       return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>${esc(title)}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span>${r.cached?'<span class="pill amber">缓存节点</span>':''}${r.protected?'<span class="pill red">结果未应用</span>':''}</div><div class="muted">${esc(source+attempt)}</div><div class="muted">${esc(progress)}</div>${probe?`<div class="muted">${esc(probe)}</div>`:''}${r.total?`<div class="muted">${esc(counts)}</div>`:''}${r.warning?`<div class="muted" style="color:#9a6700">${esc(r.warning)}</div>`:''}${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
     }).join('');
     return `<div class="stack" style="gap:10px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">来源 ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
   }).join('');
-  dialog.innerHTML=`<h2>${esc(refreshPhaseText(job))}</h2><div class="stack">${refreshProgressHTML(job)}<div class="refresh-stats">${refreshStatsHTML(job)}<span>耗时 ${esc(refreshElapsed(job))}</span></div>${job.protected&&job.status!=='failed'?`<div class="action-status err">${esc(job.protection_reason||'检测结果异常，本轮结果未应用，已恢复原节点池。')}</div>`:''}${job.error&&(job.status==='failed'||!job.protected)?`<div style="color:#b94a48">${esc(job.error)}</div>`:''}<div class="refresh-detail-list">${list}</div></div><div class="refresh-actions" style="margin-top:16px">${job.status==='running'?'<button class="btn danger" onclick="cancelRefreshSourceJob()">取消检测</button>':''}<button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button></div>`;
+  const scrollTop=listHost.scrollTop;
+  titleHost.textContent=refreshPhaseText(job);
+  progressHost.innerHTML=refreshProgressHTML(job);
+  statsHost.innerHTML=`${refreshStatsHTML(job)}<span>耗时 ${esc(refreshElapsed(job))}</span>`;
+  noticeHost.innerHTML=`${job.protected&&job.status!=='failed'?`<div class="action-status err">${esc(job.protection_reason||'执行异常，本轮结果未应用，已恢复原节点池。')}</div>`:''}${job.error&&(job.status==='failed'||!job.protected)?`<div style="color:#b94a48">${esc(job.error)}</div>`:''}`;
+  listHost.innerHTML=list;
+  listHost.scrollTop=scrollTop;
+  actionsHost.innerHTML=`${job.status==='running'?'<button class="btn danger" onclick="cancelRefreshSourceJob()">取消检测</button>':''}<button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button>`;
   modal.classList.add('show');
 }
 function openRefreshJobDetails(){

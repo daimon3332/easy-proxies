@@ -23,6 +23,7 @@ management:
   listen: 127.0.0.1:9091
   probe_target: https://www.gstatic.com/generate_204
   password: ""
+  pprof_enabled: false
 
 subscription_refresh:
   enabled: false

@@ -20,6 +20,7 @@ import (
 
 // Run builds the runtime components from config and blocks until shutdown.
 func Run(ctx context.Context, cfg *config.Config) error {
+	startupStarted := time.Now()
 	// Build monitor config
 	proxyUsername := cfg.Listener.Username
 	proxyPassword := cfg.Listener.Password
@@ -36,13 +37,16 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		ProxyUsername: proxyUsername,
 		ProxyPassword: proxyPassword,
 		ExternalIP:    cfg.ExternalIP,
+		PprofEnabled:  cfg.Management.PprofEnabled,
 	}
 
 	// Create and start BoxManager
 	boxMgr := boxmgr.New(cfg, monitorCfg)
+	monitorStarted := time.Now()
 	if err := boxMgr.EnsureMonitor(ctx); err != nil {
 		return fmt.Errorf("init monitor server: %w", err)
 	}
+	monitorDuration := time.Since(monitorStarted)
 
 	// Wire up config to monitor server for settings API
 	if server := boxMgr.MonitorServer(); server != nil {
@@ -59,11 +63,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// Initialize import service
+	storeStarted := time.Now()
 	storePath := filepath.Join(filepath.Dir(cfg.FilePath()), "managed_nodes.json")
 	nodeStore, err := importer.NewStore(storePath)
 	if err != nil {
 		return fmt.Errorf("create node store: %w", err)
 	}
+	storeDuration := time.Since(storeStarted)
+	defer nodeStore.Close()
 
 	// Pool is the single source of truth for sing-box listeners.
 	// Filter cfg.Nodes to pool DB members before sing-box starts so the
@@ -109,19 +116,35 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	tester := importer.NewNodeTester(builder.BuildSingleNodeOutbound,
+	testerOptions := []importer.TesterOption{
 		importer.WithProbeTarget(cfg.Management.ProbeTarget),
 		importer.WithTesterTimeout(cfg.SubscriptionRefresh.HealthCheckTimeout),
 		importer.WithSkipCertVerify(cfg.SkipCertVerify),
-	)
+	}
+	if cfg.Mode == "multi-port" || cfg.Mode == "hybrid" {
+		testerOptions = append(testerOptions, importer.WithRuntimeProxy(
+			cfg.MultiPort.Address,
+			cfg.MultiPort.Username,
+			cfg.MultiPort.Password,
+		))
+	}
+	tester := importer.NewNodeTester(builder.BuildSingleNodeOutbound, testerOptions...)
+	defer tester.Close()
 
 	importSvc := importer.NewService(nodeStore, tester, boxMgr)
+	subMgr.SetSourceRefresher(importSvc)
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = importSvc.Close(closeCtx)
+	}()
 	if server := boxMgr.MonitorServer(); server != nil {
 		server.SetImportService(importSvc)
 		server.SetBackupService(backup.NewService(cfg, nodeStore, boxMgr, subMgr, importSvc))
 	}
 
 	coreStarted := false
+	runtimeStarted := time.Now()
 	if len(cfg.Nodes) == 0 {
 		fmt.Println("No pool nodes configured; WebUI is available for importing nodes.")
 	} else {
@@ -130,6 +153,12 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		}
 		coreStarted = true
 	}
+	boxMgr.SetStartupTimings(map[string]int64{
+		"monitor":     monitorDuration.Milliseconds(),
+		"state_store": storeDuration.Milliseconds(),
+		"runtime":     time.Since(runtimeStarted).Milliseconds(),
+		"total":       time.Since(startupStarted).Milliseconds(),
+	})
 	defer boxMgr.Close()
 
 	// Start refresh loop only after the initial sing-box instance is ready.
@@ -157,6 +186,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	fmt.Println("Stopping subscription manager...")
 	if subMgr != nil {
 		subMgr.Stop()
+	}
+
+	fmt.Println("Stopping import jobs...")
+	if err := importSvc.Close(shutdownCtx); err != nil {
+		fmt.Printf("Error stopping import jobs: %v\n", err)
 	}
 
 	fmt.Println("Stopping box manager...")

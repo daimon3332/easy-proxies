@@ -16,7 +16,7 @@
   <img alt="Go 1.24+" src="https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white">
   <img alt="MIT License" src="https://img.shields.io/badge/License-MIT-green.svg">
   <img alt="Powered by sing-box" src="https://img.shields.io/badge/Powered%20by-sing--box-4B5563">
-  <img alt="Platforms" src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue">
+  <img alt="Platforms" src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue">
 </p>
 
 > 本專案基於 [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies) 二次開發，重點改善 WebUI、訂閱匯入、節點測速、節點生命週期管理與多連接埠使用體驗。
@@ -48,6 +48,14 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 - 支援批次重測、國家檢測、訂閱重新整理、連接埠檢視和執行日誌。
 - 探測目標僅支援 `https://www.gstatic.com/generate_204` 和 `https://cp.cloudflare.com/generate_204`。
 - WebUI 與 REST API 共用管理入口。
+
+## ⚙️ 可靠性與效能
+
+- 使用共享測速執行時重用 sing-box 服務，避免每輪重試都建立完整執行時。
+- 使用有界非同步並行、延遲重試、備用目標和跨工作去重，避免任務無限堆積。
+- 節點只有在實際 multi-port 本機連接埠也能連線到探測目標時，才會被判定為測速成功。
+- 訂閱重新整理、本機 URI/YAML/Base64 節點重測、取消任務和節點池更新都具備交易恢復與有界佇列。
+- 執行時診斷可查看啟動階段、監聽器數量、記憶體、協程和測速佇列，不會暴露節點憑證或訂閱連結。
 
 ## 🖼️ WebUI 預覽
 
@@ -117,7 +125,7 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 
 ## 常見問題
 
-使用教學包含啟動錯誤、連接埠分配、瀏覽器儲存的匯入選項和 macOS Gatekeeper 處理方式。測速成功的節點沒有使用預期連接埠時，請查看 WebUI 的連接埠頁面；被其他程式占用的連接埠會自動略過。
+使用教學包含啟動錯誤、連接埠分配和瀏覽器儲存的匯入選項。測速成功的節點沒有使用預期連接埠時，請查看 WebUI 的連接埠頁面；被其他程式占用的連接埠會自動略過。
 
 ## 上游專案與致謝
 

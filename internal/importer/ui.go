@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -13,25 +14,7 @@ const (
 )
 
 func (s *Service) UISummary() (UISummary, error) {
-	summary := UISummary{UpdatedAt: time.Now()}
-	for _, node := range s.store.ListNodes() {
-		summary.Total++
-		switch {
-		case node.InPool || node.State == StateInPool:
-			summary.InPool++
-		case node.State == StateParsed:
-			summary.Parsed++
-		case node.State == StateTesting:
-			summary.Testing++
-		case node.State == StatePassed:
-			summary.Passed++
-		case node.State == StateFailed:
-			summary.Failed++
-		case node.State == StateExcluded:
-			summary.Excluded++
-		}
-	}
-	return summary, nil
+	return s.store.uiSummary()
 }
 
 func (s *Service) ListUINodes(query UINodeListQuery) (UINodeListResponse, error) {
@@ -40,49 +23,51 @@ func (s *Service) ListUINodes(query UINodeListQuery) (UINodeListResponse, error)
 		return UINodeListResponse{}, err
 	}
 
-	nodes := s.syncRuntimeNodes(s.store.ListNodes())
-	countries := make(map[string]struct{})
-	tags := make(map[string]struct{})
-	filtered := make([]ManagedNode, 0, len(nodes))
+	nodes, total, countries, tags, err := s.store.queryUINodes(query)
+	if err != nil {
+		return UINodeListResponse{}, err
+	}
+	nodes = s.syncRuntimePagePorts(nodes)
+	items := make([]UINodeListItem, 0, len(nodes))
 	for _, node := range nodes {
-		if !matchesUIScope(node, query.Scope) {
-			continue
-		}
-		if node.CountryCode != "" {
-			countries[node.CountryCode] = struct{}{}
-		}
-		if tag := strings.TrimSpace(node.TagPrefix); tag != "" {
-			tags[tag] = struct{}{}
-		}
-		if !matchesUIFilters(node, query) {
-			continue
-		}
-		filtered = append(filtered, node)
-	}
-
-	sort.Slice(filtered, func(i, j int) bool {
-		return compareUINodes(filtered[i], filtered[j], query.Sort, query.Order)
-	})
-
-	start := (query.Page - 1) * query.PageSize
-	if start > len(filtered) {
-		start = len(filtered)
-	}
-	end := min(start+query.PageSize, len(filtered))
-	items := make([]UINodeListItem, 0, end-start)
-	for _, node := range filtered[start:end] {
 		items = append(items, uiNodeListItem(node))
 	}
 
 	return UINodeListResponse{
 		Items:     items,
-		Total:     len(filtered),
+		Total:     total,
 		Page:      query.Page,
 		PageSize:  query.PageSize,
-		Countries: sortedUIValues(countries),
-		Tags:      sortedUIValues(tags),
+		Countries: countries,
+		Tags:      tags,
 		UpdatedAt: time.Now(),
 	}, nil
+}
+
+func (s *Service) syncRuntimePagePorts(nodes []ManagedNode) []ManagedNode {
+	resolver, ok := s.nodeMgr.(NodePortResolver)
+	if !ok {
+		return s.syncRuntimeNodes(nodes)
+	}
+	keys := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		if (node.InPool || node.State == StateInPool) && node.URI != "" {
+			keys = append(keys, node.URI)
+		}
+	}
+	if len(keys) == 0 {
+		return nodes
+	}
+	ports, err := resolver.ResolveNodePorts(context.Background(), keys)
+	if err != nil {
+		return nodes
+	}
+	for i := range nodes {
+		if port, ok := ports[nodes[i].URI]; ok {
+			nodes[i].Port = port
+		}
+	}
+	return nodes
 }
 
 func (s *Service) UIPortPreview(limit int) ([]UIPortPreviewItem, error) {

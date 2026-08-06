@@ -42,6 +42,10 @@ type ImportService interface {
 	ReorderPoolBy(mode string) error
 	Reorder(ids []string) error
 	Job(jobID string) (importer.ImportJob, bool)
+	SubscribeJobEvents() (<-chan importer.JobEvent, func())
+	JobEventSnapshot() []importer.JobEvent
+	JobEventStats() importer.JobEventStats
+	ProbeSchedulerStats() importer.ProbeSchedulerStats
 }
 
 func (s *Server) ensureImportService(w http.ResponseWriter) bool {

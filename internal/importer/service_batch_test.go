@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -84,7 +83,7 @@ func (m *batchNodeManagerStub) RestoreConfigNodes(ctx context.Context, nodes []c
 
 func TestCancelRefreshUsesSingleParentSnapshotRestore(t *testing.T) {
 	mgr := &batchNodeManagerStub{}
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -154,7 +153,7 @@ func (m *batchNodeManagerStub) TriggerReload(ctx context.Context) error {
 
 func newBatchServiceForTest(t *testing.T, mgr *batchNodeManagerStub) (*Service, *Store) {
 	t.Helper()
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -193,7 +192,7 @@ func waitRefreshJobTerminal(t *testing.T, svc *Service, jobID string) SourceRefr
 
 func TestBatchRetestRemovesPoolNodeOnlyAfterThreeFailedRounds(t *testing.T) {
 	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{{Name: "tag-node", URI: "trojan://node", Port: 24000}}}
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -224,7 +223,7 @@ func TestBatchRetestRemovesPoolNodeOnlyAfterThreeFailedRounds(t *testing.T) {
 
 func TestBatchRetestKeepsPoolNodeWhenSecondRoundPasses(t *testing.T) {
 	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{{Name: "tag-node", URI: "trojan://node", Port: 24000}}}
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -255,7 +254,7 @@ func TestBatchRetestKeepsPoolNodeWhenSecondRoundPasses(t *testing.T) {
 
 func TestBatchRetestAppliesAllFailedResults(t *testing.T) {
 	mgr := &batchNodeManagerStub{}
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -570,7 +569,7 @@ func TestSourceRefreshTargetsIncludeEveryTaggedSource(t *testing.T) {
 }
 
 func TestRefreshLocalSourceRetestsEveryTaggedState(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -676,7 +675,7 @@ func TestRefreshSourcesDoesNotLetSlowFirstURLBlockHealthySources(t *testing.T) {
 	}))
 	defer fast.Close()
 
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -861,7 +860,7 @@ func TestCancelRefreshSourcesStopsPullingJob(t *testing.T) {
 }
 
 func TestCanceledImportRestoresUntestedNodes(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -900,7 +899,7 @@ func TestCanceledImportRestoresUntestedNodes(t *testing.T) {
 }
 
 func TestNewServiceRecoversPersistedTestingNodes(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -940,7 +939,7 @@ func TestCompactRefreshSourceErrorRedactsURLAndPreservesUTF8(t *testing.T) {
 }
 
 func TestFetchSubscriptionViaPoolBoundsAndPrioritizesCandidates(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -1241,6 +1240,83 @@ func TestListAndDeleteImportSources(t *testing.T) {
 	}
 }
 
+func TestSharedNodeSourceReferencesSurviveUntilLastSourceDeletion(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	path := filepath.Join(t.TempDir(), "managed_nodes.json")
+	store, err := newTestStore(t, path)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	svc := NewService(store, NewNodeTester(nil), mgr)
+	const (
+		nodeURI = "trojan://shared"
+		urlA    = "https://example.test/a"
+		urlB    = "https://example.test/b"
+	)
+	node := ManagedNode{ID: nodeID(nodeURI), URI: nodeURI, Name: "B-shared", State: StateInPool, InPool: true, Port: 24000, ImportMode: "url", ImportSource: urlA, TagPrefix: "A"}
+	if err := store.UpsertNode(node); err != nil {
+		t.Fatalf("UpsertNode(A) error = %v", err)
+	}
+	node.ImportSource = urlB
+	node.TagPrefix = "B"
+	if err := store.UpsertNode(node); err != nil {
+		t.Fatalf("UpsertNode(B) error = %v", err)
+	}
+
+	shared, ok := store.GetNode(node.ID)
+	if !ok || len(nodeSourceRefs(shared)) != 2 {
+		t.Fatalf("shared node refs = %#v, found=%v", nodeSourceRefs(shared), ok)
+	}
+	sources, err := svc.ListImportSources()
+	if err != nil {
+		t.Fatalf("ListImportSources() error = %v", err)
+	}
+	if len(sources) != 2 || sources[0].Total != 1 || sources[1].Total != 1 {
+		t.Fatalf("shared source summaries = %#v, want two one-node sources", sources)
+	}
+	targets, err := svc.sourceRefreshTargets("")
+	if err != nil {
+		t.Fatalf("sourceRefreshTargets() error = %v", err)
+	}
+	if len(targets) != 2 || !reflect.DeepEqual(targets[0].URLs, []string{urlA}) || !reflect.DeepEqual(targets[1].URLs, []string{urlB}) {
+		t.Fatalf("shared refresh targets = %#v", targets)
+	}
+
+	removed, err := svc.DeleteBySubscription(urlA)
+	if err != nil {
+		t.Fatalf("DeleteBySubscription(A) error = %v", err)
+	}
+	if removed != 1 || len(mgr.deletedBatches) != 0 || mgr.reloadCount != 0 {
+		t.Fatalf("first detach removed=%d deleted=%#v reloads=%d", removed, mgr.deletedBatches, mgr.reloadCount)
+	}
+	retained, ok := store.GetNode(node.ID)
+	refs := nodeSourceRefs(retained)
+	if !ok || len(refs) != 1 || refs[0].Source != urlB || !retained.InPool {
+		t.Fatalf("node after first detach = %#v refs=%#v found=%v", retained, refs, ok)
+	}
+
+	loaded, err := newTestStore(t, path)
+	if err != nil {
+		t.Fatalf("NewStore(reload) error = %v", err)
+	}
+	persisted, ok := loaded.GetNode(node.ID)
+	persistedRefs := nodeSourceRefs(persisted)
+	if !ok || len(persistedRefs) != 1 || persistedRefs[0].Source != urlB {
+		t.Fatalf("persisted refs = %#v found=%v", persistedRefs, ok)
+	}
+
+	removed, err = svc.DeleteBySubscription(urlB)
+	if err != nil {
+		t.Fatalf("DeleteBySubscription(B) error = %v", err)
+	}
+	if removed != 1 || len(mgr.deletedBatches) != 1 || !reflect.DeepEqual(mgr.deletedBatches[0], []string{"B-shared"}) || mgr.reloadCount != 1 {
+		t.Fatalf("last detach removed=%d deleted=%#v reloads=%d", removed, mgr.deletedBatches, mgr.reloadCount)
+	}
+	if _, ok := store.GetNode(node.ID); ok {
+		t.Fatal("shared node remained after its final source was removed")
+	}
+}
+
 func TestDeleteAllImportSourcesBatchesStoreAndConfigRemoval(t *testing.T) {
 	mgr := &batchNodeManagerStub{}
 	svc, store := newBatchServiceForTest(t, mgr)
@@ -1309,7 +1385,7 @@ func TestRefreshMixedSourcesReportsPartialAndCleansTransientState(t *testing.T) 
 
 	node := ManagedNode{ID: "local", Name: "local", URI: "trojan://local", TagPrefix: "mixed", ImportMode: "content", ImportFormat: "uri_list", State: StateFailed, Enabled: true}
 	mgr := &batchNodeManagerStub{}
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -1385,7 +1461,7 @@ func TestRefreshApplyFailureRestoresParentSnapshot(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mgr := &batchNodeManagerStub{nextPort: 25000, createErr: tc.createErr, deleteErr: tc.deleteErr, reloadErr: tc.reloadErr}
-			store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+			store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 			if err != nil {
 				t.Fatalf("NewStore() error = %v", err)
 			}
@@ -1422,7 +1498,7 @@ func TestRefreshAllFailedStagedNodesRetestsOldSource(t *testing.T) {
 	}))
 	defer server.Close()
 	mgr := &batchNodeManagerStub{}
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -1457,7 +1533,7 @@ func TestRefreshAppliesHealthySourceWhenLargeLocalSourceFails(t *testing.T) {
 	}))
 	defer server.Close()
 	mgr := &batchNodeManagerStub{nextPort: 25000}
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -1505,7 +1581,7 @@ func TestRefreshProtectionRestoreFailureIsReportedAsFailure(t *testing.T) {
 	}))
 	defer server.Close()
 	mgr := &batchNodeManagerStub{createErr: errors.New("create failed"), restoreErr: errors.New("restore failed")}
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -1535,7 +1611,7 @@ func TestRefreshProtectionRestoreFailureIsReportedAsFailure(t *testing.T) {
 
 func TestWaitTestJobTimeoutCancelsChild(t *testing.T) {
 	mgr := &batchNodeManagerStub{}
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -1566,7 +1642,7 @@ func TestWaitTestJobTimeoutCancelsChild(t *testing.T) {
 }
 
 func TestStoreMutationRollsBackWhenSaveFails(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -1578,11 +1654,9 @@ func TestStoreMutationRollsBackWhenSaveFails(t *testing.T) {
 	if err := store.UpsertJob(job); err != nil {
 		t.Fatalf("UpsertJob() error = %v", err)
 	}
-	blocker := filepath.Join(t.TempDir(), "blocker")
-	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
+	if err := store.db.close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
 	}
-	store.path = filepath.Join(blocker, "managed_nodes.json")
 	if err := store.UpsertNode(ManagedNode{ID: "new", URI: "trojan://new"}); err == nil {
 		t.Fatal("UpsertNode() unexpectedly succeeded")
 	}

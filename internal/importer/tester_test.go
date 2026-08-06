@@ -2,8 +2,13 @@ package importer
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -98,6 +103,209 @@ func TestProbeBatchDefersFailuresAcrossThreeRounds(t *testing.T) {
 	failedTimes := times["failed"]
 	if len(failedTimes) != 3 || failedTimes[1].Sub(failedTimes[0]) < tester.retryDelay || failedTimes[2].Sub(failedTimes[1]) < tester.retryDelay {
 		t.Fatalf("retry times = %#v", failedTimes)
+	}
+}
+
+type countingProbeSession struct {
+	mu       sync.Mutex
+	attempts int
+	closed   int
+}
+
+func (s *countingProbeSession) Probe(_ context.Context, _ string) TestResult {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.attempts++
+	return TestResult{Error: errors.New("fixture failure")}
+}
+
+func (s *countingProbeSession) Close() {
+	s.mu.Lock()
+	s.closed++
+	s.mu.Unlock()
+}
+
+func TestProbeBatchReusesOneSessionAcrossRetryRounds(t *testing.T) {
+	tester := NewNodeTester(nil, WithTesterConcurrency(4))
+	tester.retryDelay = time.Millisecond
+	session := &countingProbeSession{}
+	created := 0
+	tester.sessionFactory = func(_ context.Context, _ ManagedNode, _ time.Duration) (probeSession, error) {
+		created++
+		return session, nil
+	}
+
+	var result TestResult
+	for event := range tester.ProbeBatch(context.Background(), []ManagedNode{{ID: "node-1"}}) {
+		result = event.Result
+	}
+	if result.Error == nil {
+		t.Fatal("expected final probe failure")
+	}
+	if created != 1 {
+		t.Fatalf("session creations = %d, want 1", created)
+	}
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.attempts != probeRounds {
+		t.Fatalf("session attempts = %d, want %d", session.attempts, probeRounds)
+	}
+	if session.closed != 1 {
+		t.Fatalf("session closes = %d, want 1", session.closed)
+	}
+}
+
+func TestProbeBatchDoesNotShareSessionAcrossDifferentURIs(t *testing.T) {
+	tester := NewNodeTester(nil, WithTesterConcurrency(1))
+	created := 0
+	tester.sessionFactory = func(_ context.Context, _ ManagedNode, _ time.Duration) (probeSession, error) {
+		created++
+		return &successfulProbeSession{}, nil
+	}
+	nodes := []ManagedNode{
+		{ID: "same-id", URI: "ss://first"},
+		{ID: "same-id", URI: "ss://second"},
+	}
+	for range tester.ProbeBatch(context.Background(), nodes) {
+	}
+	if created != len(nodes) {
+		t.Fatalf("session creations = %d, want %d", created, len(nodes))
+	}
+}
+
+func TestProbeBatchRejectsPooledNodeWhenRuntimeListenerFails(t *testing.T) {
+	var requests int
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer proxy.Close()
+	host, port := testServerAddress(t, proxy.Listener.Addr())
+
+	tester := NewNodeTester(nil,
+		WithProbeTarget("https://example.test/generate_204"),
+		WithRuntimeProxy(host, "", ""),
+	)
+	tester.retryDelay = time.Millisecond
+	tester.sessionFactory = func(context.Context, ManagedNode, time.Duration) (probeSession, error) {
+		return &successfulProbeSession{}, nil
+	}
+
+	var result TestResult
+	for event := range tester.ProbeBatch(context.Background(), []ManagedNode{{
+		ID: "pooled", URI: "ss://pooled", Port: port, State: StateInPool, InPool: true,
+	}}) {
+		result = event.Result
+	}
+	if result.Error == nil || !strings.Contains(result.Error.Error(), "runtime listener") {
+		t.Fatalf("result error = %v, want runtime listener failure", result.Error)
+	}
+	if requests != probeRounds {
+		t.Fatalf("runtime listener requests = %d, want %d", requests, probeRounds)
+	}
+}
+
+func TestProbeBatchCandidateDoesNotRequireRuntimeListener(t *testing.T) {
+	tester := NewNodeTester(nil, WithRuntimeProxy("127.0.0.1", "", ""))
+	tester.sessionFactory = func(context.Context, ManagedNode, time.Duration) (probeSession, error) {
+		return &successfulProbeSession{}, nil
+	}
+
+	var result TestResult
+	for event := range tester.ProbeBatch(context.Background(), []ManagedNode{{
+		ID: "candidate", URI: "ss://candidate", State: StateParsed,
+	}}) {
+		result = event.Result
+	}
+	if result.Error != nil {
+		t.Fatalf("candidate probe error = %v", result.Error)
+	}
+}
+
+func TestProbeBatchAcceptsPooledNodeThroughAuthenticatedRuntimeListener(t *testing.T) {
+	const username = "proxy-user"
+	const password = "proxy-password"
+	var authorization string
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization = r.Header.Get("Proxy-Authorization")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer proxy.Close()
+	host, port := testServerAddress(t, proxy.Listener.Addr())
+
+	tester := NewNodeTester(nil,
+		WithProbeTarget("http://example.test/generate_204"),
+		WithRuntimeProxy(host, username, password),
+	)
+	tester.sessionFactory = func(context.Context, ManagedNode, time.Duration) (probeSession, error) {
+		return &successfulProbeSession{}, nil
+	}
+
+	var result TestResult
+	for event := range tester.ProbeBatch(context.Background(), []ManagedNode{{
+		ID: "pooled", URI: "ss://pooled", Port: port, State: StateInPool, InPool: true,
+	}}) {
+		result = event.Result
+	}
+	if result.Error != nil {
+		t.Fatalf("pooled probe error = %v", result.Error)
+	}
+	wantAuthorization := "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
+	if authorization != wantAuthorization {
+		t.Fatalf("proxy authorization = %q, want %q", authorization, wantAuthorization)
+	}
+}
+
+func testServerAddress(t *testing.T, address net.Addr) (string, uint16) {
+	t.Helper()
+	host, rawPort, err := net.SplitHostPort(address.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.ParseUint(rawPort, 10, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return host, uint16(port)
+}
+
+type successfulProbeSession struct{}
+
+func (*successfulProbeSession) Probe(context.Context, string) TestResult { return TestResult{} }
+func (*successfulProbeSession) Close()                                   {}
+
+func TestRunBatchUsesBoundedWorkers(t *testing.T) {
+	const concurrency = 4
+	tester := NewNodeTester(nil, WithTesterConcurrency(concurrency))
+	nodes := make([]ManagedNode, 100)
+	for i := range nodes {
+		nodes[i].ID = randomHex(12)
+	}
+	var mu sync.Mutex
+	active := 0
+	peak := 0
+	fn := func(_ context.Context, _ ManagedNode) TestResult {
+		mu.Lock()
+		active++
+		if active > peak {
+			peak = active
+		}
+		mu.Unlock()
+		time.Sleep(time.Millisecond)
+		mu.Lock()
+		active--
+		mu.Unlock()
+		return TestResult{}
+	}
+	count := 0
+	for range tester.runBatchWithConcurrency(context.Background(), nodes, concurrency, time.Second, fn) {
+		count++
+	}
+	if count != len(nodes) {
+		t.Fatalf("results = %d, want %d", count, len(nodes))
+	}
+	if peak > concurrency {
+		t.Fatalf("peak workers = %d, max %d", peak, concurrency)
 	}
 }
 

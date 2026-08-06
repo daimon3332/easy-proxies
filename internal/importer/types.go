@@ -27,6 +27,7 @@ type ManagedNode struct {
 	ImportMode          string           `json:"import_mode,omitempty"`
 	ImportSource        string           `json:"import_source,omitempty"`
 	ImportFormat        string           `json:"import_format,omitempty"`
+	SourceRefs          []NodeSourceRef  `json:"source_refs,omitempty"`
 	CountryCode         string           `json:"country_code,omitempty"`
 	CountryName         string           `json:"country_name,omitempty"`
 	LatencyMs           int64            `json:"latency_ms,omitempty"`
@@ -40,6 +41,14 @@ type ManagedNode struct {
 	LastTestAt          time.Time        `json:"last_test_at,omitempty"`
 	CreatedAt           time.Time        `json:"created_at"`
 	UpdatedAt           time.Time        `json:"updated_at"`
+}
+
+type NodeSourceRef struct {
+	TagPrefix string `json:"tag_prefix"`
+	ImportID  string `json:"import_id,omitempty"`
+	Mode      string `json:"mode,omitempty"`
+	Source    string `json:"source,omitempty"`
+	Format    string `json:"format,omitempty"`
 }
 
 func (n ManagedNode) ToConfigNode() config.NodeConfig {

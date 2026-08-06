@@ -2,9 +2,9 @@ package geoip
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -33,7 +33,10 @@ const (
 
 // Default GeoIP database download URL
 const (
-	DefaultGeoIPURL = "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb"
+	DefaultGeoIPURL    = "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-Country.mmdb"
+	maxDNSCacheEntries = 4096
+	dnsCacheTTL        = 30 * time.Minute
+	dnsFailureCacheTTL = time.Minute
 )
 
 // RegionInfo contains region details
@@ -41,6 +44,11 @@ type RegionInfo struct {
 	Code    string // "jp", "kr", "us", "hk", "tw", "other"
 	Country string // Full country name
 	ISOCode string // ISO country code
+}
+
+type dnsCacheEntry struct {
+	region    RegionInfo
+	expiresAt time.Time
 }
 
 // Lookup provides GeoIP lookup functionality
@@ -51,7 +59,7 @@ type Lookup struct {
 	updateInterval time.Duration
 	stopChan       chan struct{}
 	updateOnce     sync.Once
-	dnsCache       map[string]RegionInfo
+	dnsCache       map[string]dnsCacheEntry
 	cacheMu        sync.RWMutex
 }
 
@@ -244,7 +252,7 @@ func NewWithAutoUpdate(dbPath string, updateInterval time.Duration) (*Lookup, er
 		path:           dbPath,
 		updateInterval: updateInterval,
 		stopChan:       make(chan struct{}),
-		dnsCache:       make(map[string]RegionInfo),
+		dnsCache:       make(map[string]dnsCacheEntry),
 	}
 
 	// Start auto-update goroutine if interval is set
@@ -300,6 +308,7 @@ func (l *Lookup) Update() error {
 	oldDB := l.db
 	l.db = newDB
 	l.mu.Unlock()
+	l.clearDNSCache()
 
 	// Close old database
 	if oldDB != nil {
@@ -397,6 +406,7 @@ func (l *Lookup) Close() error {
 			close(l.stopChan)
 		}
 	})
+	l.clearDNSCache()
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -452,13 +462,9 @@ func (l *Lookup) LookupURI(uri string) RegionInfo {
 		return RegionInfo{Code: RegionOther, Country: "Unknown", ISOCode: ""}
 	}
 
-	// Check DNS cache first
-	l.cacheMu.RLock()
-	if cached, ok := l.dnsCache[host]; ok {
-		l.cacheMu.RUnlock()
+	if cached, ok := l.loadDNSCache(host, time.Now()); ok {
 		return cached
 	}
-	l.cacheMu.RUnlock()
 
 	// Resolve hostname to IP if needed
 	ip := net.ParseIP(host)
@@ -470,10 +476,7 @@ func (l *Lookup) LookupURI(uri string) RegionInfo {
 		ips, err := resolver.LookupIPAddr(ctx, host)
 		if err != nil || len(ips) == 0 {
 			result := RegionInfo{Code: RegionOther, Country: "Unknown", ISOCode: ""}
-			// Cache failed lookups too to avoid repeated timeouts
-			l.cacheMu.Lock()
-			l.dnsCache[host] = result
-			l.cacheMu.Unlock()
+			l.storeDNSCache(host, result, time.Now().Add(dnsFailureCacheTTL))
 			return result
 		}
 		host = ips[0].IP.String()
@@ -481,12 +484,44 @@ func (l *Lookup) LookupURI(uri string) RegionInfo {
 
 	result := l.LookupIP(host)
 
-	// Cache the result
-	l.cacheMu.Lock()
-	l.dnsCache[extractHostFromURI(uri)] = result
-	l.cacheMu.Unlock()
+	l.storeDNSCache(extractHostFromURI(uri), result, time.Now().Add(dnsCacheTTL))
 
 	return result
+}
+
+func (l *Lookup) loadDNSCache(host string, now time.Time) (RegionInfo, bool) {
+	l.cacheMu.Lock()
+	defer l.cacheMu.Unlock()
+	entry, ok := l.dnsCache[host]
+	if !ok {
+		return RegionInfo{}, false
+	}
+	if !entry.expiresAt.After(now) {
+		delete(l.dnsCache, host)
+		return RegionInfo{}, false
+	}
+	return entry.region, true
+}
+
+func (l *Lookup) storeDNSCache(host string, region RegionInfo, expiresAt time.Time) {
+	if host == "" {
+		return
+	}
+	l.cacheMu.Lock()
+	defer l.cacheMu.Unlock()
+	if _, exists := l.dnsCache[host]; !exists && len(l.dnsCache) >= maxDNSCacheEntries {
+		for key := range l.dnsCache {
+			delete(l.dnsCache, key)
+			break
+		}
+	}
+	l.dnsCache[host] = dnsCacheEntry{region: region, expiresAt: expiresAt}
+}
+
+func (l *Lookup) clearDNSCache() {
+	l.cacheMu.Lock()
+	clear(l.dnsCache)
+	l.cacheMu.Unlock()
 }
 
 // extractHostFromURI extracts the host/IP from various proxy URI formats

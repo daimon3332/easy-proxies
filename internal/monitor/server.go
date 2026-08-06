@@ -11,7 +11,10 @@ import (
 	"fmt"
 	"log"
 	mathrand "math/rand"
+	"net"
 	"net/http"
+	"net/http/pprof"
+	"net/netip"
 	neturl "net/url"
 	"os"
 	"runtime"
@@ -138,6 +141,7 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	mux.HandleFunc("/api/nodes/probe-all", s.withAuth(s.handleProbeAll))
 	mux.HandleFunc("/api/nodes/", s.withAuth(s.handleNodeAction))
 	mux.HandleFunc("/api/debug", s.withAuth(s.handleDebug))
+	mux.HandleFunc("/api/diagnostics", s.withAuth(s.handleDiagnostics))
 	mux.HandleFunc("/api/export", s.withAuth(s.handleExport))
 	mux.HandleFunc("/api/data-export/nodes", s.withAuth(s.handleDataExportNodes))
 	mux.HandleFunc("/api/data-export/subscriptions", s.withAuth(s.handleDataExportSubscriptions))
@@ -161,6 +165,7 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	mux.HandleFunc("/api/import/summary", s.withAuth(s.handleImportSummary))
 	mux.HandleFunc("/api/import/sources", s.withAuth(s.handleImportSources))
 	mux.HandleFunc("/api/import/", s.withAuth(s.handleImportAction))
+	mux.HandleFunc("/api/job-events", s.withAuth(s.handleJobEvents))
 	mux.HandleFunc("/api/ui/summary", s.withAuth(s.handleUISummary))
 	mux.HandleFunc("/api/ui/nodes", s.withAuth(s.handleUINodes))
 	mux.HandleFunc("/api/ui/ports", s.withAuth(s.handleUIPorts))
@@ -171,8 +176,31 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	mux.HandleFunc("/api/nodes/order", s.withAuth(s.handleManagedNodesOrder))
 	mux.HandleFunc("/api/managed-nodes/", s.withAuth(s.handleManagedNodeAction))
 	mux.HandleFunc("/api/ports/status", s.withAuth(s.handlePortsStatus))
+	if cfg.PprofEnabled {
+		if isLoopbackListen(cfg.Listen) {
+			mux.HandleFunc("/debug/pprof/", s.withAuth(pprof.Index))
+			mux.HandleFunc("/debug/pprof/cmdline", s.withAuth(pprof.Cmdline))
+			mux.HandleFunc("/debug/pprof/profile", s.withAuth(pprof.Profile))
+			mux.HandleFunc("/debug/pprof/symbol", s.withAuth(pprof.Symbol))
+			mux.HandleFunc("/debug/pprof/trace", s.withAuth(pprof.Trace))
+		} else {
+			logger.Printf("pprof disabled: management listen address is not loopback")
+		}
+	}
 	s.srv = &http.Server{Addr: cfg.Listen, Handler: mux}
 	return s
+}
+
+func isLoopbackListen(listen string) bool {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(listen))
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	address, err := netip.ParseAddr(host)
+	return err == nil && address.IsLoopback()
 }
 
 // SetSubscriptionRefresher sets the subscription refresher for API endpoints.

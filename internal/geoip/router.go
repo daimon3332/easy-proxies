@@ -55,8 +55,7 @@ func (r *Router) SetPool(region string, dialer PoolDialer) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.pools[region] = dialer
-	// Clear transport cache since pools changed
-	r.transports = make(map[PoolDialer]*http.Transport)
+	r.closeTransportsLocked()
 }
 
 // SetGlobalPool sets the default pool for requests without region path
@@ -64,8 +63,7 @@ func (r *Router) SetGlobalPool(dialer PoolDialer) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.global = dialer
-	// Clear transport cache since pools changed
-	r.transports = make(map[PoolDialer]*http.Transport)
+	r.closeTransportsLocked()
 }
 
 // Start starts the GeoIP router HTTP server
@@ -95,12 +93,22 @@ func (r *Router) Start(ctx context.Context) error {
 
 // Stop stops the GeoIP router
 func (r *Router) Stop() error {
+	r.mu.Lock()
+	r.closeTransportsLocked()
+	r.mu.Unlock()
 	if r.server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return r.server.Shutdown(ctx)
 	}
 	return nil
+}
+
+func (r *Router) closeTransportsLocked() {
+	for _, transport := range r.transports {
+		transport.CloseIdleConnections()
+	}
+	clear(r.transports)
 }
 
 // checkProxyAuth validates the Proxy-Authorization header.

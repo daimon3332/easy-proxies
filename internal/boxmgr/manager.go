@@ -9,17 +9,20 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"easy_proxies/internal/builder"
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/geoip"
 	"easy_proxies/internal/monitor"
+	"easy_proxies/internal/outbound/dispatch"
 	"easy_proxies/internal/outbound/pool"
 
 	"github.com/sagernet/sing-box"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/include"
+	singlog "github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 )
 
@@ -39,6 +42,43 @@ type Logger interface {
 	Infof(format string, args ...any)
 	Warnf(format string, args ...any)
 	Errorf(format string, args ...any)
+}
+
+func (m *Manager) Diagnostics() map[string]any {
+	m.mu.RLock()
+	cfg := cloneConfig(m.cfg)
+	instance := m.currentBox
+	m.mu.RUnlock()
+	result := map[string]any{"running": instance != nil}
+	if cfg == nil {
+		return result
+	}
+	result["mode"] = cfg.Mode
+	result["configured_nodes"] = len(cfg.Nodes)
+	if instance != nil {
+		result["inbounds"] = len(instance.Inbound().Inbounds())
+		result["outbounds"] = len(instance.Outbound().Outbounds())
+	}
+	if cfg.Mode == "multi-port" || cfg.Mode == "hybrid" {
+		result["listeners"] = len(cfg.Nodes)
+	}
+	if value := m.startupTimings.Load(); value != nil {
+		stored := value.(map[string]int64)
+		timings := make(map[string]int64, len(stored))
+		for stage, milliseconds := range stored {
+			timings[stage] = milliseconds
+		}
+		result["startup_ms"] = timings
+	}
+	return result
+}
+
+func (m *Manager) SetStartupTimings(timings map[string]int64) {
+	cloned := make(map[string]int64, len(timings))
+	for stage, milliseconds := range timings {
+		cloned[stage] = milliseconds
+	}
+	m.startupTimings.Store(cloned)
 }
 
 // Option configures the Manager.
@@ -65,15 +105,21 @@ type Manager struct {
 	minAvailableNodes int
 	logger            Logger
 
-	baseCtx            context.Context
-	healthCheckStarted bool
+	baseCtx   context.Context
+	portIndex atomic.Value
+
+	runtimeCfg        *config.Config
+	runtimeContexts   sync.Map
+	runtimeLogFactory singlog.Factory
+	startupTimings    atomic.Value
 }
 
 // New creates a BoxManager with the given config.
 func New(cfg *config.Config, monitorCfg monitor.Config, opts ...Option) *Manager {
 	m := &Manager{
-		cfg:        cfg,
-		monitorCfg: monitorCfg,
+		cfg:               cfg,
+		monitorCfg:        monitorCfg,
+		runtimeLogFactory: singlog.NewNOPFactory(),
 	}
 	m.applyConfigSettings(cfg)
 	for _, opt := range opts {
@@ -137,15 +183,10 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	m.mu.Lock()
 	m.currentBox = instance
+	m.runtimeCfg = cloneConfig(cfg)
 	m.mu.Unlock()
 
-	// Start periodic health check after nodes are registered
-	m.mu.Lock()
-	if m.monitorMgr != nil && !m.healthCheckStarted {
-		m.monitorMgr.StartPeriodicHealthCheck(periodicHealthInterval, periodicHealthTimeout)
-		m.healthCheckStarted = true
-	}
-	m.mu.Unlock()
+	m.configureHealthChecks(cfg, false)
 
 	m.logger.Infof("sing-box instance started with %d nodes", len(cfg.Nodes))
 
@@ -177,7 +218,10 @@ func (m *Manager) reloadLocked(newCfg *config.Config) error {
 	}
 	ctx := m.baseCtx
 	oldBox := m.currentBox
-	oldCfg := m.cfg
+	oldCfg := cloneConfig(m.runtimeCfg)
+	if oldCfg == nil {
+		oldCfg = cloneConfig(m.cfg)
+	}
 	m.currentBox = nil // Mark as reloading
 	m.mu.Unlock()
 
@@ -194,6 +238,7 @@ func (m *Manager) reloadLocked(newCfg *config.Config) error {
 		if err := oldBox.Close(); err != nil {
 			m.logger.Warnf("error closing old instance: %v", err)
 		}
+		m.runtimeContexts.Delete(oldBox)
 	}
 
 	// Stop GeoIP router before starting new box to release its port
@@ -257,6 +302,7 @@ func (m *Manager) reloadLocked(newCfg *config.Config) error {
 	m.mu.Lock()
 	m.currentBox = instance
 	m.cfg = newCfg
+	m.runtimeCfg = cloneConfig(newCfg)
 	m.mu.Unlock()
 
 	// Sync config to monitor server so future WebUI settings changes target the current config pointer
@@ -264,16 +310,7 @@ func (m *Manager) reloadLocked(newCfg *config.Config) error {
 		m.monitorServer.SetConfig(m.cfg)
 	}
 
-	// Probe reloaded nodes asynchronously after the new instance is usable.
-	if m.monitorMgr != nil {
-		go func() {
-			select {
-			case <-ctx.Done():
-			case <-time.After(3 * time.Second):
-				m.monitorMgr.ProbeAllNow(periodicHealthTimeout)
-			}
-		}()
-	}
+	m.configureHealthChecks(newCfg, true)
 
 	m.logger.Infof("reload completed successfully with %d nodes", len(newCfg.Nodes))
 
@@ -290,6 +327,35 @@ func (m *Manager) reloadLocked(newCfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func (m *Manager) configureHealthChecks(cfg *config.Config, reloaded bool) {
+	m.mu.RLock()
+	monitorMgr := m.monitorMgr
+	ctx := m.baseCtx
+	m.mu.RUnlock()
+	if monitorMgr == nil || cfg == nil {
+		return
+	}
+	if cfg.Mode == "multi-port" {
+		monitorMgr.StopPeriodicHealthCheck()
+		monitorMgr.MarkAllAvailable()
+		return
+	}
+	started := monitorMgr.StartPeriodicHealthCheck(periodicHealthInterval, periodicHealthTimeout)
+	if !reloaded || started {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-time.After(3 * time.Second):
+			monitorMgr.ProbeAllNow(periodicHealthTimeout)
+		}
+	}()
 }
 
 // rollbackToOldConfig attempts to restart with the previous configuration.
@@ -311,6 +377,7 @@ func (m *Manager) rollbackToOldConfig(ctx context.Context, oldCfg *config.Config
 	m.mu.Lock()
 	m.currentBox = instance
 	m.cfg = oldCfg
+	m.runtimeCfg = cloneConfig(oldCfg)
 	m.mu.Unlock()
 	// Sync config pointer to monitor server after rollback
 	if m.monitorServer != nil {
@@ -395,6 +462,7 @@ func (m *Manager) Close() error {
 
 	var err error
 	if m.currentBox != nil {
+		m.runtimeContexts.Delete(m.currentBox)
 		err = m.currentBox.Close()
 		m.currentBox = nil
 	}
@@ -405,7 +473,6 @@ func (m *Manager) Close() error {
 	if m.monitorMgr != nil {
 		m.monitorMgr.Stop()
 		m.monitorMgr = nil
-		m.healthCheckStarted = false
 	}
 	if m.geoRouter != nil {
 		m.geoRouter.Stop()
@@ -519,6 +586,7 @@ func (m *Manager) createBox(ctx context.Context, cfg *config.Config) (*box.Box, 
 		inboundRegistry := include.InboundRegistry()
 		outboundRegistry := include.OutboundRegistry()
 		pool.Register(outboundRegistry)
+		dispatch.Register(outboundRegistry)
 		endpointRegistry := include.EndpointRegistry()
 		dnsRegistry := include.DNSTransportRegistry()
 		serviceRegistry := include.ServiceRegistry()
@@ -528,6 +596,7 @@ func (m *Manager) createBox(ctx context.Context, cfg *config.Config) (*box.Box, 
 
 		instance, err := box.New(box.Options{Context: boxCtx, Options: opts})
 		if err == nil {
+			m.runtimeContexts.Store(instance, boxCtx)
 			if attempt > 0 {
 				log.Printf("✅ sing-box instance created after removing %d invalid outbound(s)", attempt)
 			}
@@ -740,6 +809,17 @@ func (m *Manager) applyConfigSettings(cfg *config.Config) {
 		m.drainTimeout = defaultDrainTimeout
 	}
 	m.minAvailableNodes = cfg.SubscriptionRefresh.MinAvailableNodes
+	m.storePortIndex(cfg)
+}
+
+func (m *Manager) storePortIndex(cfg *config.Config) {
+	ports := make(map[string]uint16, len(cfg.Nodes))
+	for _, node := range cfg.Nodes {
+		if node.URI != "" && node.Port > 0 {
+			ports[node.URI] = node.Port
+		}
+	}
+	m.portIndex.Store(ports)
 }
 
 // defaultLogger is the fallback logger using standard log.
@@ -790,6 +870,26 @@ func (m *Manager) ListConfigNodes(ctx context.Context) ([]config.NodeConfig, err
 		return nil, errConfigUnavailable
 	}
 	return cloneNodes(m.cfg.Nodes), nil
+}
+
+func (m *Manager) ResolveNodePorts(ctx context.Context, nodeURIs []string) (map[string]uint16, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
+	value := m.portIndex.Load()
+	if value == nil {
+		return nil, errConfigUnavailable
+	}
+	index := value.(map[string]uint16)
+	ports := make(map[string]uint16, len(nodeURIs))
+	for _, uri := range nodeURIs {
+		if port, ok := index[uri]; ok {
+			ports[uri] = port
+		}
+	}
+	return ports, nil
 }
 
 func (m *Manager) RestoreConfigNodes(ctx context.Context, nodes []config.NodeConfig) error {
@@ -1103,12 +1203,13 @@ func (m *Manager) triggerReloadLocked(ctx context.Context) error {
 	m.mu.RLock()
 	cfgCopy := m.copyConfigLocked()
 	notStarted := m.currentBox == nil
+	runtimeCfg := cloneConfig(m.runtimeCfg)
 	m.mu.RUnlock()
 
 	if cfgCopy == nil {
 		return errConfigUnavailable
 	}
-	if cfgCopy.Mode == "multi-port" || cfgCopy.Mode == "hybrid" {
+	if notStarted && (cfgCopy.Mode == "multi-port" || cfgCopy.Mode == "hybrid") {
 		if err := m.rebuildMultiPortAssignments(cfgCopy); err != nil {
 			return fmt.Errorf("rebuild multi-port assignments: %w", err)
 		}
@@ -1126,6 +1227,13 @@ func (m *Manager) triggerReloadLocked(ctx context.Context) error {
 		m.cfg = cfgCopy
 		m.mu.Unlock()
 		return m.Start(ctx)
+	}
+	if canReconcileMultiPort(runtimeCfg, cfgCopy) {
+		if err := m.reconcileMultiPort(runtimeCfg, cfgCopy); err == nil {
+			return nil
+		} else {
+			m.logger.Warnf("incremental multi-port reconcile failed, falling back to full reload: %v", err)
+		}
 	}
 	return m.reloadLocked(cfgCopy)
 }
@@ -1212,7 +1320,11 @@ func (m *Manager) RebuildPortAssignments() error {
 	if m.cfg == nil {
 		return errConfigUnavailable
 	}
-	return m.rebuildMultiPortAssignments(m.cfg)
+	if err := m.rebuildMultiPortAssignments(m.cfg); err != nil {
+		return err
+	}
+	m.storePortIndex(m.cfg)
+	return nil
 }
 
 // --- Helper functions ---
@@ -1281,19 +1393,166 @@ func cloneNodes(nodes []config.NodeConfig) []config.NodeConfig {
 	return out
 }
 
-func (m *Manager) copyConfigLocked() *config.Config {
-	if m.cfg == nil {
+func cloneConfig(cfg *config.Config) *config.Config {
+	if cfg == nil {
 		return nil
 	}
-	cloned := *m.cfg
-	cloned.Nodes = cloneNodes(m.cfg.Nodes)
-	// Clone Subscriptions slice to avoid shared backing array issues
-	if len(m.cfg.Subscriptions) > 0 {
-		cloned.Subscriptions = make([]string, len(m.cfg.Subscriptions))
-		copy(cloned.Subscriptions, m.cfg.Subscriptions)
-	}
-	cloned.SetFilePath(m.cfg.FilePath())
+	cloned := *cfg
+	cloned.Nodes = cloneNodes(cfg.Nodes)
+	cloned.Subscriptions = append([]string(nil), cfg.Subscriptions...)
+	cloned.SetFilePath(cfg.FilePath())
 	return &cloned
+}
+
+func (m *Manager) copyConfigLocked() *config.Config {
+	return cloneConfig(m.cfg)
+}
+
+type runtimeNodeSpec struct {
+	node        config.NodeConfig
+	outboundTag string
+	inboundTag  string
+}
+
+func runtimeNodeSpecs(nodes []config.NodeConfig) map[string]runtimeNodeSpec {
+	result := make(map[string]runtimeNodeSpec, len(nodes))
+	used := make(map[string]int, len(nodes))
+	for index, node := range nodes {
+		base := builder.NodeTag(node.Name)
+		if base == "" {
+			base = fmt.Sprintf("node-%d", index+1)
+		}
+		tag := base
+		if count := used[base]; count > 0 {
+			count++
+			used[base] = count
+			tag = fmt.Sprintf("%s-%d", base, count)
+		} else {
+			used[base] = 1
+		}
+		result[tag] = runtimeNodeSpec{node: node, outboundTag: tag, inboundTag: "in-" + tag}
+	}
+	return result
+}
+
+func canReconcileMultiPort(current, desired *config.Config) bool {
+	if current == nil || desired == nil || current.Mode != "multi-port" || desired.Mode != "multi-port" {
+		return false
+	}
+	return current.MultiPort == desired.MultiPort &&
+		current.Listener == desired.Listener &&
+		current.Pool == desired.Pool &&
+		current.GeoIP == desired.GeoIP &&
+		current.Log == desired.Log &&
+		current.LogLevel == desired.LogLevel &&
+		current.SkipCertVerify == desired.SkipCertVerify
+}
+
+func (m *Manager) reconcileMultiPort(current, desired *config.Config) error {
+	m.mu.RLock()
+	instance := m.currentBox
+	m.mu.RUnlock()
+	if instance == nil {
+		return errors.New("manager not started")
+	}
+	runtimeCtx, ok := m.runtimeContexts.Load(instance)
+	if !ok {
+		return errors.New("runtime context unavailable")
+	}
+	dispatchOutbound, loaded := instance.Outbound().Outbound(dispatch.Tag)
+	if !loaded {
+		return errors.New("multi-port dispatcher unavailable")
+	}
+	updater, ok := dispatchOutbound.(dispatch.MappingUpdater)
+	if !ok {
+		return errors.New("multi-port dispatcher does not support updates")
+	}
+
+	currentSpecs := runtimeNodeSpecs(current.Nodes)
+	desiredSpecs := runtimeNodeSpecs(desired.Nodes)
+	removeTags := make([]string, 0)
+	addTags := make([]string, 0)
+	for tag, oldSpec := range currentSpecs {
+		newSpec, exists := desiredSpecs[tag]
+		if !exists || newSpec.node != oldSpec.node {
+			removeTags = append(removeTags, tag)
+		}
+	}
+	for tag, newSpec := range desiredSpecs {
+		oldSpec, exists := currentSpecs[tag]
+		if !exists || newSpec.node != oldSpec.node {
+			addTags = append(addTags, tag)
+		}
+	}
+	if len(removeTags) == 0 && len(addTags) == 0 {
+		m.publishIncrementalConfig(desired)
+		return nil
+	}
+
+	type preparedNode struct {
+		outbound option.Outbound
+		inbound  option.Inbound
+	}
+	prepared := make(map[string]preparedNode, len(addTags))
+	for _, tag := range addTags {
+		spec := desiredSpecs[tag]
+		outbound, err := builder.BuildSingleNodeOutbound(tag, spec.node.URI, desired.SkipCertVerify)
+		if err != nil {
+			return fmt.Errorf("build outbound %s: %w", tag, err)
+		}
+		inbound, err := builder.BuildMultiPortInbound(desired, spec.node, tag)
+		if err != nil {
+			return fmt.Errorf("build inbound %s: %w", spec.inboundTag, err)
+		}
+		prepared[tag] = preparedNode{outbound: outbound, inbound: inbound}
+	}
+
+	for _, tag := range removeTags {
+		if err := instance.Inbound().Remove(currentSpecs[tag].inboundTag); err != nil {
+			return fmt.Errorf("remove inbound %s: %w", currentSpecs[tag].inboundTag, err)
+		}
+	}
+	for _, tag := range removeTags {
+		if err := instance.Outbound().Remove(tag); err != nil {
+			return fmt.Errorf("remove outbound %s: %w", tag, err)
+		}
+	}
+
+	logger := m.runtimeLogFactory.NewLogger("runtime/reconcile")
+	ctx := runtimeCtx.(context.Context)
+	for _, tag := range addTags {
+		outbound := prepared[tag].outbound
+		if err := instance.Outbound().Create(ctx, instance.Router(), logger, outbound.Tag, outbound.Type, outbound.Options); err != nil {
+			return fmt.Errorf("create outbound %s: %w", tag, err)
+		}
+	}
+	mappings := make(map[string]string, len(desiredSpecs))
+	for tag, spec := range desiredSpecs {
+		mappings[spec.inboundTag] = tag
+	}
+	updater.UpdateMappings(mappings)
+	for _, tag := range addTags {
+		inbound := prepared[tag].inbound
+		if err := instance.Inbound().Create(ctx, instance.Router(), logger, inbound.Tag, inbound.Type, inbound.Options); err != nil {
+			return fmt.Errorf("create inbound %s: %w", inbound.Tag, err)
+		}
+	}
+
+	m.publishIncrementalConfig(desired)
+	m.logger.Infof("incremental multi-port reconcile completed: added=%d removed=%d total=%d", len(addTags), len(removeTags), len(desired.Nodes))
+	return nil
+}
+
+func (m *Manager) publishIncrementalConfig(cfg *config.Config) {
+	m.mu.Lock()
+	m.cfg = cfg
+	m.runtimeCfg = cloneConfig(cfg)
+	m.applyConfigSettings(cfg)
+	server := m.monitorServer
+	m.mu.Unlock()
+	if server != nil {
+		server.SetConfig(cfg)
+	}
 }
 
 func (m *Manager) nodeIndexLocked(name string) int {

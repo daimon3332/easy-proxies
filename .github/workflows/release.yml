@@ -73,14 +73,6 @@ jobs:
             asset_os: linux
             goarch: arm64
             extension: ""
-          - goos: darwin
-            asset_os: macos
-            goarch: amd64
-            extension: ""
-          - goos: darwin
-            asset_os: macos
-            goarch: arm64
-            extension: ""
     steps:
       - name: Check out source
         uses: actions/checkout@v7.0.1
@@ -161,8 +153,8 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f -name 'easy_proxies-*' | sort)
-          if [[ ${#assets[@]} -ne 12 ]]; then
-            printf 'Expected 12 release assets, found %d\n' "${#assets[@]}" >&2
+          if [[ ${#assets[@]} -ne 8 ]]; then
+            printf 'Expected 8 release assets, found %d\n' "${#assets[@]}" >&2
             printf '%s\n' "${assets[@]}" >&2
             exit 1
           fi

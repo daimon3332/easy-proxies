@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,11 +14,14 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/subfetch"
 )
+
+var ErrNoRefreshSources = errors.New("no refreshable import sources")
 
 type NodeManager interface {
 	CreateNode(ctx context.Context, node config.NodeConfig) (config.NodeConfig, error)
@@ -52,6 +56,10 @@ type NodeLister interface {
 	ListConfigNodes(ctx context.Context) ([]config.NodeConfig, error)
 }
 
+type NodePortResolver interface {
+	ResolveNodePorts(ctx context.Context, nodeURIs []string) (map[string]uint16, error)
+}
+
 type NodeSnapshotRestorer interface {
 	RestoreConfigNodes(ctx context.Context, nodes []config.NodeConfig) error
 }
@@ -62,16 +70,24 @@ type Service struct {
 	nodeMgr    NodeManager
 	httpClient *http.Client
 
-	importCancelsMu  sync.Mutex
-	importCancels    map[string]context.CancelFunc
-	testJobsMu       sync.RWMutex
-	testJobs         map[string]*TestJob
-	testCancelsMu    sync.Mutex
-	testCancels      map[string]context.CancelFunc
-	refreshJobsMu    sync.RWMutex
-	refreshJobs      map[string]*SourceRefreshJob
-	refreshCancelsMu sync.Mutex
-	refreshCancels   map[string]context.CancelFunc
+	importCancelsMu   sync.Mutex
+	importCancels     map[string]context.CancelFunc
+	testJobsMu        sync.RWMutex
+	testJobs          map[string]*TestJob
+	testCancelsMu     sync.Mutex
+	testCancels       map[string]context.CancelFunc
+	refreshJobsMu     sync.RWMutex
+	refreshJobs       map[string]*SourceRefreshJob
+	refreshCancelsMu  sync.Mutex
+	refreshCancels    map[string]context.CancelFunc
+	jobEventsMu       sync.Mutex
+	jobEventSubs      map[uint64]chan JobEvent
+	jobEventNext      uint64
+	jobEventsClosed   bool
+	jobEventCoalesced atomic.Uint64
+	lifecycleMu       sync.Mutex
+	jobsWG            sync.WaitGroup
+	closing           bool
 
 	refreshConcurrency     int
 	refreshRetryDelay      time.Duration
@@ -83,6 +99,13 @@ type Service struct {
 }
 
 type Option func(*Service)
+
+func (s *Service) ProbeSchedulerStats() ProbeSchedulerStats {
+	if s == nil || s.tester == nil {
+		return ProbeSchedulerStats{}
+	}
+	return s.tester.ProbeSchedulerStats()
+}
 
 const (
 	defaultRefreshConcurrency     = 3
@@ -110,6 +133,7 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 		testCancels:            make(map[string]context.CancelFunc),
 		refreshJobs:            make(map[string]*SourceRefreshJob),
 		refreshCancels:         make(map[string]context.CancelFunc),
+		jobEventSubs:           make(map[uint64]chan JobEvent),
 		refreshConcurrency:     defaultRefreshConcurrency,
 		refreshRetryDelay:      defaultRefreshRetryDelay,
 		refreshSourceTimeout:   defaultRefreshSourceTimeout,
@@ -121,6 +145,59 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 		opt(s)
 	}
 	return s
+}
+
+func (s *Service) launchBackground(register func(context.CancelFunc), run func(context.Context)) bool {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.lifecycleMu.Lock()
+	if s.closing {
+		s.lifecycleMu.Unlock()
+		cancel()
+		return false
+	}
+	register(cancel)
+	s.jobsWG.Add(1)
+	s.lifecycleMu.Unlock()
+	go func() {
+		defer s.jobsWG.Done()
+		run(ctx)
+	}()
+	return true
+}
+
+func (s *Service) Close(ctx context.Context) error {
+	s.lifecycleMu.Lock()
+	if !s.closing {
+		s.closing = true
+		s.importCancelsMu.Lock()
+		for _, cancel := range s.importCancels {
+			cancel()
+		}
+		s.importCancelsMu.Unlock()
+		s.testCancelsMu.Lock()
+		for _, cancel := range s.testCancels {
+			cancel()
+		}
+		s.testCancelsMu.Unlock()
+		s.refreshCancelsMu.Lock()
+		for _, cancel := range s.refreshCancels {
+			cancel()
+		}
+		s.refreshCancelsMu.Unlock()
+	}
+	s.lifecycleMu.Unlock()
+	s.closeJobEvents()
+	done := make(chan struct{})
+	go func() {
+		s.jobsWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *Service) HasActiveJobs() bool {
@@ -227,11 +304,23 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 		}
 	}
 	s.refreshJobsMu.Unlock()
-	ctx, cancel := context.WithCancel(context.Background())
-	s.refreshCancelsMu.Lock()
-	s.refreshCancels[jobID] = cancel
-	s.refreshCancelsMu.Unlock()
-	go s.runRefreshJob(ctx, jobID, targets, snapshot)
+	copyJob := cloneRefreshJob(job)
+	s.publishJobEvent(JobEvent{Kind: "refresh", ID: jobID, Refresh: &copyJob})
+	started := s.launchBackground(func(cancel context.CancelFunc) {
+		s.refreshCancelsMu.Lock()
+		s.refreshCancels[jobID] = cancel
+		s.refreshCancelsMu.Unlock()
+	}, func(ctx context.Context) {
+		s.runRefreshJob(ctx, jobID, targets, snapshot)
+	})
+	if !started {
+		s.updateRefreshJob(jobID, func(active *SourceRefreshJob) {
+			active.Status = SourceRefreshJobCanceled
+			active.Phase = "canceled"
+			active.Error = "服务正在关闭"
+		})
+		return "", fmt.Errorf("服务正在关闭")
+	}
 	return jobID, nil
 }
 
@@ -281,13 +370,7 @@ func (s *Service) GetRefreshJob(jobID string) (SourceRefreshJob, bool) {
 	if !ok {
 		return SourceRefreshJob{}, false
 	}
-	copyJob := *job
-	copyJob.Groups = make([]SourceRefreshGroup, len(job.Groups))
-	for i, group := range job.Groups {
-		copyJob.Groups[i] = group
-		copyJob.Groups[i].URLs = append([]SourceRefreshURL(nil), group.URLs...)
-	}
-	return copyJob, true
+	return cloneRefreshJob(job), true
 }
 
 func (s *Service) sourceRefreshTargets(key string) ([]sourceRefreshTarget, error) {
@@ -296,9 +379,12 @@ func (s *Service) sourceRefreshTargets(key string) ([]sourceRefreshTarget, error
 	selectedTags := make(map[string]struct{})
 	if key != "" {
 		for _, node := range nodes {
-			tagPrefix := strings.TrimSpace(node.TagPrefix)
-			if tagPrefix != "" && importSourceKey(node) == key {
-				selectedTags[tagPrefix] = struct{}{}
+			for _, ref := range nodeSourceRefs(node) {
+				view := nodeWithSource(node, ref)
+				tagPrefix := strings.TrimSpace(ref.TagPrefix)
+				if tagPrefix != "" && importSourceKey(view) == key {
+					selectedTags[tagPrefix] = struct{}{}
+				}
 			}
 		}
 		if tagPrefix, ok := strings.CutPrefix(key, "tag:"); ok && strings.TrimSpace(tagPrefix) != "" {
@@ -310,39 +396,43 @@ func (s *Service) sourceRefreshTargets(key string) ([]sourceRefreshTarget, error
 	urlSeen := make(map[string]map[string]struct{})
 	formatSeen := make(map[string]map[string]struct{})
 	for _, node := range nodes {
-		tagPrefix := strings.TrimSpace(node.TagPrefix)
-		if tagPrefix == "" {
-			continue
-		}
-		if key != "" {
-			if _, ok := selectedTags[tagPrefix]; !ok {
+		for _, ref := range nodeSourceRefs(node) {
+			tagPrefix := strings.TrimSpace(ref.TagPrefix)
+			if tagPrefix == "" {
 				continue
 			}
-		}
-		target := targetByTag[tagPrefix]
-		if target == nil {
-			target = &sourceRefreshTarget{Key: "tag:" + tagPrefix, TagPrefix: tagPrefix}
-			targetByTag[tagPrefix] = target
-			urlSeen[tagPrefix] = make(map[string]struct{})
-			formatSeen[tagPrefix] = make(map[string]struct{})
-		}
-		source := strings.TrimSpace(node.ImportSource)
-		if node.ImportMode == "url" && source != "" {
-			for _, rawURL := range splitSubscriptionURLs(source) {
-				if _, exists := urlSeen[tagPrefix][rawURL]; exists {
+			if key != "" {
+				if _, ok := selectedTags[tagPrefix]; !ok {
 					continue
 				}
-				urlSeen[tagPrefix][rawURL] = struct{}{}
-				target.URLs = append(target.URLs, rawURL)
 			}
-			continue
-		}
-		target.LocalNodeIDs = append(target.LocalNodeIDs, node.ID)
-		format := strings.TrimSpace(node.ImportFormat)
-		if format != "" {
-			if _, exists := formatSeen[tagPrefix][format]; !exists {
-				formatSeen[tagPrefix][format] = struct{}{}
-				target.LocalFormats = append(target.LocalFormats, format)
+			target := targetByTag[tagPrefix]
+			if target == nil {
+				target = &sourceRefreshTarget{Key: "tag:" + tagPrefix, TagPrefix: tagPrefix}
+				targetByTag[tagPrefix] = target
+				urlSeen[tagPrefix] = make(map[string]struct{})
+				formatSeen[tagPrefix] = make(map[string]struct{})
+			}
+			source := strings.TrimSpace(ref.Source)
+			if isURLSourceRef(ref) && source != "" {
+				for _, rawURL := range splitSubscriptionURLs(source) {
+					if _, exists := urlSeen[tagPrefix][rawURL]; exists {
+						continue
+					}
+					urlSeen[tagPrefix][rawURL] = struct{}{}
+					target.URLs = append(target.URLs, rawURL)
+				}
+				continue
+			}
+			if !stringSliceContains(target.LocalNodeIDs, node.ID) {
+				target.LocalNodeIDs = append(target.LocalNodeIDs, node.ID)
+			}
+			format := strings.TrimSpace(ref.Format)
+			if format != "" {
+				if _, exists := formatSeen[tagPrefix][format]; !exists {
+					formatSeen[tagPrefix][format] = struct{}{}
+					target.LocalFormats = append(target.LocalFormats, format)
+				}
 			}
 		}
 	}
@@ -357,9 +447,9 @@ func (s *Service) sourceRefreshTargets(key string) ([]sourceRefreshTarget, error
 	sort.Slice(targets, func(i, j int) bool { return targets[i].TagPrefix < targets[j].TagPrefix })
 	if len(targets) == 0 {
 		if key != "" {
-			return nil, fmt.Errorf("未找到可重新检测的导入来源")
+			return nil, fmt.Errorf("%w: 未找到可重新检测的导入来源", ErrNoRefreshSources)
 		}
-		return nil, fmt.Errorf("没有带 Tag 的导入来源")
+		return nil, fmt.Errorf("%w: 没有带 Tag 的导入来源", ErrNoRefreshSources)
 	}
 	return targets, nil
 }
@@ -953,10 +1043,9 @@ func (s *Service) existingLocalRefreshNodeIDs(target sourceRefreshTarget) []stri
 	ids := make([]string, 0, len(target.LocalNodeIDs))
 	for _, id := range target.LocalNodeIDs {
 		node, ok := s.store.GetNode(id)
-		if !ok || strings.TrimSpace(node.TagPrefix) != target.TagPrefix {
-			continue
-		}
-		if node.ImportMode == "url" && strings.TrimSpace(node.ImportSource) != "" {
+		if !ok || !nodeHasSource(node, func(ref NodeSourceRef) bool {
+			return strings.TrimSpace(ref.TagPrefix) == target.TagPrefix && !isURLSourceRef(ref)
+		}) {
 			continue
 		}
 		ids = append(ids, id)
@@ -967,7 +1056,9 @@ func (s *Service) existingLocalRefreshNodeIDs(target sourceRefreshTarget) []stri
 func (s *Service) existingURLRefreshNodeIDs(tagPrefix, subURL string) []string {
 	ids := make([]string, 0)
 	for _, node := range s.store.ListNodes() {
-		if node.TagPrefix != tagPrefix || node.ImportMode != "url" || strings.TrimSpace(node.ImportSource) != subURL {
+		if !nodeHasSource(node, func(ref NodeSourceRef) bool {
+			return ref.TagPrefix == tagPrefix && isURLSourceRef(ref) && strings.TrimSpace(ref.Source) == subURL
+		}) {
 			continue
 		}
 		ids = append(ids, node.ID)
@@ -1378,13 +1469,16 @@ func (s *Service) recalculateRefreshJob(job *SourceRefreshJob) {
 
 func (s *Service) updateRefreshJob(jobID string, fn func(*SourceRefreshJob)) {
 	s.refreshJobsMu.Lock()
-	defer s.refreshJobsMu.Unlock()
 	job, ok := s.refreshJobs[jobID]
 	if !ok {
+		s.refreshJobsMu.Unlock()
 		return
 	}
 	fn(job)
 	s.recalculateRefreshJob(job)
+	copyJob := cloneRefreshJob(job)
+	s.refreshJobsMu.Unlock()
+	s.publishJobEvent(JobEvent{Kind: "refresh", ID: jobID, Refresh: &copyJob})
 }
 
 func (s *Service) finalizeRefreshJob(job *SourceRefreshJob) {
@@ -1690,8 +1784,10 @@ func (s *Service) tagPrefixForImportSource(source string) string {
 		return ""
 	}
 	for _, node := range s.store.ListNodes() {
-		if strings.TrimSpace(node.ImportSource) == source && strings.TrimSpace(node.TagPrefix) != "" {
-			return strings.TrimSpace(node.TagPrefix)
+		for _, ref := range nodeSourceRefs(node) {
+			if strings.TrimSpace(ref.Source) == source && strings.TrimSpace(ref.TagPrefix) != "" {
+				return strings.TrimSpace(ref.TagPrefix)
+			}
 		}
 	}
 	return ""
@@ -1771,9 +1867,20 @@ func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, er
 		return CommitResponse{}, err
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	s.registerImportCancel(jobID, cancel)
-	go s.runPipeline(ctx, jobID, nodes, originalStates, req.PromotePassed)
+	started := s.launchBackground(func(cancel context.CancelFunc) {
+		s.registerImportCancel(jobID, cancel)
+	}, func(ctx context.Context) {
+		s.runPipeline(ctx, jobID, nodes, originalStates, req.PromotePassed)
+	})
+	if !started {
+		_ = s.store.RestoreNodeStatesIfCurrent(originalStates, StateTesting)
+		_ = s.store.UpdateJob(jobID, func(job *ImportJob) {
+			job.Status = ImportStatusCanceled
+			job.Error = "服务正在关闭"
+			job.UpdatedAt = time.Now()
+		})
+		return CommitResponse{}, fmt.Errorf("服务正在关闭")
+	}
 
 	return CommitResponse{JobID: jobID}, nil
 }
@@ -1803,7 +1910,7 @@ func (s *Service) CancelImportJob(jobID string) (ImportJob, error) {
 	s.importCancelsMu.Unlock()
 	if cancel != nil {
 		cancel()
-		_ = s.store.UpdateJob(jobID, func(j *ImportJob) {
+		_ = s.store.UpdateJobProgress(jobID, func(j *ImportJob) {
 			j.Error = "正在终止"
 			j.UpdatedAt = time.Now()
 		})
@@ -1834,7 +1941,7 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 
 	if ctx.Err() == nil {
 		for event := range s.tester.ProbeBatchWithProgress(ctx, nodes, func(progress ProbeRoundProgress) {
-			_ = s.store.UpdateJob(jobID, func(job *ImportJob) {
+			_ = s.store.UpdateJobProgress(jobID, func(job *ImportJob) {
 				job.ProbeRound = progress.Round
 				job.ProbeRounds = progress.Rounds
 				job.ProbeRoundDone = progress.Completed
@@ -1925,7 +2032,7 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 }
 
 func (s *Service) updateImportProgress(jobID string, passed, failed, promoted int) {
-	_ = s.store.UpdateJob(jobID, func(j *ImportJob) {
+	_ = s.store.UpdateJobProgress(jobID, func(j *ImportJob) {
 		j.Passed = passed
 		j.Failed = failed
 		j.Promoted = promoted
@@ -2159,10 +2266,22 @@ func (s *Service) StartBatchTest(req BatchTestRequest) (string, error) {
 		}
 	}
 	s.testJobsMu.Unlock()
+	copyJob := *job
+	s.publishJobEvent(JobEvent{Kind: "test", ID: jobID, Test: &copyJob})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	s.registerTestCancel(jobID, cancel)
-	go s.runBatchTestJob(ctx, jobID, req)
+	started := s.launchBackground(func(cancel context.CancelFunc) {
+		s.registerTestCancel(jobID, cancel)
+	}, func(ctx context.Context) {
+		s.runBatchTestJob(ctx, jobID, req)
+	})
+	if !started {
+		s.updateJob(jobID, func(job *TestJob) {
+			job.Status = TestJobCanceled
+			job.Phase = "canceled"
+			job.Error = "服务正在关闭"
+		})
+		return "", fmt.Errorf("服务正在关闭")
+	}
 	return jobID, nil
 }
 
@@ -2179,13 +2298,16 @@ func (s *Service) GetTestJob(jobID string) (TestJob, bool) {
 
 func (s *Service) updateJob(jobID string, fn func(*TestJob)) {
 	s.testJobsMu.Lock()
-	defer s.testJobsMu.Unlock()
 	j, ok := s.testJobs[jobID]
 	if !ok {
+		s.testJobsMu.Unlock()
 		return
 	}
 	fn(j)
 	j.UpdatedAt = time.Now()
+	copyJob := *j
+	s.testJobsMu.Unlock()
+	s.publishJobEvent(JobEvent{Kind: "test", ID: jobID, Test: &copyJob})
 }
 
 func (s *Service) registerTestCancel(jobID string, cancel context.CancelFunc) {
@@ -2859,17 +2981,43 @@ func (s *Service) deleteBySubscription(url string, reload bool) (int, error) {
 	if url == "" {
 		return 0, fmt.Errorf("订阅 URL 不能为空")
 	}
-	all := s.store.ListNodes()
-	ids := make([]string, 0)
+	return s.detachSources(func(ref NodeSourceRef) bool {
+		return isURLSourceRef(ref) && strings.TrimSpace(ref.Source) == url
+	}, reload)
+}
+
+func (s *Service) detachSources(match func(NodeSourceRef) bool, reload bool) (int, error) {
+	updates := make([]ManagedNode, 0)
+	deleted := make([]string, 0)
 	poolNames := make([]string, 0)
-	for _, n := range all {
-		if n.ImportSource != url {
+	touched := 0
+	for _, node := range s.store.ListNodes() {
+		refs := nodeSourceRefs(node)
+		kept := make([]NodeSourceRef, 0, len(refs))
+		removed := false
+		for _, ref := range refs {
+			if match(ref) {
+				removed = true
+				continue
+			}
+			kept = append(kept, ref)
+		}
+		if !removed {
 			continue
 		}
-		ids = append(ids, n.ID)
-		if (n.InPool || n.State == StateInPool) && strings.TrimSpace(n.Name) != "" {
-			poolNames = append(poolNames, n.Name)
+		touched++
+		if len(kept) == 0 {
+			deleted = append(deleted, node.ID)
+			if (node.InPool || node.State == StateInPool) && strings.TrimSpace(node.Name) != "" {
+				poolNames = append(poolNames, node.Name)
+			}
+			continue
 		}
+		node.SourceRefs = kept
+		if match(sourceRefFromNode(node)) {
+			applyPrimarySource(&node, kept[0])
+		}
+		updates = append(updates, node)
 	}
 	if len(poolNames) > 0 {
 		if err := s.deleteConfigNodesStrict(poolNames); err != nil {
@@ -2881,13 +3029,13 @@ func (s *Service) deleteBySubscription(url string, reload bool) (int, error) {
 			}
 		}
 	}
-	if len(ids) == 0 {
+	if touched == 0 {
 		return 0, nil
 	}
-	if err := s.store.DeleteNodes(ids); err != nil {
+	if err := s.store.ApplyNodeChanges(updates, deleted); err != nil {
 		return 0, err
 	}
-	return len(ids), nil
+	return touched, nil
 }
 
 func (s *Service) MarkSubscriptionFailed(url, lastErr string) (int, error) {
@@ -2902,7 +3050,14 @@ func (s *Service) MarkSubscriptionFailed(url, lastErr string) (int, error) {
 	updates := make([]ManagedNode, 0)
 	poolNames := make([]string, 0)
 	for _, node := range all {
-		if strings.TrimSpace(node.ImportSource) != url {
+		matches := 0
+		refs := nodeSourceRefs(node)
+		for _, ref := range refs {
+			if isURLSourceRef(ref) && strings.TrimSpace(ref.Source) == url {
+				matches++
+			}
+		}
+		if matches == 0 || matches < len(refs) {
 			continue
 		}
 		updated, poolName := failedNodeUpdate(node, lastErr)
@@ -2935,29 +3090,9 @@ func (s *Service) DeleteImportSource(key string) (int, error) {
 	if tagPrefix, ok := strings.CutPrefix(key, "tag:"); ok {
 		return s.deleteByTagPrefix(tagPrefix)
 	}
-	all := s.store.ListNodes()
-	ids := make([]string, 0)
-	poolNames := make([]string, 0)
-	for _, n := range all {
-		if importSourceKey(n) != key {
-			continue
-		}
-		ids = append(ids, n.ID)
-		if (n.InPool || n.State == StateInPool) && strings.TrimSpace(n.Name) != "" {
-			poolNames = append(poolNames, n.Name)
-		}
-	}
-	if len(poolNames) > 0 {
-		s.deleteConfigNodes(poolNames)
-		_ = s.nodeMgr.TriggerReload(context.Background())
-	}
-	if len(ids) == 0 {
-		return 0, nil
-	}
-	if err := s.store.DeleteNodes(ids); err != nil {
-		return 0, err
-	}
-	return len(ids), nil
+	return s.detachSources(func(ref NodeSourceRef) bool {
+		return importSourceKey(nodeWithSource(ManagedNode{}, ref)) == key
+	}, true)
 }
 
 func (s *Service) deleteByTagPrefix(tagPrefix string) (int, error) {
@@ -2965,29 +3100,9 @@ func (s *Service) deleteByTagPrefix(tagPrefix string) (int, error) {
 	if tagPrefix == "" {
 		return 0, fmt.Errorf("标签不能为空")
 	}
-	all := s.store.ListNodes()
-	ids := make([]string, 0)
-	poolNames := make([]string, 0)
-	for _, n := range all {
-		if strings.TrimSpace(n.TagPrefix) != tagPrefix {
-			continue
-		}
-		ids = append(ids, n.ID)
-		if (n.InPool || n.State == StateInPool) && strings.TrimSpace(n.Name) != "" {
-			poolNames = append(poolNames, n.Name)
-		}
-	}
-	if len(poolNames) > 0 {
-		s.deleteConfigNodes(poolNames)
-		_ = s.nodeMgr.TriggerReload(context.Background())
-	}
-	if len(ids) == 0 {
-		return 0, nil
-	}
-	if err := s.store.DeleteNodes(ids); err != nil {
-		return 0, err
-	}
-	return len(ids), nil
+	return s.detachSources(func(ref NodeSourceRef) bool {
+		return strings.TrimSpace(ref.TagPrefix) == tagPrefix
+	}, true)
 }
 
 func (s *Service) DeleteAllImportSources() (int, error) {
@@ -3017,56 +3132,59 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 	nodes := s.store.ListNodes()
 	groups := make(map[string]*ImportSourceSummary)
 	for _, node := range nodes {
-		key := importSourceKey(node)
-		if key == "" {
-			key = "node:" + node.ID
-		}
-		group := groups[key]
-		if group == nil {
-			group = &ImportSourceSummary{
-				Key:         key,
-				ImportID:    node.ImportID,
-				Mode:        node.ImportMode,
-				Format:      node.ImportFormat,
-				TagPrefix:   node.TagPrefix,
-				Source:      node.ImportSource,
-				Refreshable: strings.TrimSpace(node.TagPrefix) != "",
-				CreatedAt:   node.CreatedAt,
-				UpdatedAt:   node.UpdatedAt,
+		for _, ref := range nodeSourceRefs(node) {
+			view := nodeWithSource(node, ref)
+			key := importSourceKey(view)
+			if key == "" {
+				key = "node:" + node.ID
 			}
-			groups[key] = group
-		}
-		if group.TagPrefix == "" {
-			group.TagPrefix = node.TagPrefix
-		}
-		if strings.TrimSpace(node.TagPrefix) != "" {
-			group.Refreshable = true
-		}
-		if group.Format == "" {
-			group.Format = node.ImportFormat
-		}
-		if group.Mode == "" {
-			group.Mode = node.ImportMode
-		}
-		if group.Source == "" {
-			group.Source = node.ImportSource
-		} else if node.ImportMode == "url" && strings.TrimSpace(node.ImportSource) != "" && !sourceListContains(group.Source, node.ImportSource) {
-			group.Source += "\n" + strings.TrimSpace(node.ImportSource)
-		}
-		if group.CreatedAt.IsZero() || (!node.CreatedAt.IsZero() && node.CreatedAt.Before(group.CreatedAt)) {
-			group.CreatedAt = node.CreatedAt
-		}
-		if node.UpdatedAt.After(group.UpdatedAt) {
-			group.UpdatedAt = node.UpdatedAt
-		}
-		group.Total++
-		switch {
-		case node.InPool || node.State == StateInPool:
-			group.Pool++
-		case node.State == StatePassed:
-			group.Candidate++
-		case node.State == StateFailed:
-			group.Failed++
+			group := groups[key]
+			if group == nil {
+				group = &ImportSourceSummary{
+					Key:         key,
+					ImportID:    view.ImportID,
+					Mode:        view.ImportMode,
+					Format:      view.ImportFormat,
+					TagPrefix:   view.TagPrefix,
+					Source:      view.ImportSource,
+					Refreshable: strings.TrimSpace(view.TagPrefix) != "",
+					CreatedAt:   node.CreatedAt,
+					UpdatedAt:   node.UpdatedAt,
+				}
+				groups[key] = group
+			}
+			if group.TagPrefix == "" {
+				group.TagPrefix = view.TagPrefix
+			}
+			if strings.TrimSpace(view.TagPrefix) != "" {
+				group.Refreshable = true
+			}
+			if group.Format == "" {
+				group.Format = view.ImportFormat
+			}
+			if group.Mode == "" {
+				group.Mode = view.ImportMode
+			}
+			if group.Source == "" {
+				group.Source = view.ImportSource
+			} else if isURLSourceRef(ref) && strings.TrimSpace(view.ImportSource) != "" && !sourceListContains(group.Source, view.ImportSource) {
+				group.Source += "\n" + strings.TrimSpace(view.ImportSource)
+			}
+			if group.CreatedAt.IsZero() || (!node.CreatedAt.IsZero() && node.CreatedAt.Before(group.CreatedAt)) {
+				group.CreatedAt = node.CreatedAt
+			}
+			if node.UpdatedAt.After(group.UpdatedAt) {
+				group.UpdatedAt = node.UpdatedAt
+			}
+			group.Total++
+			switch {
+			case node.InPool || node.State == StateInPool:
+				group.Pool++
+			case node.State == StatePassed:
+				group.Candidate++
+			case node.State == StateFailed:
+				group.Failed++
+			}
 		}
 	}
 	result := make([]ImportSourceSummary, 0, len(groups))
@@ -3084,7 +3202,7 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 
 func importSourceKey(node ManagedNode) string {
 	source := strings.TrimSpace(node.ImportSource)
-	if node.ImportMode == "url" && source != "" {
+	if isURLSourceRef(sourceRefFromNode(node)) && source != "" {
 		if tag := strings.TrimSpace(node.TagPrefix); tag != "" {
 			return "tag:" + tag
 		}

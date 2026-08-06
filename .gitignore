@@ -9,6 +9,9 @@
 config.yaml
 nodes.txt
 managed_nodes.json
+managed_nodes.db
+managed_nodes.db-wal
+managed_nodes.db-shm
 node_ports.json
 
 # GeoIP database (auto-downloaded)

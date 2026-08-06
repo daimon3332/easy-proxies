@@ -202,8 +202,8 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .empty{text-align:center;color:var(--muted);padding:42px 12px;border:1px dashed var(--line-strong);border-radius:16px;background:rgba(255,255,255,.5)}
 .status{min-height:22px;color:var(--muted)}
 .toast-wrap{position:fixed;right:22px;top:22px;z-index:30;display:grid;gap:10px}
-.toast{background:#fff;border:1px solid var(--line);border-left:5px solid var(--green);box-shadow:var(--shadow);border-radius:14px;padding:12px 14px;max-width:360px}
-.toast.err{border-left-color:var(--red)}
+.toast{background:#fff;border:2px solid var(--green);box-shadow:var(--shadow);border-radius:14px;padding:12px 14px;max-width:360px}
+.toast.err{border-color:var(--red)}
 .modal{position:fixed;inset:0;background:rgba(20,51,68,.22);display:none;align-items:center;justify-content:center;z-index:20;padding:20px}
 .modal.show{display:flex}
 .modal.refresh-modal{background:transparent;pointer-events:none;align-items:flex-end;justify-content:flex-end;padding:24px}
@@ -212,7 +212,7 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .dialog.wide{width:min(920px,100%)}
 .dialog-back{position:fixed;inset:0;background:rgba(20,51,68,.22);display:flex;align-items:center;justify-content:center;z-index:30;padding:20px}
 .progress-bar{height:10px;background:#eef3f5;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
-.progress-fill{height:100%;background:var(--green);transition:width .25s ease}
+.progress-fill{height:100%;background:var(--green)}
 .dialog h2{margin:0 0 14px}
 pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;color:#315467;background:#f5fbff;border:1px solid var(--line);border-radius:14px;padding:14px;max-height:460px;overflow:auto}
 pre.log-view{height:100%;max-height:none}
@@ -233,10 +233,9 @@ pre.log-view{height:100%;max-height:none}
 .refresh-top{display:flex;align-items:center;gap:10px;max-width:360px;border:1px solid #bcd0ff;background:#f7faff;border-radius:10px;padding:8px 12px;color:var(--blue-deep);cursor:pointer;text-align:left}
 .refresh-top .progress{width:74px;height:7px;flex:none}
 .refresh-progress{height:10px;background:#dce8ef;border-radius:6px;overflow:hidden}
-.refresh-progress span{display:block;height:100%;background:var(--green);transition:width .25s ease}
-.refresh-progress span.indeterminate{width:32%;animation:refresh-progress 1.2s ease-in-out infinite}
+.refresh-progress span{display:block;height:100%;background:var(--green)}
+.refresh-progress span.indeterminate{width:100%;opacity:.55}
 .refresh-detail-list{display:grid;gap:12px;max-height:min(56vh,560px);overflow:auto;padding-right:4px}
-@keyframes refresh-progress{0%{transform:translateX(-110%)}100%{transform:translateX(330%)}}
 @media(max-width:980px){
   .app{grid-template-columns:1fr}
   .side{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}
@@ -352,6 +351,11 @@ const S={
   refreshDialogOpen:false,
   refreshDialogJob:'',
   refreshPollError:'',
+  jobEvents:new Map(),
+  jobWaiters:new Map(),
+  jobStreamAbort:null,
+  jobStreamTask:null,
+  jobStreamConnected:false,
   selected:new Set(),
   poolOrderMode:'country',
   poolSortMode:'port',
@@ -415,6 +419,66 @@ async function api(path,opt={}){
   if(!res.ok){const err=new Error(message||res.statusText);err.status=res.status;throw err}
   return data;
 }
+function jobEventValue(event){return event?.kind==='test'?event.test:event?.kind==='refresh'?event.refresh:null}
+function storeJobEvent(event){
+  const job=jobEventValue(event);if(!job||!event.id)return;
+  const key=`${event.kind}:${event.id}`;
+  S.jobEvents.set(key,job);
+  const waiters=S.jobWaiters.get(key);if(!waiters)return;
+  for(const notify of [...waiters])notify(job);
+}
+function wakeJobEventWaiters(){
+  for(const waiters of S.jobWaiters.values())for(const notify of [...waiters])notify({__stream_lost:true});
+}
+function waitForJobEvent(kind,id,stamp,timeout=120000){
+  const key=`${kind}:${id}`,current=S.jobEvents.get(key);
+  if(current&&String(current.updated_at||'')!==String(stamp||''))return Promise.resolve(current);
+  return new Promise(resolve=>{
+    let settled=false;
+    const cleanup=()=>{const waiters=S.jobWaiters.get(key);if(waiters){waiters.delete(notify);if(!waiters.size)S.jobWaiters.delete(key)}};
+    const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);cleanup();resolve(value)};
+    const notify=job=>{if(job?.__stream_lost)finish(null);else if(String(job?.updated_at||'')!==String(stamp||''))finish(job)};
+    if(!S.jobWaiters.has(key))S.jobWaiters.set(key,new Set());
+    S.jobWaiters.get(key).add(notify);
+    const timer=setTimeout(()=>finish(null),timeout);
+  });
+}
+function consumeJobEventData(data){
+  if(Array.isArray(data)){for(const event of data)storeJobEvent(event);return}
+  storeJobEvent(data);
+}
+async function readJobEventStream(response,signal){
+  if(!response.body)throw new Error('浏览器不支持流式进度');
+  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+  while(!signal.aborted){
+    const {value,done}=await reader.read();if(done)break;
+    buffer+=decoder.decode(value,{stream:true}).replace(/\r/g,'');
+    let boundary;
+    while((boundary=buffer.indexOf('\n\n'))>=0){
+      const block=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);
+      const payload=block.split('\n').filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart()).join('\n');
+      if(payload){try{consumeJobEventData(JSON.parse(payload))}catch(e){}}
+    }
+  }
+}
+function startJobEventStream(force=false){
+  if(force&&S.jobStreamAbort){S.jobStreamAbort.abort();S.jobStreamTask=null}
+  if(S.jobStreamTask)return;
+  const controller=new AbortController();S.jobStreamAbort=controller;
+  S.jobStreamTask=(async()=>{
+    let failures=0;
+    while(!controller.signal.aborted){
+      try{
+        const headers=S.token?{Authorization:'Bearer '+S.token}:{};
+        const response=await fetch('/api/job-events',{headers,signal:controller.signal});
+        if(!response.ok)throw new Error(`进度流连接失败: ${response.status}`);
+        failures=0;S.jobStreamConnected=true;await readJobEventStream(response,controller.signal);
+      }catch(err){if(controller.signal.aborted)break;failures++}
+      S.jobStreamConnected=false;wakeJobEventWaiters();
+      if(!controller.signal.aborted)await new Promise(resolve=>setTimeout(resolve,Math.min(5000,500*Math.pow(2,Math.min(failures,3)))));
+    }
+  })().finally(()=>{if(S.jobStreamAbort===controller){S.jobStreamAbort=null;S.jobStreamTask=null}});
+}
 async function login(e){
   e.preventDefault();
   try{
@@ -422,6 +486,7 @@ async function login(e){
     S.token=data.token||'';
     if(S.token)localStorage.setItem('easy_proxies_token',S.token);
     qs('#authModal').classList.remove('show');
+    startJobEventStream(true);
     await refresh();
   }catch(err){setStatus('#authStatus',err.message)}
 }
@@ -863,11 +928,12 @@ async function pollBatchJob(jobId,label){
   openProgress(label||'正在测试');
   let last=null;
   try{
+    last=await api('/api/managed-nodes/batch-test/status?id='+encodeURIComponent(jobId));
     while(true){
-      last=await api('/api/managed-nodes/batch-test/status?id='+encodeURIComponent(jobId));
       updateProgress(last,label||'正在测试');
       if(last.status!=='running')break;
-      await new Promise(r=>setTimeout(r,500));
+      const pushed=await waitForJobEvent('test',jobId,last.updated_at);
+      last=pushed||await api('/api/managed-nodes/batch-test/status?id='+encodeURIComponent(jobId));
     }
     if(last?.status==='canceled')throw new Error('测速已终止，检测前节点池已恢复');
     if(last?.status==='failed')throw new Error(last.error||'测速任务失败');
@@ -2005,9 +2071,11 @@ async function pollRefreshSourceJob(jobID){
   S.refreshPollingJob=jobID;
   let failures=0,last=null;
   try{
+    try{last=await api('/api/import/refresh/jobs/'+encodeURIComponent(jobID))}catch(err){if(err.status===401||err.status===404)throw err}
     while(true){
       try{
-        last=await api('/api/import/refresh/jobs/'+encodeURIComponent(jobID));
+        const pushed=last?await waitForJobEvent('refresh',jobID,last.updated_at):null;
+        last=pushed||await api('/api/import/refresh/jobs/'+encodeURIComponent(jobID));
         failures=0;
         S.refreshPollError='';
       }catch(err){
@@ -2023,7 +2091,6 @@ async function pollRefreshSourceJob(jobID){
       renderRefreshStatusHost();
       if(S.refreshDialogOpen&&S.refreshDialogJob===jobID)renderRefreshJobDialog(last);
       if(last.status==='finished'||last.status==='failed'||last.status==='canceled')break;
-      await new Promise(resolve=>setTimeout(resolve,1000));
     }
     S.activeRefreshJob='';
     localStorage.removeItem(ACTIVE_REFRESH_JOB_KEY);
@@ -2264,7 +2331,7 @@ async function downloadExport(){
 }
 (async function boot(){
   renderNav();
-  try{await api('/api/ui/summary');qs('#authModal').classList.remove('show')}catch(e){}
+  try{await api('/api/ui/summary');qs('#authModal').classList.remove('show');startJobEventStream()}catch(e){}
   setupAllAutoProbe();
   await go('import');
 })();

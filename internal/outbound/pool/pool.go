@@ -1,12 +1,14 @@
 package pool
 
 import (
-	"bufio"
 	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -71,21 +73,22 @@ type memberState struct {
 
 type poolOutbound struct {
 	outbound.Adapter
-	ctx            context.Context
-	logger         singlog.ContextLogger
-	manager        adapter.OutboundManager
-	options        Options
-	mode           string
-	members        []*memberState
-	mu             sync.Mutex
-	rrCounter      atomic.Uint32
-	rng            *rand.Rand
-	rngMu          sync.Mutex // protects rng for random mode
-	rotateMu       sync.Mutex
-	rotateTag      string
-	rotateSince    time.Time
-	monitor        *monitor.Manager
-	candidatesPool sync.Pool
+	ctx             context.Context
+	logger          singlog.ContextLogger
+	manager         adapter.OutboundManager
+	options         Options
+	mode            string
+	members         []*memberState
+	mu              sync.Mutex
+	rrCounter       atomic.Uint32
+	rng             *rand.Rand
+	rngMu           sync.Mutex // protects rng for random mode
+	rotateMu        sync.Mutex
+	rotateTag       string
+	rotateMember    *memberState
+	rotateSince     time.Time
+	monitor         *monitor.Manager
+	selectionChecks atomic.Uint64
 }
 
 func newPool(ctx context.Context, _ adapter.Router, logger singlog.ContextLogger, tag string, options Options) (adapter.Outbound, error) {
@@ -98,7 +101,6 @@ func newPool(ctx context.Context, _ adapter.Router, logger singlog.ContextLogger
 	}
 	monitorMgr := monitor.FromContext(ctx)
 	normalized := normalizeOptions(options)
-	memberCount := len(normalized.Members)
 	p := &poolOutbound{
 		Adapter: outbound.NewAdapter(Type, tag, []string{N.NetworkTCP, N.NetworkUDP}, normalized.Members),
 		ctx:     ctx,
@@ -108,16 +110,12 @@ func newPool(ctx context.Context, _ adapter.Router, logger singlog.ContextLogger
 		mode:    normalized.Mode,
 		rng:     rand.New(rand.NewSource(time.Now().UnixNano())),
 		monitor: monitorMgr,
-		candidatesPool: sync.Pool{
-			New: func() any {
-				return make([]*memberState, 0, memberCount)
-			},
-		},
 	}
 
 	// Register nodes immediately if monitor is available
 	if monitorMgr != nil {
 		logger.Info("registering ", len(normalized.Members), " nodes to monitor")
+		registered := 0
 		for _, memberTag := range normalized.Members {
 			// Acquire shared state for this tag (creates if not exists)
 			state := acquireSharedState(memberTag)
@@ -137,7 +135,7 @@ func newPool(ctx context.Context, _ adapter.Router, logger singlog.ContextLogger
 			if entry != nil {
 				// Attach entry to shared state so all pool instances share it
 				state.attachEntry(entry)
-				logger.Info("registered node: ", memberTag)
+				registered++
 				// Set probe, release, and blacklist functions immediately
 				entry.SetRelease(p.makeReleaseByTagFunc(memberTag))
 				entry.SetBlacklistFn(p.makeBlacklistByTagFunc(memberTag))
@@ -148,6 +146,7 @@ func newPool(ctx context.Context, _ adapter.Router, logger singlog.ContextLogger
 				logger.Warn("failed to register node: ", memberTag)
 			}
 		}
+		logger.Info("registered ", registered, " nodes to monitor")
 	} else {
 		logger.Warn("monitor manager is nil, skipping node registration")
 	}
@@ -195,10 +194,6 @@ func (p *poolOutbound) Start(stage adapter.StartStage) error {
 	p.mu.Unlock()
 	if err != nil {
 		return err
-	}
-	// 在初始化完成后，立即在后台触发健康检查
-	if p.monitor != nil {
-		go p.probeAllMembersOnStartup()
 	}
 	return nil
 }
@@ -258,97 +253,6 @@ func (p *poolOutbound) initializeMembersLocked() error {
 	return nil
 }
 
-// probeAllMembersOnStartup performs initial health checks on all members
-func (p *poolOutbound) probeAllMembersOnStartup() {
-	destination, ok := p.monitor.DestinationForProbe()
-	if !ok {
-		p.logger.Warn("probe target not configured, skipping initial health check")
-		// 没有配置探测目标时，标记所有节点为可用
-		p.mu.Lock()
-		for _, member := range p.members {
-			if member.entry != nil {
-				member.entry.MarkInitialCheckDone(true)
-			}
-		}
-		p.mu.Unlock()
-		return
-	}
-
-	p.logger.Info("starting initial health check for all nodes")
-
-	p.mu.Lock()
-	members := make([]*memberState, len(p.members))
-	copy(members, p.members)
-	p.mu.Unlock()
-
-	// Concurrent probing with bounded workers
-	const maxWorkers = 20
-	type probeResult struct {
-		member  *memberState
-		success bool
-		latency time.Duration
-		err     error
-	}
-
-	results := make(chan probeResult, len(members))
-	sem := make(chan struct{}, maxWorkers)
-
-	for _, member := range members {
-		sem <- struct{}{} // acquire worker slot
-		go func(m *memberState) {
-			defer func() { <-sem }() // release worker slot
-
-			ctx, cancel := context.WithTimeout(p.ctx, 15*time.Second)
-			defer cancel()
-
-			start := time.Now()
-			conn, err := m.outbound.DialContext(ctx, N.NetworkTCP, destination)
-			if err != nil {
-				results <- probeResult{member: m, err: err}
-				return
-			}
-
-			_, err = httpProbe(conn, destination.AddrString())
-			conn.Close()
-			if err != nil {
-				results <- probeResult{member: m, err: err}
-				return
-			}
-
-			results <- probeResult{member: m, success: true, latency: time.Since(start)}
-		}(member)
-	}
-
-	// Collect results
-	availableCount := 0
-	failedCount := 0
-	for i := 0; i < len(members); i++ {
-		res := <-results
-		if res.err != nil {
-			p.logger.Warn("initial probe failed for ", res.member.tag, ": ", res.err)
-			failedCount++
-			if res.member.shared != nil {
-				res.member.shared.recordFailure(res.err, 1, p.options.BlacklistDuration)
-			} else if res.member.entry != nil {
-				res.member.entry.RecordFailure(res.err)
-			}
-			if res.member.entry != nil {
-				res.member.entry.MarkInitialCheckDone(false)
-			}
-		} else {
-			latencyMs := res.latency.Milliseconds()
-			p.logger.Info("initial probe success for ", res.member.tag, ", latency: ", latencyMs, "ms")
-			availableCount++
-			if res.member.entry != nil {
-				res.member.entry.RecordSuccessWithLatency(res.latency)
-				res.member.entry.MarkInitialCheckDone(true)
-			}
-		}
-	}
-
-	p.logger.Info("initial health check completed: ", availableCount, " available, ", failedCount, " failed")
-}
-
 func (p *poolOutbound) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	member, err := p.pickMember(network)
 	if err != nil {
@@ -383,119 +287,145 @@ func (p *poolOutbound) ListenPacket(ctx context.Context, destination M.Socksaddr
 
 func (p *poolOutbound) pickMember(network string) (*memberState, error) {
 	now := time.Now()
-	candidates := p.getCandidateBuffer()
-
 	p.mu.Lock()
 	if len(p.members) == 0 {
 		if err := p.initializeMembersLocked(); err != nil {
 			p.mu.Unlock()
-			p.putCandidateBuffer(candidates)
 			return nil, err
 		}
 	}
-	candidates = p.availableMembersLocked(now, network, candidates)
+	member := p.selectAvailableLocked(now, network)
 	p.mu.Unlock()
 
-	if len(candidates) == 0 {
-		p.mu.Lock()
-		if p.releaseIfAllBlacklistedLocked(now) {
-			candidates = p.availableMembersLocked(now, network, candidates)
-		}
-		p.mu.Unlock()
-	}
-
-	if len(candidates) == 0 {
-		p.putCandidateBuffer(candidates)
+	if member == nil {
 		return nil, E.New("no healthy proxy available")
 	}
-
-	member := p.selectMember(candidates)
-	p.putCandidateBuffer(candidates)
 	return member, nil
 }
 
-func (p *poolOutbound) availableMembersLocked(now time.Time, network string, buf []*memberState) []*memberState {
-	result := buf[:0]
-	for _, member := range p.members {
-		// Check blacklist via shared state (auto-clears if expired)
-		if member.shared != nil && member.shared.isBlacklisted(now) {
-			continue
-		}
-		if network != "" && !common.Contains(member.outbound.Network(), network) {
-			continue
-		}
-		result = append(result, member)
-	}
-	return result
-}
-
-func (p *poolOutbound) releaseIfAllBlacklistedLocked(now time.Time) bool {
-	if len(p.members) == 0 {
-		return false
-	}
-	// Check if all members are blacklisted
-	for _, member := range p.members {
-		if member.shared == nil || !member.shared.isBlacklisted(now) {
-			return false
-		}
-	}
-	// All blacklisted, force release all
-	for _, member := range p.members {
-		if member.shared != nil {
-			member.shared.forceRelease()
-		}
-	}
-	p.logger.Warn("all upstream proxies were blacklisted, releasing them for retry")
-	return true
-}
-
-func (p *poolOutbound) selectMember(candidates []*memberState) *memberState {
+func (p *poolOutbound) selectAvailableLocked(now time.Time, network string) *memberState {
 	switch p.mode {
 	case modeRandom:
-		p.rngMu.Lock()
-		idx := p.rng.Intn(len(candidates))
-		p.rngMu.Unlock()
-		return candidates[idx]
+		return p.selectRandomAvailableLocked(now, network)
 	case modeBalance:
-		var selected *memberState
-		var minActive int32
-		for _, member := range candidates {
-			var active int32
-			if member.shared != nil {
-				active = member.shared.activeCount()
-			}
-			if selected == nil || active < minActive {
-				selected = member
-				minActive = active
-			}
-		}
-		return selected
+		return p.selectBalanceAvailableLocked(now, network)
 	case modeRotate:
-		return p.selectRotateMember(candidates)
+		return p.selectRotateAvailableLocked(now, network)
 	default:
-		idx := int(p.rrCounter.Add(1)-1) % len(candidates)
-		return candidates[idx]
+		return p.selectSequentialAvailableLocked(now, network)
 	}
 }
 
-func (p *poolOutbound) selectRotateMember(candidates []*memberState) *memberState {
-	now := time.Now()
+func (p *poolOutbound) memberAvailable(member *memberState, now time.Time, network string) bool {
+	p.selectionChecks.Add(1)
+	if member == nil {
+		return false
+	}
+	if network != "" && (member.outbound == nil || !common.Contains(member.outbound.Network(), network)) {
+		return false
+	}
+	return member.shared == nil || member.shared.tryAcquire(now)
+}
+
+func (p *poolOutbound) selectSequentialAvailableLocked(now time.Time, network string) *memberState {
+	for range p.members {
+		idx := int(p.rrCounter.Add(1)-1) % len(p.members)
+		if member := p.members[idx]; p.memberAvailable(member, now, network) {
+			return member
+		}
+	}
+	return nil
+}
+
+func (p *poolOutbound) selectRandomAvailableLocked(now time.Time, network string) *memberState {
+	for range min(len(p.members), 8) {
+		if member := p.members[p.randomIndex(len(p.members))]; p.memberAvailable(member, now, network) {
+			return member
+		}
+	}
+	start := p.randomIndex(len(p.members))
+	for offset := range p.members {
+		if member := p.members[(start+offset)%len(p.members)]; p.memberAvailable(member, now, network) {
+			return member
+		}
+	}
+	return nil
+}
+
+func (p *poolOutbound) selectBalanceAvailableLocked(now time.Time, network string) *memberState {
+	var first, second *memberState
+	for range min(len(p.members)*2, 8) {
+		member := p.members[p.randomIndex(len(p.members))]
+		if member == first || !p.memberAvailable(member, now, network) {
+			continue
+		}
+		if first == nil {
+			first = member
+			if first.shared != nil && first.shared.isHalfOpen() {
+				return first
+			}
+		} else {
+			second = member
+			break
+		}
+	}
+	if first == nil || second == nil {
+		start := p.randomIndex(len(p.members))
+		for offset := range p.members {
+			member := p.members[(start+offset)%len(p.members)]
+			if member == first || !p.memberAvailable(member, now, network) {
+				continue
+			}
+			if first == nil {
+				first = member
+			} else {
+				second = member
+				break
+			}
+		}
+	}
+	if second == nil {
+		return first
+	}
+	if memberActive(second) < memberActive(first) {
+		return second
+	}
+	return first
+}
+
+func memberActive(member *memberState) int32 {
+	if member == nil || member.shared == nil {
+		return 0
+	}
+	return member.shared.activeCount()
+}
+
+func (p *poolOutbound) randomIndex(size int) int {
+	p.rngMu.Lock()
+	idx := p.rng.Intn(size)
+	p.rngMu.Unlock()
+	return idx
+}
+
+func (p *poolOutbound) selectRotateAvailableLocked(now time.Time, network string) *memberState {
+	p.rotateMu.Lock()
+	defer p.rotateMu.Unlock()
 	interval := p.options.RotationInterval
 	if interval <= 0 {
 		interval = 2 * time.Minute
 	}
-
-	p.rotateMu.Lock()
-	defer p.rotateMu.Unlock()
-
-	if p.rotateTag != "" && now.Sub(p.rotateSince) < interval {
-		if member := findCandidateByTag(candidates, p.rotateTag); member != nil {
-			return member
-		}
+	if p.rotateMember != nil && now.Sub(p.rotateSince) < interval && p.memberAvailable(p.rotateMember, now, network) {
+		return p.rotateMember
 	}
-
 	start := 0
-	if p.rotateTag != "" {
+	if p.rotateMember != nil {
+		for i, member := range p.members {
+			if member == p.rotateMember {
+				start = i + 1
+				break
+			}
+		}
+	} else if p.rotateTag != "" {
 		for i, member := range p.members {
 			if member.tag == p.rotateTag {
 				start = i + 1
@@ -503,26 +433,15 @@ func (p *poolOutbound) selectRotateMember(candidates []*memberState) *memberStat
 			}
 		}
 	}
-	for i := 0; i < len(p.members); i++ {
-		member := p.members[(start+i)%len(p.members)]
-		if candidate := findCandidateByTag(candidates, member.tag); candidate != nil {
-			p.rotateTag = candidate.tag
-			p.rotateSince = now
-			return candidate
+	for offset := range p.members {
+		member := p.members[(start+offset)%len(p.members)]
+		if !p.memberAvailable(member, now, network) {
+			continue
 		}
-	}
-
-	member := candidates[0]
-	p.rotateTag = member.tag
-	p.rotateSince = now
-	return member
-}
-
-func findCandidateByTag(candidates []*memberState, tag string) *memberState {
-	for _, member := range candidates {
-		if member.tag == tag {
-			return member
-		}
+		p.rotateMember = member
+		p.rotateTag = member.tag
+		p.rotateSince = now
+		return member
 	}
 	return nil
 }
@@ -568,68 +487,22 @@ func (p *poolOutbound) makeReleaseFunc(member *memberState) func() {
 	}
 }
 
-// httpProbe performs an HTTP probe through the connection and measures TTFB.
-// It sends a minimal HTTP request and waits for the first byte of response.
-func httpProbe(conn net.Conn, host string) (time.Duration, error) {
-	// Build HTTP request
-	req := fmt.Sprintf("GET /generate_204 HTTP/1.1\r\nHost: %s\r\nConnection: close\r\nUser-Agent: Mozilla/5.0\r\n\r\n", host)
-
-	// Try to set write deadline (ignore errors for connections that don't support it)
-	_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-
-	// Record time just before sending request
-	start := time.Now()
-
-	// Send HTTP request
-	if _, err := conn.Write([]byte(req)); err != nil {
-		return 0, fmt.Errorf("write request: %w", err)
-	}
-
-	// Try to set read deadline (ignore errors for connections that don't support it)
-	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-
-	// Read first byte (TTFB - Time To First Byte)
-	reader := bufio.NewReader(conn)
-	_, err := reader.ReadByte()
-	if err != nil {
-		return 0, fmt.Errorf("read response: %w", err)
-	}
-
-	// Calculate TTFB
-	ttfb := time.Since(start)
-	return ttfb, nil
-}
-
 func (p *poolOutbound) makeProbeFunc(member *memberState) func(ctx context.Context) (time.Duration, error) {
 	if p.monitor == nil {
 		return nil
 	}
-	destination, ok := p.monitor.DestinationForProbe()
+	target, ok := p.monitor.ProbeTarget()
 	if !ok {
 		return nil
 	}
 	return func(ctx context.Context) (time.Duration, error) {
-		start := time.Now()
-		conn, err := member.outbound.DialContext(ctx, N.NetworkTCP, destination)
+		duration, err := probeHTTP(ctx, target, member.outbound.DialContext)
 		if err != nil {
 			if member.entry != nil {
 				member.entry.RecordFailure(err)
 			}
 			return 0, err
 		}
-		defer conn.Close()
-
-		// Perform HTTP probe to measure actual latency (TTFB)
-		_, err = httpProbe(conn, destination.AddrString())
-		if err != nil {
-			if member.entry != nil {
-				member.entry.RecordFailure(err)
-			}
-			return 0, err
-		}
-
-		// Total duration = dial time + HTTP probe
-		duration := time.Since(start)
 		if member.entry != nil {
 			member.entry.RecordSuccessWithLatency(duration)
 		}
@@ -648,7 +521,7 @@ func (p *poolOutbound) makeProbeByTagFunc(tag string) func(ctx context.Context) 
 	if p.monitor == nil {
 		return nil
 	}
-	destination, ok := p.monitor.DestinationForProbe()
+	target, ok := p.monitor.ProbeTarget()
 	if !ok {
 		return nil
 	}
@@ -676,18 +549,7 @@ func (p *poolOutbound) makeProbeByTagFunc(tag string) func(ctx context.Context) 
 			return 0, E.New("member not found: ", tag)
 		}
 
-		start := time.Now()
-		conn, err := member.outbound.DialContext(ctx, N.NetworkTCP, destination)
-		if err != nil {
-			if member.entry != nil {
-				member.entry.RecordFailure(err)
-			}
-			return 0, err
-		}
-		defer conn.Close()
-
-		// Perform HTTP probe to measure actual latency (TTFB)
-		_, err = httpProbe(conn, destination.AddrString())
+		duration, err := probeHTTP(ctx, target, member.outbound.DialContext)
 		if err != nil {
 			if member.entry != nil {
 				member.entry.RecordFailure(err)
@@ -695,8 +557,6 @@ func (p *poolOutbound) makeProbeByTagFunc(tag string) func(ctx context.Context) 
 			return 0, err
 		}
 
-		// Total duration = dial time + TTFB
-		duration := time.Since(start)
 		if member.entry != nil {
 			member.entry.RecordSuccessWithLatency(duration)
 		}
@@ -706,6 +566,31 @@ func (p *poolOutbound) makeProbeByTagFunc(tag string) func(ctx context.Context) 
 		}
 		return duration, nil
 	}
+}
+
+func probeHTTP(ctx context.Context, target string, dial func(context.Context, string, M.Socksaddr) (net.Conn, error)) (time.Duration, error) {
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			return dial(ctx, network, M.ParseSocksaddr(address))
+		},
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	defer transport.CloseIdleConnections()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return 0, err
+	}
+	start := time.Now()
+	response, err := (&http.Client{Transport: transport}).Do(request)
+	if err != nil {
+		return 0, err
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, response.Body)
+	if response.StatusCode != http.StatusNoContent {
+		return 0, fmt.Errorf("probe got HTTP %d, expected 204", response.StatusCode)
+	}
+	return time.Since(start), nil
 }
 
 // makeReleaseByTagFunc creates a release function that works before member initialization
@@ -756,22 +641,4 @@ func (p *poolOutbound) decActive(member *memberState) {
 	if member.shared != nil {
 		member.shared.decActive()
 	}
-}
-
-func (p *poolOutbound) getCandidateBuffer() []*memberState {
-	if buf := p.candidatesPool.Get(); buf != nil {
-		return buf.([]*memberState)
-	}
-	return make([]*memberState, 0, len(p.options.Members))
-}
-
-func (p *poolOutbound) putCandidateBuffer(buf []*memberState) {
-	if buf == nil {
-		return
-	}
-	const maxCached = 4096
-	if cap(buf) > maxCached {
-		return
-	}
-	p.candidatesPool.Put(buf[:0])
 }

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/netip"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/geoip"
+	"easy_proxies/internal/outbound/dispatch"
 	poolout "easy_proxies/internal/outbound/pool"
 
 	C "github.com/sagernet/sing-box/constant"
@@ -22,6 +24,8 @@ import (
 	"github.com/sagernet/sing/common/auth"
 	"github.com/sagernet/sing/common/json/badoption"
 )
+
+const verboseMultiPortLogLimit = 100
 
 // Build converts high level config into sing-box Options tree.
 func Build(cfg *config.Config) (option.Options, error) {
@@ -228,6 +232,8 @@ func Build(cfg *config.Config) (option.Options, error) {
 			return option.Options{}, err
 		}
 		inbounds = append(inbounds, inbound)
+	}
+	if enablePoolInbound {
 		poolOptions := poolout.Options{
 			Mode:              cfg.Pool.Mode,
 			Members:           memberTags,
@@ -241,65 +247,29 @@ func Build(cfg *config.Config) (option.Options, error) {
 			Tag:     poolout.Tag,
 			Options: &poolOptions,
 		})
-		route.Final = poolout.Tag
 	}
 
 	// Build multi-port inbounds (one port per node)
 	if enableMultiPort {
-		addr, err := parseAddr(cfg.MultiPort.Address)
-		if err != nil {
-			return option.Options{}, fmt.Errorf("parse multi-port address: %w", err)
-		}
+		mappings := make(map[string]string, len(memberTags))
 		for _, tag := range memberTags {
 			meta := metadata[tag]
-			perMeta := map[string]poolout.MemberMeta{tag: meta}
-			poolTag := fmt.Sprintf("%s-%s", poolout.Tag, tag)
-			perOptions := poolout.Options{
-				Mode:              "sequential",
-				Members:           []string{tag},
-				FailureThreshold:  cfg.Pool.FailureThreshold,
-				BlacklistDuration: cfg.Pool.BlacklistDuration,
-				RotationInterval:  cfg.Pool.RotationInterval,
-				Metadata:          perMeta,
+			inbound, err := BuildMultiPortInbound(cfg, config.NodeConfig{Port: meta.Port}, tag)
+			if err != nil {
+				return option.Options{}, err
 			}
-			perPool := option.Outbound{
-				Type:    poolout.Type,
-				Tag:     poolTag,
-				Options: &perOptions,
-			}
-			outbounds = append(outbounds, perPool)
-			inboundOptions := &option.HTTPMixedInboundOptions{
-				ListenOptions: option.ListenOptions{
-					Listen:     addr,
-					ListenPort: meta.Port,
-				},
-			}
-			username := cfg.MultiPort.Username
-			password := cfg.MultiPort.Password
-			if username != "" {
-				inboundOptions.Users = []auth.User{{Username: username, Password: password}}
-			}
-			inboundTag := fmt.Sprintf("in-%s", tag)
-			inbounds = append(inbounds, option.Inbound{
-				Type:    C.TypeMixed,
-				Tag:     inboundTag,
-				Options: inboundOptions,
-			})
-			route.Rules = append(route.Rules, option.Rule{
-				Type: C.RuleTypeDefault,
-				DefaultOptions: option.DefaultRule{
-					RawDefaultRule: option.RawDefaultRule{
-						Inbound: badoption.Listable[string]{inboundTag},
-					},
-					RuleAction: option.RuleAction{
-						Action: C.RuleActionTypeRoute,
-						RouteOptions: option.RouteActionOptions{
-							Outbound: poolTag,
-						},
-					},
-				},
-			})
+			inbounds = append(inbounds, inbound)
+			mappings[inbound.Tag] = tag
 		}
+		fallback := ""
+		if enablePoolInbound {
+			fallback = poolout.Tag
+		}
+		dispatchOptions := dispatch.Options{Mappings: mappings, Fallback: fallback}
+		outbounds = append(outbounds, option.Outbound{Type: dispatch.Type, Tag: dispatch.Tag, Options: &dispatchOptions})
+		route.Final = dispatch.Tag
+	} else {
+		route.Final = poolout.Tag
 	}
 
 	// Build GeoIP region-based pool outbounds and routing
@@ -348,17 +318,32 @@ func Build(cfg *config.Config) (option.Options, error) {
 	}
 
 	opts := option.Options{
-		Log:       &option.LogOptions{Level: strings.ToLower(cfg.LogLevel)},
+		Log:       &option.LogOptions{Level: coreLogLevel(cfg, len(inbounds))},
 		Inbounds:  inbounds,
 		Outbounds: outbounds,
 		Route:     &route,
 		Experimental: &option.ExperimentalOptions{
 			ClashAPI: &option.ClashAPIOptions{
-				ExternalController: "127.0.0.1:9092",
+				ExternalController: clashAPIListen(),
 			},
 		},
 	}
 	return opts, nil
+}
+
+func clashAPIListen() string {
+	if listen := strings.TrimSpace(os.Getenv("EASY_PROXIES_CLASH_API_LISTEN")); listen != "" {
+		return listen
+	}
+	return "127.0.0.1:9092"
+}
+
+func coreLogLevel(cfg *config.Config, inboundCount int) string {
+	level := strings.ToLower(strings.TrimSpace(cfg.LogLevel))
+	if (cfg.Mode == "multi-port" || cfg.Mode == "hybrid") && inboundCount > verboseMultiPortLogLimit && level == "info" {
+		return "warn"
+	}
+	return level
 }
 
 func buildPoolInbound(cfg *config.Config) (option.Inbound, error) {
@@ -1365,59 +1350,36 @@ func atoiDefault(value string) int {
 	return v
 }
 
-// printProxyLinks prints all proxy connection information at startup
 func printProxyLinks(cfg *config.Config, metadata map[string]poolout.MemberMeta) {
-	log.Println("")
-	log.Println("📡 Proxy Links:")
-	log.Println("═══════════════════════════════════════════════════════════════")
-
 	showPoolEntry := cfg.Mode == "pool" || cfg.Mode == "hybrid"
 	showMultiPort := cfg.Mode == "multi-port" || cfg.Mode == "hybrid"
 
 	if showPoolEntry {
-		// Pool mode: single entry point for all nodes
-		var auth string
-		if cfg.Listener.Username != "" {
-			auth = fmt.Sprintf("%s:%s@", cfg.Listener.Username, cfg.Listener.Password)
-		}
-		httpProxyURL := fmt.Sprintf("http://%s%s:%d", auth, cfg.Listener.Address, cfg.Listener.Port)
-		socksProxyURL := fmt.Sprintf("socks5://%s%s:%d", auth, cfg.Listener.Address, cfg.Listener.Port)
-		log.Printf("🌐 Pool Entry Point:")
-		log.Printf("   HTTP:   %s", httpProxyURL)
-		log.Printf("   SOCKS5: %s", socksProxyURL)
-		log.Println("")
-		log.Printf("   Nodes in pool (%d):", len(metadata))
-		for _, meta := range metadata {
-			log.Printf("   • %s", meta.Name)
-		}
-		if showMultiPort {
-			log.Println("")
-		}
+		log.Printf("🌐 Pool listener: %s:%d, nodes=%d, authentication=%s",
+			cfg.Listener.Address, cfg.Listener.Port, len(metadata), authStatus(cfg.Listener.Username))
 	}
 
 	if showMultiPort {
-		// Multi-port mode: each node has its own port
-		log.Printf("🔌 Multi-Port Entry Points (%d nodes):", len(cfg.Nodes))
-		log.Println("")
-		for _, node := range cfg.Nodes {
-			var auth string
-			username := node.Username
-			password := node.Password
-			if username == "" {
-				username = cfg.MultiPort.Username
-				password = cfg.MultiPort.Password
+		var firstPort, lastPort uint16
+		for _, meta := range metadata {
+			if meta.Port == 0 {
+				continue
 			}
-			if username != "" {
-				auth = fmt.Sprintf("%s:%s@", username, password)
+			if firstPort == 0 || meta.Port < firstPort {
+				firstPort = meta.Port
 			}
-			httpProxyURL := fmt.Sprintf("http://%s%s:%d", auth, cfg.MultiPort.Address, node.Port)
-			socksProxyURL := fmt.Sprintf("socks5://%s%s:%d", auth, cfg.MultiPort.Address, node.Port)
-			log.Printf("   [%d] %s", node.Port, node.Name)
-			log.Printf("       HTTP:   %s", httpProxyURL)
-			log.Printf("       SOCKS5: %s", socksProxyURL)
+			if meta.Port > lastPort {
+				lastPort = meta.Port
+			}
 		}
+		log.Printf("🔌 Multi-port listeners: %s:%d-%d, nodes=%d, authentication=%s",
+			cfg.MultiPort.Address, firstPort, lastPort, len(metadata), authStatus(cfg.MultiPort.Username))
 	}
+}
 
-	log.Println("═══════════════════════════════════════════════════════════════")
-	log.Println("")
+func authStatus(username string) string {
+	if username == "" {
+		return "disabled"
+	}
+	return "enabled"
 }

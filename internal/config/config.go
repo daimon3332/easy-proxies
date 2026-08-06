@@ -131,10 +131,11 @@ type MultiPortConfig struct {
 
 // ManagementConfig controls the monitoring HTTP endpoint.
 type ManagementConfig struct {
-	Enabled     *bool  `yaml:"enabled"`
-	Listen      string `yaml:"listen"`
-	ProbeTarget string `yaml:"probe_target"`
-	Password    string `yaml:"password"` // WebUI 访问密码，为空则不需要密码
+	Enabled      *bool  `yaml:"enabled"`
+	Listen       string `yaml:"listen"`
+	ProbeTarget  string `yaml:"probe_target"`
+	Password     string `yaml:"password"` // WebUI 访问密码，为空则不需要密码
+	PprofEnabled bool   `yaml:"pprof_enabled,omitempty"`
 }
 
 // SubscriptionRefreshConfig controls subscription auto-refresh and reload settings.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
+	"net/url"
 	"runtime"
 	"sort"
 	"strconv"
@@ -26,6 +26,7 @@ type Config struct {
 	ProxyPassword  string // 代理池的密码（用于导出）
 	ExternalIP     string // 外部 IP 地址，用于导出时替换 0.0.0.0
 	SkipCertVerify bool   // 全局跳过 SSL 证书验证
+	PprofEnabled   bool
 }
 
 // NodeInfo is static metadata about a proxy entry.
@@ -97,14 +98,18 @@ type entry struct {
 
 // Manager aggregates all node states for the UI/API.
 type Manager struct {
-	cfg        Config
-	probeDst   M.Socksaddr
-	probeReady bool
-	mu         sync.RWMutex
-	nodes      map[string]*entry
-	ctx        context.Context
-	cancel     context.CancelFunc
-	logger     Logger
+	cfg          Config
+	probeDst     M.Socksaddr
+	probeTarget  string
+	probeReady   bool
+	mu           sync.RWMutex
+	nodes        map[string]*entry
+	ctx          context.Context
+	cancel       context.CancelFunc
+	healthMu     sync.Mutex
+	healthCancel context.CancelFunc
+	probeRunning atomic.Bool
+	logger       Logger
 }
 
 // Logger interface for logging
@@ -123,30 +128,27 @@ func NewManager(cfg Config) (*Manager, error) {
 		cancel: cancel,
 	}
 	if cfg.ProbeTarget != "" {
-		target := cfg.ProbeTarget
-		// Strip URL scheme if present (e.g., "https://www.google.com:443" -> "www.google.com:443")
-		if strings.HasPrefix(target, "https://") {
-			target = strings.TrimPrefix(target, "https://")
-		} else if strings.HasPrefix(target, "http://") {
-			target = strings.TrimPrefix(target, "http://")
+		target := strings.TrimSpace(cfg.ProbeTarget)
+		if !strings.Contains(target, "://") {
+			target = "http://" + target
 		}
-		// Remove trailing path if present
-		if idx := strings.Index(target, "/"); idx != -1 {
-			target = target[:idx]
+		parsedURL, err := url.Parse(target)
+		if err != nil || parsedURL.Hostname() == "" {
+			cancel()
+			return nil, fmt.Errorf("invalid probe target %q", cfg.ProbeTarget)
 		}
-		host, port, err := net.SplitHostPort(target)
-		if err != nil {
-			// If no port specified, use default based on original scheme
-			if strings.HasPrefix(cfg.ProbeTarget, "https://") {
-				host = target
+		host := parsedURL.Hostname()
+		port := parsedURL.Port()
+		if port == "" {
+			if parsedURL.Scheme == "https" {
 				port = "443"
 			} else {
-				host = target
 				port = "80"
 			}
 		}
 		parsed := M.ParseSocksaddrHostPort(host, parsePort(port))
 		m.probeDst = parsed
+		m.probeTarget = parsedURL.String()
 		m.probeReady = true
 	}
 	return m, nil
@@ -160,13 +162,21 @@ func (m *Manager) SetLogger(logger Logger) {
 // StartPeriodicHealthCheck starts a background goroutine that periodically checks all nodes.
 // interval: how often to check (e.g., 30 * time.Second)
 // timeout: timeout for each probe (e.g., 10 * time.Second)
-func (m *Manager) StartPeriodicHealthCheck(interval, timeout time.Duration) {
+func (m *Manager) StartPeriodicHealthCheck(interval, timeout time.Duration) bool {
 	if !m.probeReady {
 		if m.logger != nil {
 			m.logger.Warn("probe target not configured, periodic health check disabled")
 		}
-		return
+		return false
 	}
+	m.healthMu.Lock()
+	if m.healthCancel != nil {
+		m.healthMu.Unlock()
+		return false
+	}
+	healthCtx, cancel := context.WithCancel(m.ctx)
+	m.healthCancel = cancel
+	m.healthMu.Unlock()
 
 	go func() {
 		ticker := time.NewTicker(interval)
@@ -176,12 +186,12 @@ func (m *Manager) StartPeriodicHealthCheck(interval, timeout time.Duration) {
 
 		for {
 			select {
-			case <-m.ctx.Done():
+			case <-healthCtx.Done():
 				return
 			case <-initial.C:
-				m.probeAllNodes(timeout)
+				m.probeAllNodes(healthCtx, timeout)
 			case <-ticker.C:
-				m.probeAllNodes(timeout)
+				m.probeAllNodes(healthCtx, timeout)
 			}
 		}
 	}()
@@ -189,15 +199,30 @@ func (m *Manager) StartPeriodicHealthCheck(interval, timeout time.Duration) {
 	if m.logger != nil {
 		m.logger.Info("periodic health check started, interval: ", interval)
 	}
+	return true
+}
+
+func (m *Manager) StopPeriodicHealthCheck() {
+	m.healthMu.Lock()
+	cancel := m.healthCancel
+	m.healthCancel = nil
+	m.healthMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 // ProbeAllNow triggers a one-time health check on all nodes (e.g. after reload).
 func (m *Manager) ProbeAllNow(timeout time.Duration) {
-	m.probeAllNodes(timeout)
+	m.probeAllNodes(m.ctx, timeout)
 }
 
 // probeAllNodes checks all registered nodes concurrently.
-func (m *Manager) probeAllNodes(timeout time.Duration) {
+func (m *Manager) probeAllNodes(ctx context.Context, timeout time.Duration) {
+	if !m.probeRunning.CompareAndSwap(false, true) {
+		return
+	}
+	defer m.probeRunning.Store(false)
 	m.mu.RLock()
 	entries := make([]*entry, 0, len(m.nodes))
 	for _, e := range m.nodes {
@@ -235,14 +260,19 @@ func (m *Manager) probeAllNodes(timeout time.Duration) {
 			continue
 		}
 
-		sem <- struct{}{}
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return
+		case sem <- struct{}{}:
+		}
 		wg.Add(1)
 		go func(entry *entry, probe probeFunc, tag string) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			ctx, cancel := context.WithTimeout(m.ctx, timeout)
-			latency, err := probe(ctx)
+			probeCtx, cancel := context.WithTimeout(ctx, timeout)
+			latency, err := probe(probeCtx)
 			cancel()
 
 			entry.mu.Lock()
@@ -261,9 +291,6 @@ func (m *Manager) probeAllNodes(timeout time.Duration) {
 			}
 			entry.mu.Unlock()
 
-			if err != nil && m.logger != nil {
-				m.logger.Warn("probe failed for ", tag, ": ", err)
-			}
 		}(e, probeFn, tag)
 	}
 	wg.Wait()
@@ -275,6 +302,7 @@ func (m *Manager) probeAllNodes(timeout time.Duration) {
 
 // Stop stops the periodic health check.
 func (m *Manager) Stop() {
+	m.StopPeriodicHealthCheck()
 	if m.cancel != nil {
 		m.cancel()
 	}
@@ -319,6 +347,28 @@ func (m *Manager) DestinationForProbe() (M.Socksaddr, bool) {
 		return M.Socksaddr{}, false
 	}
 	return m.probeDst, true
+}
+
+func (m *Manager) ProbeTarget() (string, bool) {
+	if !m.probeReady {
+		return "", false
+	}
+	return m.probeTarget, true
+}
+
+func (m *Manager) MarkAllAvailable() {
+	m.mu.RLock()
+	entries := make([]*entry, 0, len(m.nodes))
+	for _, entry := range m.nodes {
+		entries = append(entries, entry)
+	}
+	m.mu.RUnlock()
+	for _, entry := range entries {
+		entry.mu.Lock()
+		entry.initialCheckDone = true
+		entry.available = true
+		entry.mu.Unlock()
+	}
 }
 
 // Snapshot returns a sorted copy of current node states.

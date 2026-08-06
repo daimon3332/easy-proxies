@@ -2,6 +2,7 @@ package importer
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -9,7 +10,7 @@ import (
 
 func newUIService(t *testing.T, nodes []ManagedNode) *Service {
 	t.Helper()
-	store, err := NewStore(filepath.Join(t.TempDir(), "managed_nodes.json"))
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 	if err != nil {
 		t.Fatalf("NewStore() error = %v", err)
 	}
@@ -104,6 +105,53 @@ func TestListUINodesKeepsMissingSortValuesLast(t *testing.T) {
 		}
 		if len(result.Items) != 3 || result.Items[2].ID != "none" {
 			t.Fatalf("missing latency was not last for %s: %#v", order, result.Items)
+		}
+	}
+}
+
+func TestListUINodesSQLSearchAndLatencyFilters(t *testing.T) {
+	service := newUIService(t, []ManagedNode{
+		{ID: "fast-jp", URI: "trojan://fast", Name: "Tokyo Fast", TagPrefix: "alpha", CountryCode: "JP", CountryName: "Japan", LatencyMs: 200, State: StatePassed},
+		{ID: "slow-jp", URI: "trojan://slow", Name: "Tokyo Slow", TagPrefix: "alpha", CountryCode: "JP", CountryName: "Japan", LatencyMs: 1800, State: StatePassed},
+		{ID: "fast-us", URI: "trojan://us", Name: "Seattle Fast", TagPrefix: "beta", CountryCode: "US", LatencyMs: 300, State: StatePassed},
+	})
+	result, err := service.ListUINodes(UINodeListQuery{
+		Scope: "candidate", Country: "JP", Tag: "alpha", Query: "tokyo", Latency: "0-500", Sort: "name", Order: "asc", Page: 1, PageSize: 20,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Total != 1 || len(result.Items) != 1 || result.Items[0].ID != "fast-jp" {
+		t.Fatalf("unexpected SQL-filtered result: %#v", result)
+	}
+	if !reflect.DeepEqual(result.Countries, []string{"JP", "US"}) || !reflect.DeepEqual(result.Tags, []string{"alpha", "beta"}) {
+		t.Fatalf("scope filter options changed: countries=%v tags=%v", result.Countries, result.Tags)
+	}
+}
+
+func BenchmarkListUINodesPage5000(b *testing.B) {
+	store, err := NewStore(filepath.Join(b.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = store.Close() })
+	nodes := make([]ManagedNode, 5000)
+	for i := range nodes {
+		nodes[i] = ManagedNode{
+			ID: fmt.Sprintf("node-%05d", i), URI: fmt.Sprintf("trojan://node-%d", i), Name: fmt.Sprintf("Node %05d", i),
+			TagPrefix: fmt.Sprintf("tag-%d", i%10), CountryCode: []string{"JP", "US", "SG"}[i%3], LatencyMs: int64(i%2000 + 1), State: StatePassed,
+		}
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		b.Fatal(err)
+	}
+	service := NewService(store, nil, nil)
+	query := UINodeListQuery{Scope: "candidate", Page: 1, PageSize: 100, Sort: "latency", Order: "asc"}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if _, err := service.ListUINodes(query); err != nil {
+			b.Fatal(err)
 		}
 	}
 }

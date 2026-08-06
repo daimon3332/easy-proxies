@@ -16,7 +16,7 @@
   <img alt="Go 1.24+" src="https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white">
   <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-green.svg">
   <img alt="Powered by sing-box" src="https://img.shields.io/badge/Powered%20by-sing--box-4B5563">
-  <img alt="Platforms" src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue">
+  <img alt="Platforms" src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue">
 </p>
 
 > Easy Proxies is a community-maintained fork of [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies). This fork focuses on a redesigned WebUI, subscription importing, reliable node testing, node lifecycle management, and an easier multi-port workflow.
@@ -48,6 +48,14 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 - Batch retest, country detection, subscription refresh, port inspection, and logs.
 - Probe target selection between `https://www.gstatic.com/generate_204` and `https://cp.cloudflare.com/generate_204`.
 - WebUI and REST API served from the same management endpoint.
+
+## ⚙️ Reliability and performance
+
+- A shared probe runtime reuses sing-box services instead of creating a complete runtime for every retry.
+- Probe work uses bounded asynchronous workers, delayed retries, alternate targets, and cross-job de-duplication.
+- A pooled node is only reported as passed after its actual local multi-port listener also reaches the probe target.
+- Source refresh, local URI/YAML/Base64 retesting, cancellation, and pool updates use transactional recovery and bounded queues.
+- Runtime diagnostics expose startup stages, listener counts, memory, goroutines, and probe queues without exposing node credentials or subscription URLs.
 
 ## 🖼️ WebUI preview
 
@@ -122,7 +130,7 @@ For source setup, build tags, tests, branch conventions, and the pull request wo
 
 ## Troubleshooting
 
-The user guide covers startup errors, missing ports, browser-saved import options, and macOS Gatekeeper handling. When a passed node does not use the expected port, check the WebUI port page because occupied ports are skipped automatically.
+The user guide covers startup errors, missing ports, and browser-saved import options. When a passed node does not use the expected port, check the WebUI port page because occupied ports are skipped automatically.
 
 ## Upstream and acknowledgements
 

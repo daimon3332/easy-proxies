@@ -15,6 +15,7 @@ type sharedMemberState struct {
 	failures         int
 	blacklisted      bool
 	blacklistedUntil time.Time
+	halfOpen         bool
 	entry            atomic.Pointer[monitor.EntryHandle]
 	active           atomic.Int32
 }
@@ -64,11 +65,16 @@ func (s *sharedMemberState) entryHandle() *monitor.EntryHandle {
 // Returns: (current failures, blacklisted, blacklist until time)
 func (s *sharedMemberState) recordFailure(cause error, threshold int, duration time.Duration) (int, bool, time.Time) {
 	s.mu.Lock()
-	s.failures++
+	triggered := s.halfOpen
+	s.halfOpen = false
+	if triggered {
+		s.failures = 0
+	} else {
+		s.failures++
+	}
 	count := s.failures
-	triggered := false
 	var until time.Time
-	if s.failures >= threshold {
+	if triggered || s.failures >= threshold {
 		triggered = true
 		until = time.Now().Add(duration)
 		s.failures = 0
@@ -88,31 +94,45 @@ func (s *sharedMemberState) recordFailure(cause error, threshold int, duration t
 
 func (s *sharedMemberState) recordSuccess() {
 	s.mu.Lock()
+	wasBlacklisted := s.blacklisted || s.halfOpen
 	s.failures = 0
+	s.blacklisted = false
+	s.blacklistedUntil = time.Time{}
+	s.halfOpen = false
 	s.mu.Unlock()
 
 	if entry := s.entry.Load(); entry != nil {
 		entry.RecordSuccess()
-	}
-}
-
-// isBlacklisted checks if the node is currently blacklisted, auto-clearing if expired.
-func (s *sharedMemberState) isBlacklisted(now time.Time) bool {
-	s.mu.Lock()
-	expired := s.blacklisted && now.After(s.blacklistedUntil)
-	if expired {
-		s.blacklisted = false
-		s.blacklistedUntil = time.Time{}
-	}
-	blacklisted := s.blacklisted
-	s.mu.Unlock()
-
-	if expired {
-		if entry := s.entry.Load(); entry != nil {
+		if wasBlacklisted {
 			entry.ClearBlacklist()
 		}
 	}
+}
+
+func (s *sharedMemberState) isBlacklisted(now time.Time) bool {
+	s.mu.Lock()
+	blacklisted := s.blacklisted
+	s.mu.Unlock()
 	return blacklisted
+}
+
+func (s *sharedMemberState) tryAcquire(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.blacklisted {
+		return true
+	}
+	if now.Before(s.blacklistedUntil) || s.halfOpen {
+		return false
+	}
+	s.halfOpen = true
+	return true
+}
+
+func (s *sharedMemberState) isHalfOpen() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.halfOpen
 }
 
 func (s *sharedMemberState) forceRelease() {
@@ -120,6 +140,7 @@ func (s *sharedMemberState) forceRelease() {
 	s.failures = 0
 	s.blacklisted = false
 	s.blacklistedUntil = time.Time{}
+	s.halfOpen = false
 	s.mu.Unlock()
 
 	if entry := s.entry.Load(); entry != nil {
@@ -159,6 +180,7 @@ func blacklistSharedMember(tag string, duration time.Duration) {
 		state.mu.Lock()
 		state.blacklisted = true
 		state.blacklistedUntil = until
+		state.halfOpen = false
 		state.failures = 0
 		state.mu.Unlock()
 	}

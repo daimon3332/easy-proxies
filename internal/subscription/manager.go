@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -45,15 +46,28 @@ type Manager struct {
 	boxMgr  *boxmgr.Manager
 	logger  Logger
 
-	status        monitor.SubscriptionStatus
-	ctx           context.Context
-	cancel        context.CancelFunc
-	refreshMu     sync.Mutex // prevents concurrent refreshes
-	manualRefresh chan struct{}
+	status          monitor.SubscriptionStatus
+	ctx             context.Context
+	cancel          context.CancelFunc
+	refreshMu       sync.Mutex // prevents concurrent refreshes
+	manualRefresh   chan struct{}
+	sourceRefresher SourceRefresher
 
 	// Track nodes.txt content hash to detect modifications
 	lastSubHash      string    // Hash of nodes.txt content after last subscription refresh
 	lastNodesModTime time.Time // Last known modification time of nodes.txt
+}
+
+type SourceRefresher interface {
+	StartRefreshSources(key string) (string, error)
+	GetRefreshJob(jobID string) (importer.SourceRefreshJob, bool)
+}
+
+const defaultFetchConcurrency = 4
+
+type subscriptionFetchResult struct {
+	nodes []config.NodeConfig
+	err   error
 }
 
 // New creates a SubscriptionManager.
@@ -99,6 +113,12 @@ func (m *Manager) Stop() {
 		m.cancel()
 	}
 
+}
+
+func (m *Manager) SetSourceRefresher(refresher SourceRefresher) {
+	m.mu.Lock()
+	m.sourceRefresher = refresher
+	m.mu.Unlock()
 }
 
 // UpdateConfig hot-reloads subscription URLs and refresh settings without restart.
@@ -322,6 +342,21 @@ func (m *Manager) doRefresh() {
 	}()
 
 	m.logger.Infof("starting subscription refresh")
+	if handled, err := m.refreshManagedSources(); handled {
+		m.mu.Lock()
+		m.status.LastRefresh = time.Now()
+		m.status.LastError = ""
+		if err != nil {
+			m.status.LastError = err.Error()
+		}
+		m.mu.Unlock()
+		if err != nil {
+			m.logger.Errorf("managed source refresh failed: %v", err)
+		} else {
+			m.logger.Infof("managed source refresh completed")
+		}
+		return
+	}
 
 	// Fetch nodes from all subscriptions
 	nodes, err := m.fetchAllSubscriptions()
@@ -379,6 +414,58 @@ func (m *Manager) doRefresh() {
 	m.mu.Unlock()
 
 	m.logger.Infof("subscription refresh completed, %d candidate nodes written to nodes.txt", len(nodes))
+}
+
+func (m *Manager) refreshManagedSources() (bool, error) {
+	m.mu.RLock()
+	refresher := m.sourceRefresher
+	ctx := m.ctx
+	m.mu.RUnlock()
+	if refresher == nil {
+		return false, nil
+	}
+	jobID, err := refresher.StartRefreshSources("")
+	if errors.Is(err, importer.ErrNoRefreshSources) {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		job, ok := refresher.GetRefreshJob(jobID)
+		if !ok {
+			return true, fmt.Errorf("managed source refresh job disappeared")
+		}
+		if job.Status != importer.SourceRefreshJobRunning {
+			m.mu.Lock()
+			m.status.NodeCount = job.Passed
+			m.mu.Unlock()
+			switch job.Status {
+			case importer.SourceRefreshJobFinished:
+				if job.Protected {
+					return true, fmt.Errorf("managed source refresh protected previous pool: %s", job.ProtectionReason)
+				}
+				return true, nil
+			case importer.SourceRefreshJobCanceled:
+				return true, fmt.Errorf("managed source refresh canceled")
+			default:
+				if strings.TrimSpace(job.Error) != "" {
+					return true, fmt.Errorf("managed source refresh failed: %s", job.Error)
+				}
+				return true, fmt.Errorf("managed source refresh failed")
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return true, ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // getNodesFilePath returns the path to nodes.txt.
@@ -476,23 +563,32 @@ func (m *Manager) MarkNodesModified() {
 
 // fetchAllSubscriptions fetches nodes from all configured subscription URLs.
 func (m *Manager) fetchAllSubscriptions() ([]config.NodeConfig, error) {
-	var allNodes []config.NodeConfig
-	var lastErr error
-
+	m.mu.RLock()
+	ctx := m.ctx
+	urls := append([]string(nil), m.baseCfg.Subscriptions...)
 	timeout := m.baseCfg.SubscriptionRefresh.Timeout
+	skipTLSVerify := m.baseCfg.SkipCertVerify
+	m.mu.RUnlock()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
 
-	for _, subURL := range m.baseCfg.Subscriptions {
-		nodes, err := m.fetchSubscription(subURL, timeout)
-		if err != nil {
-			m.logger.Warnf("failed to fetch %s: %v", subURL, err)
-			lastErr = err
+	results := fetchSubscriptions(ctx, urls, defaultFetchConcurrency, func(fetchCtx context.Context, subURL string) ([]config.NodeConfig, error) {
+		return m.fetchSubscriptionContext(fetchCtx, subURL, timeout, skipTLSVerify)
+	})
+	var allNodes []config.NodeConfig
+	var lastErr error
+	for i, result := range results {
+		if result.err != nil {
+			m.logger.Warnf("failed to fetch subscription %d: %v", i+1, result.err)
+			lastErr = result.err
 			continue
 		}
-		m.logger.Infof("fetched %d nodes from subscription", len(nodes))
-		allNodes = append(allNodes, nodes...)
+		m.logger.Infof("fetched %d nodes from subscription %d", len(result.nodes), i+1)
+		allNodes = append(allNodes, result.nodes...)
 	}
 
 	if len(allNodes) == 0 && lastErr != nil {
@@ -504,14 +600,60 @@ func (m *Manager) fetchAllSubscriptions() ([]config.NodeConfig, error) {
 
 // fetchSubscription fetches and parses a single subscription URL.
 func (m *Manager) fetchSubscription(subURL string, timeout time.Duration) ([]config.NodeConfig, error) {
-	ctx, cancel := context.WithTimeout(m.ctx, timeout)
+	m.mu.RLock()
+	ctx := m.ctx
+	skipTLSVerify := m.baseCfg.SkipCertVerify
+	m.mu.RUnlock()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return m.fetchSubscriptionContext(ctx, subURL, timeout, skipTLSVerify)
+}
+
+func fetchSubscriptions(ctx context.Context, urls []string, limit int, fetch func(context.Context, string) ([]config.NodeConfig, error)) []subscriptionFetchResult {
+	results := make([]subscriptionFetchResult, len(urls))
+	if len(urls) == 0 || fetch == nil {
+		return results
+	}
+	if limit <= 0 || limit > len(urls) {
+		limit = len(urls)
+	}
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for worker := 0; worker < limit; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range jobs {
+				if ctx.Err() != nil {
+					results[index].err = ctx.Err()
+					continue
+				}
+				results[index].nodes, results[index].err = fetch(ctx, urls[index])
+			}
+		}()
+	}
+	for index := range urls {
+		select {
+		case jobs <- index:
+		case <-ctx.Done():
+			results[index].err = ctx.Err()
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	return results
+}
+
+func (m *Manager) fetchSubscriptionContext(ctx context.Context, subURL string, timeout time.Duration, skipTLSVerify bool) ([]config.NodeConfig, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	body, err := subfetch.Fetch(ctx, subURL, subfetch.Options{
 		Timeout:       timeout,
-		SkipTLSVerify: m.baseCfg.SkipCertVerify,
+		SkipTLSVerify: skipTLSVerify,
 		ProxyFallback: func(ctx context.Context, rawURL string, headers http.Header) ([]byte, error) {
-			return m.fetchSubscriptionViaPool(ctx, rawURL, headers, timeout)
+			return m.fetchSubscriptionViaPool(ctx, rawURL, headers, timeout, skipTLSVerify)
 		},
 	})
 	if err != nil {
@@ -520,7 +662,7 @@ func (m *Manager) fetchSubscription(subURL string, timeout time.Duration) ([]con
 	return config.ParseSubscriptionContent(string(body))
 }
 
-func (m *Manager) fetchSubscriptionViaPool(ctx context.Context, rawURL string, headers http.Header, timeout time.Duration) ([]byte, error) {
+func (m *Manager) fetchSubscriptionViaPool(ctx context.Context, rawURL string, headers http.Header, timeout time.Duration, skipTLSVerify bool) ([]byte, error) {
 	if m.boxMgr == nil {
 		return nil, fmt.Errorf("box manager unavailable")
 	}
@@ -536,7 +678,7 @@ func (m *Manager) fetchSubscriptionViaPool(ctx context.Context, rawURL string, h
 		if strings.TrimSpace(node.URI) == "" {
 			continue
 		}
-		client, closeClient, clientErr := importer.NewHTTPClientForURI(ctx, builder.BuildSingleNodeOutbound, node.Name, node.URI, timeout, m.baseCfg.SkipCertVerify)
+		client, closeClient, clientErr := importer.NewHTTPClientForURI(ctx, builder.BuildSingleNodeOutbound, node.Name, node.URI, timeout, skipTLSVerify)
 		if clientErr != nil {
 			errs = append(errs, node.Name+": "+clientErr.Error())
 			continue

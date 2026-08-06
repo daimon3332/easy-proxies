@@ -74,6 +74,7 @@ func testService(t *testing.T) (*Service, *config.Config, *importer.Store, *runt
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 	node := importer.ManagedNode{ID: "node-1", Name: "node", URI: "ss://YWVzLTI1Ni1nY206cGFzcw==@example.com:8388#node", State: importer.StateInPool, InPool: true, Enabled: true, Port: 24000}
 	if err := store.UpsertNode(node); err != nil {
 		t.Fatal(err)

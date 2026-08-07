@@ -18,6 +18,7 @@ import (
 	"easy_proxies/internal/geoip"
 	"easy_proxies/internal/outbound/dispatch"
 	poolout "easy_proxies/internal/outbound/pool"
+	"easy_proxies/internal/proxychain"
 
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
@@ -29,11 +30,52 @@ const verboseMultiPortLogLimit = 100
 
 // Build converts high level config into sing-box Options tree.
 func Build(cfg *config.Config) (option.Options, error) {
-	baseOutbounds := make([]option.Outbound, 0, len(cfg.Nodes))
+	baseOutbounds := make([]option.Outbound, 0, len(cfg.Nodes)+len(cfg.ChainProfiles))
 	memberTags := make([]string, 0, len(cfg.Nodes))
 	metadata := make(map[string]poolout.MemberMeta)
 	var failedNodes []string
 	usedTags := make(map[string]int) // Track tag usage for uniqueness
+	chainDetours := make(map[string]string, len(cfg.ChainProfiles))
+	usedChainProfiles := make(map[string]struct{})
+	for _, node := range cfg.Nodes {
+		if node.ChainProfileID != "" {
+			usedChainProfiles[node.ChainProfileID] = struct{}{}
+		}
+	}
+	for _, profile := range cfg.ChainProfiles {
+		if !profile.Enabled {
+			continue
+		}
+		if _, used := usedChainProfiles[profile.ID]; !used {
+			continue
+		}
+		if len(profile.Hops) == 0 {
+			return option.Options{}, fmt.Errorf("chain profile %q has no hops", profile.Name)
+		}
+		prefix := "chain-" + sanitizeTag(profile.ID)
+		if prefix == "chain-" {
+			prefix = "chain-" + proxychain.ContentID(profile)[:12]
+		}
+		hopURIs := make([]string, 0, len(profile.Hops))
+		for _, hop := range profile.Hops {
+			hopURIs = append(hopURIs, hop.URI)
+		}
+		chainOutbounds, err := BuildChainOutbounds(prefix+"-baseline", hopURIs[len(hopURIs)-1], hopURIs[:len(hopURIs)-1], cfg.SkipCertVerify)
+		if err != nil {
+			return option.Options{}, fmt.Errorf("build chain profile %q: %w", profile.Name, err)
+		}
+		for index := range chainOutbounds {
+			chainOutbounds[index].Tag = fmt.Sprintf("%s-hop-%d", prefix, index+1)
+			if index > 0 {
+				if err := SetOutboundDetour(&chainOutbounds[index], chainOutbounds[index-1].Tag); err != nil {
+					return option.Options{}, fmt.Errorf("configure chain profile %q: %w", profile.Name, err)
+				}
+			}
+			baseOutbounds = append(baseOutbounds, chainOutbounds[index])
+			usedTags[chainOutbounds[index].Tag] = 1
+		}
+		chainDetours[profile.ID] = chainOutbounds[len(chainOutbounds)-1].Tag
+	}
 
 	// Initialize GeoIP lookup if enabled
 	var geoLookup *geoip.Lookup
@@ -86,6 +128,22 @@ func Build(cfg *config.Config) (option.Options, error) {
 			log.Printf("❌ Failed to build node '%s': %v (skipping)", node.Name, err)
 			failedNodes = append(failedNodes, node.Name)
 			continue
+		}
+		if node.ChainProfileID != "" {
+			detour, ok := chainDetours[node.ChainProfileID]
+			if !ok {
+				failedNodes = append(failedNodes, node.Name)
+				continue
+			}
+			profile, _ := proxychain.Find(cfg.ChainProfiles, node.ChainProfileID)
+			if err := validateDetourTransport(node.URI, profile.Hops[len(profile.Hops)-1].URI); err != nil {
+				failedNodes = append(failedNodes, node.Name)
+				continue
+			}
+			if err := SetOutboundDetour(&outbound, detour); err != nil {
+				failedNodes = append(failedNodes, node.Name)
+				continue
+			}
 		}
 		memberTags = append(memberTags, tag)
 		baseOutbounds = append(baseOutbounds, outbound)

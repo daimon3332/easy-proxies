@@ -41,7 +41,12 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 
 - 🔗 Subscription-first WebUI workflow.
 - Imports HTTP/HTTPS subscriptions, URI lists, Base64 content, and Clash/Mihomo YAML.
+- Imports plain `host:port` and optional `user:pass@host:port` lists as HTTP or SOCKS5 nodes.
 - ⚡ Concurrent and asynchronous node testing with live progress.
+- 🔀 Optional front-proxy profiles for chained routes, using any proxy URI protocol supported by the current sing-box build.
+- Subscription fetching keeps the standard direct-first strategy with bounded fallback through available pooled proxies; the selected front proxy is used only for the chained node route.
+- Chained imports report the front-proxy baseline and the complete route separately; terminal nodes are not tested by direct connection.
+- Site connectivity checks run against any selected tags for Google, GitHub, Outlook, and ProxySpace, then can rebuild ports from the strict intersection of selected sites.
 - 🧩 Keeps candidate, pooled, and failed nodes instead of silently dropping failures.
 - Automatically promotes passed imports to the node pool by default.
 - 🔌 One local port per node in the default `multi-port` mode.
@@ -112,8 +117,11 @@ Import formats:
 - Proxy URI list
 - Base64-encoded URI list
 - Clash/Mihomo YAML `proxies` section
+- Plain Host:Port list, one entry per line: `host:port` or `user:pass@host:port` (HTTP/SOCKS5 selected during import)
 
 Common protocols include VLESS, VMess, Trojan, Shadowsocks, ShadowsocksR, Hysteria, Hysteria2, TUIC, AnyTLS, HTTP/HTTPS, SOCKS4, and SOCKS5. Actual protocol availability depends on the sing-box version and build tags.
+
+For chained imports, configure a front-proxy profile in Settings and select it during import. Subscription content is still fetched by the standard direct-first strategy with bounded fallback through available pooled proxies. A successful result means both the front proxy and the complete `front proxy -> imported node -> probe target` route passed. Individual protocols still need a compatible transport path; for example, a UDP-dependent terminal cannot use a front proxy that only provides TCP tunneling.
 
 ## Runtime modes
 

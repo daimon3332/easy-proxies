@@ -13,11 +13,14 @@ import (
 	"net/netip"
 	"net/url"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"easy_proxies/internal/proxychain"
 
 	"github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/adapter"
@@ -39,6 +42,7 @@ const (
 )
 
 type OutboundBuilder func(tag, uri string, skipCertVerify bool) (option.Outbound, error)
+type ChainOutboundBuilder func(tag, terminalURI string, hopURIs []string, skipCertVerify bool) ([]option.Outbound, error)
 
 type probeSession interface {
 	Probe(ctx context.Context, target string) TestResult
@@ -76,6 +80,7 @@ type NodeTester struct {
 	concurrency          int
 	skipCertVerify       bool
 	buildOutbound        OutboundBuilder
+	buildChainOutbounds  ChainOutboundBuilder
 	retryDelay           time.Duration
 	runtimeProxyAddress  string
 	runtimeProxyUsername string
@@ -91,6 +96,9 @@ type NodeTester struct {
 	fallbacks            atomic.Uint64
 	closeOnce            sync.Once
 	closeErr             error
+	chainMu              sync.RWMutex
+	chainProfiles        map[string]proxychain.Profile
+	chainSessionID       atomic.Uint64
 }
 
 type TesterOption func(*NodeTester)
@@ -103,6 +111,7 @@ func NewNodeTester(buildFn OutboundBuilder, opts ...TesterOption) *NodeTester {
 		concurrency:   defaultProbeConcurrency,
 		buildOutbound: buildFn,
 		retryDelay:    defaultProbeRetryDelay,
+		chainProfiles: make(map[string]proxychain.Profile),
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -113,6 +122,51 @@ func NewNodeTester(buildFn OutboundBuilder, opts ...TesterOption) *NodeTester {
 	t.sessionFactory = t.newProbeSession
 	t.batchSem = make(chan struct{}, t.concurrency)
 	return t
+}
+
+func WithChainProfiles(profiles []proxychain.Profile) TesterOption {
+	return func(t *NodeTester) {
+		_ = t.SetChainProfiles(profiles)
+	}
+}
+
+func WithChainOutboundBuilder(buildFn ChainOutboundBuilder) TesterOption {
+	return func(t *NodeTester) {
+		t.buildChainOutbounds = buildFn
+	}
+}
+
+func (t *NodeTester) SetChainProfiles(profiles []proxychain.Profile) error {
+	normalized, err := proxychain.NormalizeProfiles(profiles)
+	if err != nil {
+		return err
+	}
+	byID := make(map[string]proxychain.Profile, len(normalized))
+	for _, profile := range normalized {
+		byID[profile.ID] = profile
+	}
+	t.chainMu.Lock()
+	t.chainProfiles = byID
+	t.chainMu.Unlock()
+	return nil
+}
+
+func (t *NodeTester) ChainProfile(id string) (proxychain.Profile, bool) {
+	t.chainMu.RLock()
+	defer t.chainMu.RUnlock()
+	profile, ok := t.chainProfiles[strings.TrimSpace(id)]
+	return profile, ok
+}
+
+func (t *NodeTester) ChainProfiles() []proxychain.Profile {
+	t.chainMu.RLock()
+	defer t.chainMu.RUnlock()
+	profiles := make([]proxychain.Profile, 0, len(t.chainProfiles))
+	for _, profile := range t.chainProfiles {
+		profiles = append(profiles, profile)
+	}
+	sort.Slice(profiles, func(i, j int) bool { return profiles[i].Name < profiles[j].Name })
+	return profiles
 }
 
 func WithProbeTarget(target string) TesterOption {
@@ -295,6 +349,7 @@ type directProbeSession struct {
 	client    *http.Client
 	transport *http.Transport
 	closeOnce sync.Once
+	cleanup   func()
 }
 
 func newDirectProbeSession(tester *NodeTester, outbound adapter.Outbound, timeout time.Duration) *directProbeSession {
@@ -323,7 +378,11 @@ func (s *directProbeSession) Probe(ctx context.Context, target string) TestResul
 func (s *directProbeSession) Close() {
 	s.closeOnce.Do(func() {
 		s.transport.CloseIdleConnections()
-		_ = common.Close(s.outbound)
+		if s.cleanup != nil {
+			s.cleanup()
+		} else {
+			_ = common.Close(s.outbound)
+		}
 	})
 }
 
@@ -339,6 +398,35 @@ func (t *NodeTester) newProbeSession(ctx context.Context, node ManagedNode, time
 		return nil, permanentProbeFailure(fmt.Errorf("outbound builder is not configured"))
 	}
 	tag := "test-" + safeTagPart(node.ID)
+	if node.ChainProfileID != "" {
+		if t.buildChainOutbounds == nil {
+			return nil, permanentProbeFailure(fmt.Errorf("chain outbound builder is not configured"))
+		}
+		profile, ok := t.ChainProfile(node.ChainProfileID)
+		if !ok || !profile.Enabled {
+			return nil, permanentProbeFailure(fmt.Errorf("chain profile %q is unavailable", node.ChainProfileID))
+		}
+		hopURIs := make([]string, 0, len(profile.Hops))
+		for _, hop := range profile.Hops {
+			hopURIs = append(hopURIs, hop.URI)
+		}
+		tag = fmt.Sprintf("%s-%d", tag, t.chainSessionID.Add(1))
+		configs, err := t.buildChainOutbounds(tag, node.URI, hopURIs, t.skipCertVerify)
+		if err != nil {
+			return nil, permanentProbeFailure(err)
+		}
+		runtime, runtimeErr := t.sharedRuntime()
+		if runtimeErr != nil {
+			return nil, runtimeErr
+		}
+		outbound, cleanup, err := runtime.BuildChain(configs)
+		if err != nil {
+			return nil, err
+		}
+		session := newDirectProbeSession(t, outbound, timeout)
+		session.cleanup = cleanup
+		return session, nil
+	}
 	config, err := t.buildOutbound(tag, node.URI, t.skipCertVerify)
 	if err != nil {
 		return nil, permanentProbeFailure(fmt.Errorf("build outbound: %w", err))
@@ -358,6 +446,94 @@ func (t *NodeTester) newProbeSession(ctx context.Context, node ManagedNode, time
 	}
 	t.fallbacks.Add(1)
 	return &httpProbeSession{tester: t, client: client, close: closeClient}, nil
+}
+
+func (t *NodeTester) TestChainProfile(ctx context.Context, profile proxychain.Profile) TestResult {
+	if t.buildChainOutbounds == nil {
+		return TestResult{Error: fmt.Errorf("chain outbound builder is not configured")}
+	}
+	normalized, err := proxychain.NormalizeProfile(profile)
+	if err != nil {
+		return TestResult{Error: err}
+	}
+	hopURIs := make([]string, 0, len(normalized.Hops))
+	for _, hop := range normalized.Hops {
+		hopURIs = append(hopURIs, hop.URI)
+	}
+	tag := fmt.Sprintf("chain-baseline-%s-%d", safeTagPart(normalized.ID), t.chainSessionID.Add(1))
+	configs, err := t.buildChainOutbounds(tag, hopURIs[len(hopURIs)-1], hopURIs[:len(hopURIs)-1], t.skipCertVerify)
+	if err != nil {
+		return TestResult{Error: err}
+	}
+	runtime, err := t.sharedRuntime()
+	if err != nil {
+		return TestResult{Error: err}
+	}
+	outbound, cleanup, err := runtime.BuildChain(configs)
+	if err != nil {
+		return TestResult{Error: err}
+	}
+	session := newDirectProbeSession(t, outbound, t.timeout)
+	session.cleanup = cleanup
+	defer session.Close()
+	return session.Probe(ctx, t.probeTarget)
+}
+
+func (t *NodeTester) FetchViaChain(ctx context.Context, profile proxychain.Profile, rawURL string, headers http.Header, timeout time.Duration) ([]byte, error) {
+	if t.buildChainOutbounds == nil {
+		return nil, fmt.Errorf("chain outbound builder is not configured")
+	}
+	if timeout <= 0 {
+		timeout = t.timeout
+	}
+	normalized, err := proxychain.NormalizeProfile(profile)
+	if err != nil {
+		return nil, err
+	}
+	hopURIs := make([]string, 0, len(normalized.Hops))
+	for _, hop := range normalized.Hops {
+		hopURIs = append(hopURIs, hop.URI)
+	}
+	tag := fmt.Sprintf("chain-fetch-%s-%d", safeTagPart(normalized.ID), t.chainSessionID.Add(1))
+	configs, err := t.buildChainOutbounds(tag, hopURIs[len(hopURIs)-1], hopURIs[:len(hopURIs)-1], t.skipCertVerify)
+	if err != nil {
+		return nil, err
+	}
+	runtime, err := t.sharedRuntime()
+	if err != nil {
+		return nil, err
+	}
+	outbound, cleanup, err := runtime.BuildChain(configs)
+	if err != nil {
+		return nil, err
+	}
+	session := newDirectProbeSession(t, outbound, timeout)
+	session.cleanup = cleanup
+	defer session.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if headers != nil {
+		req.Header = headers.Clone()
+	}
+	resp, err := session.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("subscription returned HTTP %d", resp.StatusCode)
+	}
+	const maxBody = 10 << 20
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxBody {
+		return nil, fmt.Errorf("subscription response exceeds 10MB")
+	}
+	return body, nil
 }
 
 func (t *NodeTester) CompatibilityFallbacks() uint64 {

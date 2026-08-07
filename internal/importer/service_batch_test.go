@@ -800,14 +800,16 @@ func TestRefreshLocalSourceRetestsEveryTaggedState(t *testing.T) {
 
 func TestApplyImportJobProgress(t *testing.T) {
 	row := SourceRefreshURL{Status: "testing"}
+	probe := &ChainProbeResult{ProfileID: "front", ProfileName: "Front", LatencyMs: 25}
 	applyImportJobProgress(&row, ImportJob{
-		Status:   ImportStatusRunning,
-		Total:    10,
-		Passed:   6,
-		Failed:   4,
-		Promoted: 2,
+		Status:     ImportStatusRunning,
+		Total:      10,
+		Passed:     6,
+		Failed:     4,
+		Promoted:   2,
+		ChainProbe: probe,
 	})
-	if row.Status != "promoting" || row.Total != 10 || row.Done != 10 || row.Passed != 6 || row.Failed != 4 || row.Promoted != 2 {
+	if row.Status != "promoting" || row.Total != 10 || row.Done != 10 || row.Passed != 6 || row.Failed != 4 || row.Promoted != 2 || row.ChainProbe == nil || row.ChainProbe.ProfileID != "front" {
 		t.Fatalf("row = %#v, want live promoting progress", row)
 	}
 }

@@ -43,14 +43,14 @@ func (s *stateDB) uiSummary() (UISummary, error) {
 		COALESCE(SUM(CASE WHEN in_pool = 0 AND state <> ? AND state = ? THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN in_pool = 0 AND state <> ? AND state = ? THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN in_pool = 0 AND state <> ? AND state = ? THEN 1 ELSE 0 END), 0),
-		COALESCE(SUM(CASE WHEN in_pool = 0 AND state <> ? AND state = ? THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN in_pool = 0 AND state <> ? AND state IN (?, ?) THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN in_pool = 0 AND state <> ? AND state = ? THEN 1 ELSE 0 END), 0)
 		FROM managed_nodes`,
 		StateInPool,
 		StateInPool, StateParsed,
 		StateInPool, StateTesting,
 		StateInPool, StatePassed,
-		StateInPool, StateFailed,
+		StateInPool, StateFailed, StateBlocked,
 		StateInPool, StateExcluded,
 	).Scan(&summary.Total, &summary.InPool, &summary.Parsed, &summary.Testing, &summary.Passed, &summary.Failed, &summary.Excluded)
 	if err != nil {
@@ -167,7 +167,7 @@ func uiScopeSQL(scope string) (string, []any) {
 	case "pool":
 		return "(in_pool = 1 OR state = ?)", []any{StateInPool}
 	case "failed":
-		return "state = ?", []any{StateFailed}
+		return "state IN (?, ?)", []any{StateFailed, StateBlocked}
 	default:
 		return "1 = 1", nil
 	}

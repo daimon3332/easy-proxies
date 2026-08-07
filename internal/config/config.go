@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"easy_proxies/internal/proxychain"
 	"easy_proxies/internal/subfetch"
 
 	"gopkg.in/yaml.v3"
@@ -32,6 +33,7 @@ type Config struct {
 	GeoIP               GeoIPConfig               `yaml:"geoip"`
 	Log                 LogConfig                 `yaml:"log"`
 	WebDAV              WebDAVConfig              `yaml:"webdav"`
+	ChainProfiles       []proxychain.Profile      `yaml:"chain_profiles,omitempty" json:"chain_profiles,omitempty"`
 	Nodes               []NodeConfig              `yaml:"nodes"`
 	NodesFile           string                    `yaml:"nodes_file"`    // 节点文件路径，每行一个 URI
 	Subscriptions       []string                  `yaml:"subscriptions"` // 订阅链接列表
@@ -159,18 +161,19 @@ const (
 
 // NodeConfig describes a single upstream proxy endpoint expressed as URI.
 type NodeConfig struct {
-	Name     string     `yaml:"name" json:"name"`
-	URI      string     `yaml:"uri" json:"uri"`
-	Port     uint16     `yaml:"port,omitempty" json:"port,omitempty"`
-	Username string     `yaml:"username,omitempty" json:"username,omitempty"`
-	Password string     `yaml:"password,omitempty" json:"password,omitempty"`
-	Source   NodeSource `yaml:"-" json:"source,omitempty"` // Runtime only, not persisted
+	Name           string     `yaml:"name" json:"name"`
+	URI            string     `yaml:"uri" json:"uri"`
+	ChainProfileID string     `yaml:"chain_profile_id,omitempty" json:"chain_profile_id,omitempty"`
+	Port           uint16     `yaml:"port,omitempty" json:"port,omitempty"`
+	Username       string     `yaml:"username,omitempty" json:"username,omitempty"`
+	Password       string     `yaml:"password,omitempty" json:"password,omitempty"`
+	Source         NodeSource `yaml:"-" json:"source,omitempty"` // Runtime only, not persisted
 }
 
 // NodeKey returns a unique identifier for the node based on its URI.
 // This is used to preserve port assignments across reloads.
 func (n *NodeConfig) NodeKey() string {
-	return n.URI
+	return n.URI + "\x00" + n.ChainProfileID
 }
 
 // Load reads YAML config from disk and applies defaults/validation.
@@ -245,6 +248,11 @@ func ExtractNodeName(uri string) string {
 }
 
 func (c *Config) normalize() error {
+	profiles, err := proxychain.NormalizeProfiles(c.ChainProfiles)
+	if err != nil {
+		return err
+	}
+	c.ChainProfiles = profiles
 	if c.Mode == "" {
 		c.Mode = "multi-port"
 	}
@@ -357,6 +365,16 @@ func (c *Config) normalize() error {
 		if c.Nodes[idx].URI == "" {
 			return fmt.Errorf("node %d is missing uri", idx)
 		}
+		if id := strings.TrimSpace(c.Nodes[idx].ChainProfileID); id != "" {
+			profile, ok := proxychain.Find(c.ChainProfiles, id)
+			if !ok {
+				return fmt.Errorf("node %d references unknown chain profile %q", idx, id)
+			}
+			if !profile.Enabled {
+				return fmt.Errorf("node %d references disabled chain profile %q", idx, id)
+			}
+			c.Nodes[idx].ChainProfileID = id
+		}
 
 		// Auto-extract name from URI if not provided
 		if c.Nodes[idx].Name == "" {
@@ -406,6 +424,9 @@ func (c *Config) normalize() error {
 
 	// Log config defaults
 	c.normalizeLogConfig()
+	if err := c.validateChainProfileLoops(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -425,6 +446,11 @@ func (c *Config) BuildPortMap() map[string]uint16 {
 // NormalizeWithPortMap applies defaults and validation, preserving port assignments
 // for nodes that exist in the provided port map.
 func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
+	profiles, err := proxychain.NormalizeProfiles(c.ChainProfiles)
+	if err != nil {
+		return err
+	}
+	c.ChainProfiles = profiles
 	if c.Mode == "" {
 		c.Mode = "multi-port"
 	}
@@ -506,6 +532,13 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 		if c.Nodes[idx].URI == "" {
 			return fmt.Errorf("node %d is missing uri", idx)
 		}
+		if id := strings.TrimSpace(c.Nodes[idx].ChainProfileID); id != "" {
+			profile, ok := proxychain.Find(c.ChainProfiles, id)
+			if !ok || !profile.Enabled {
+				return fmt.Errorf("node %d references unavailable chain profile %q", idx, id)
+			}
+			c.Nodes[idx].ChainProfileID = id
+		}
 
 		// Auto-extract name from URI if not provided
 		if c.Nodes[idx].Name == "" {
@@ -574,8 +607,64 @@ func (c *Config) NormalizeWithPortMap(portMap map[string]uint16) error {
 	}
 
 	c.normalizeLogConfig()
+	if err := c.validateChainProfileLoops(); err != nil {
+		return err
+	}
 
 	return nil
+}
+
+func (c *Config) validateChainProfileLoops() error {
+	localPorts := make(map[uint16]struct{}, len(c.Nodes)+2)
+	if c.Listener.Port != 0 {
+		localPorts[c.Listener.Port] = struct{}{}
+	}
+	for _, node := range c.Nodes {
+		if node.Port != 0 {
+			localPorts[node.Port] = struct{}{}
+		}
+	}
+	if _, rawPort, err := net.SplitHostPort(c.Management.Listen); err == nil {
+		if port, parseErr := strconv.ParseUint(rawPort, 10, 16); parseErr == nil {
+			localPorts[uint16(port)] = struct{}{}
+		}
+	}
+	for _, profile := range c.ChainProfiles {
+		for index, hop := range profile.Hops {
+			parsed, err := url.Parse(hop.URI)
+			if err != nil || !isLocalProxyHost(parsed.Hostname()) {
+				continue
+			}
+			if _, blocked := localPorts[proxyDefaultPort(parsed)]; blocked {
+				return fmt.Errorf("chain profile %q hop %d points to an easy_proxies local port", profile.Name, index+1)
+			}
+		}
+	}
+	return nil
+}
+
+func isLocalProxyHost(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func proxyDefaultPort(parsed *url.URL) uint16 {
+	if rawPort := parsed.Port(); rawPort != "" {
+		port, _ := strconv.ParseUint(rawPort, 10, 16)
+		return uint16(port)
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http":
+		return 80
+	case "https":
+		return 443
+	default:
+		return 0
+	}
 }
 
 // normalizeLogConfig applies defaults to the log config.
@@ -1217,6 +1306,7 @@ func (c *Config) BackupYAML() ([]byte, error) {
 	backup.filePath = ""
 	backup.NodesFile = ""
 	backup.Subscriptions = append([]string(nil), c.Subscriptions...)
+	backup.ChainProfiles = append([]proxychain.Profile(nil), c.ChainProfiles...)
 	backup.Nodes = append([]NodeConfig(nil), c.Nodes...)
 	return yaml.Marshal(&backup)
 }
@@ -1300,11 +1390,12 @@ func (c *Config) SaveNodes() error {
 	for _, node := range c.Nodes {
 		// Create a clean copy without runtime fields for saving
 		cleanNode := NodeConfig{
-			Name:     node.Name,
-			URI:      node.URI,
-			Port:     node.Port,
-			Username: node.Username,
-			Password: node.Password,
+			Name:           node.Name,
+			URI:            node.URI,
+			ChainProfileID: node.ChainProfileID,
+			Port:           node.Port,
+			Username:       node.Username,
+			Password:       node.Password,
 		}
 		switch node.Source {
 		case NodeSourceInline:
@@ -1393,6 +1484,7 @@ func (c *Config) SaveSettings() error {
 	saveCfg.Pool = c.Pool
 	saveCfg.Management = c.Management
 	saveCfg.WebDAV = c.WebDAV
+	saveCfg.ChainProfiles = append([]proxychain.Profile(nil), c.ChainProfiles...)
 
 	newData, err := yaml.Marshal(&saveCfg)
 	if err != nil {

@@ -4,11 +4,12 @@ import "strings"
 
 func sourceRefFromNode(node ManagedNode) NodeSourceRef {
 	return NodeSourceRef{
-		TagPrefix: strings.TrimSpace(node.TagPrefix),
-		ImportID:  strings.TrimSpace(node.ImportID),
-		Mode:      strings.TrimSpace(node.ImportMode),
-		Source:    strings.TrimSpace(node.ImportSource),
-		Format:    strings.TrimSpace(node.ImportFormat),
+		TagPrefix:      strings.TrimSpace(node.TagPrefix),
+		ImportID:       strings.TrimSpace(node.ImportID),
+		Mode:           strings.TrimSpace(node.ImportMode),
+		Source:         strings.TrimSpace(node.ImportSource),
+		Format:         strings.TrimSpace(node.ImportFormat),
+		ChainProfileID: strings.TrimSpace(node.ChainProfileID),
 	}
 }
 
@@ -64,8 +65,13 @@ func normalizeSourceRef(ref NodeSourceRef) NodeSourceRef {
 	ref.Mode = strings.TrimSpace(ref.Mode)
 	ref.Source = strings.TrimSpace(ref.Source)
 	ref.Format = strings.TrimSpace(ref.Format)
+	ref.ChainProfileID = strings.TrimSpace(ref.ChainProfileID)
+	ref.FetchPolicy = strings.TrimSpace(ref.FetchPolicy)
 	if ref.Mode == "" && isURLSourceRef(ref) {
 		ref.Mode = "url"
+	}
+	if isURLSourceRef(ref) {
+		ref.FetchPolicy = FetchAuto
 	}
 	return ref
 }
@@ -78,9 +84,9 @@ func sourceRefIdentity(ref NodeSourceRef) string {
 		return ""
 	}
 	if isURLSourceRef(ref) {
-		return tag + "\x00url\x00" + source
+		return tag + "\x00url\x00" + source + "\x00" + ref.ChainProfileID
 	}
-	return tag + "\x00" + mode + "\x00" + source + "\x00" + strings.TrimSpace(ref.ImportID)
+	return tag + "\x00" + mode + "\x00" + source + "\x00" + strings.TrimSpace(ref.ImportID) + "\x00" + ref.ChainProfileID
 }
 
 func isURLSourceRef(ref NodeSourceRef) bool {
@@ -101,6 +107,7 @@ func applyPrimarySource(node *ManagedNode, ref NodeSourceRef) {
 	node.ImportMode = ref.Mode
 	node.ImportSource = ref.Source
 	node.ImportFormat = ref.Format
+	node.ChainProfileID = ref.ChainProfileID
 }
 
 func nodeHasSource(node ManagedNode, match func(NodeSourceRef) bool) bool {

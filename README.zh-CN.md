@@ -41,7 +41,12 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 
 - 🔗 面向普通用户的订阅优先 WebUI 流程。
 - 支持 HTTP/HTTPS 订阅、URI 列表、Base64 内容和 Clash/Mihomo YAML。
+- 支持每行一个 `host:port` 或可选 `user:pass@host:port` 的 HTTP/SOCKS5 节点列表。
 - ⚡ 并发、异步节点测速和实时进度。
+- 🔀 支持使用当前 sing-box 构建可识别的任意代理 URI 配置前置代理，并形成链式路由。
+- 订阅拉取固定沿用直连优先、可用池内代理有限兜底的策略；所选前置代理只用于组成节点链路。
+- 链式导入分别显示前置基线与完整链路结果，不对后置节点执行无前置的直连测试。
+- 站点检测支持任意 TAG，分别检测 Google、GitHub、Outlook 和 ProxySpace，并可按所选站点全部成功的严格交集重新生成端口。
 - 🧩 分别保留候选节点、节点池节点和失败节点。
 - 导入测速成功后默认自动加入节点池。
 - 🔌 默认 `multi-port` 模式下每个节点独立端口。
@@ -106,9 +111,11 @@ Easy Proxies 可以把一个或多个代理订阅 URL 转换为本地 HTTP/SOCKS
 
 ## 导入格式与协议
 
-支持 HTTP/HTTPS 订阅 URL、代理 URI 列表、Base64 编码 URI 列表，以及 Clash/Mihomo YAML 的 `proxies` 部分。
+支持 HTTP/HTTPS 订阅 URL、代理 URI 列表、Base64 编码 URI 列表、Clash/Mihomo YAML 的 `proxies` 部分，以及每行一个 `host:port` 或 `user:pass@host:port` 的纯文本列表。导入 Host:Port 列表时需要选择 HTTP 或 SOCKS5 协议。
 
 常见协议包括 VLESS、VMess、Trojan、Shadowsocks、ShadowsocksR、Hysteria、Hysteria2、TUIC、AnyTLS、HTTP/HTTPS、SOCKS4 和 SOCKS5。实际协议能力取决于 sing-box 版本与构建标签。
+
+链式导入需要先在设置中配置前置代理，再在导入时选择该前置。订阅内容仍按直连优先、可用池内代理有限兜底的策略拉取。测试成功表示前置代理和 `前置代理 -> 导入节点 -> 探测目标` 完整链路都可用。协议组合仍需满足传输兼容性，例如依赖 UDP 的后置节点不能使用仅提供 TCP 隧道的前置代理。
 
 ## 运行模式
 

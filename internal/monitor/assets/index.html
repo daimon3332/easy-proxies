@@ -42,11 +42,11 @@ button{cursor:pointer}
 .side{padding:22px 16px;border-right:1px solid var(--line);background:#fff;position:sticky;top:0;height:100vh}
 .brand{display:flex;align-items:center;gap:12px;margin:0 8px 28px}
 .logo{width:40px;height:40px;border-radius:8px;background:url('/logo.png') center/cover no-repeat;box-shadow:0 8px 20px rgba(20,30,40,.12)}
-.brand strong{display:block;font-size:19px;letter-spacing:-.03em}
+.brand strong{display:block;font-size:19px}
 .brand span{display:block;color:var(--muted);font-size:12px}
 .nav{display:grid;gap:8px}
 .nav button{
-  border:0;background:transparent;color:var(--muted);border-radius:14px;padding:12px 13px;text-align:left;
+  border:0;background:transparent;color:var(--muted);border-radius:8px;padding:12px 13px;text-align:left;
   display:flex;align-items:center;justify-content:space-between;transition:.18s ease;
 }
 .nav button:hover{background:#e9f7fe;color:var(--blue-deep)}
@@ -54,7 +54,7 @@ button{cursor:pointer}
 .badge{font-size:12px;color:var(--blue-deep);background:#dff4ff;border-radius:999px;padding:1px 8px}
 .main{padding:28px;display:grid;gap:20px;align-content:start}
 .topbar{display:flex;gap:14px;align-items:center;justify-content:space-between}
-.title h1{margin:0;font-size:28px;letter-spacing:-.04em}
+.title h1{margin:0;font-size:28px}
 .title p{margin:4px 0 0;color:var(--muted)}
 .topbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px}
 .github-link{width:44px;height:44px;display:inline-grid;place-items:center;flex:none;color:var(--text);background:#fff;border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 4px 12px rgba(20,30,40,.05);transition:.16s ease}
@@ -77,8 +77,8 @@ button{cursor:pointer}
 .action-line strong{font-size:16px}
 .pool-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding:14px;border:1px solid var(--line);border-radius:8px;background:#f7f9fb}
 .list-tools{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px}
-.node-table{border:1px solid var(--line);border-radius:16px;overflow:auto;background:#fff}
-.table-head,.table-row{display:grid;grid-template-columns:34px 52px minmax(260px,1.7fr) 96px 112px 118px 96px minmax(120px,.8fr) 240px;gap:12px;align-items:center;min-width:1120px}
+.node-table{border:1px solid var(--line);border-radius:8px;overflow:auto;background:#fff}
+.table-head,.table-row{display:grid;grid-template-columns:34px 52px minmax(210px,1.7fr) 88px 96px 100px 82px minmax(96px,.75fr) 174px;gap:10px;align-items:center;min-width:1000px}
 .table-head{padding:14px 16px;border-bottom:1px solid var(--line);font-weight:800;color:var(--text)}
 .table-row{padding:13px 16px;border-bottom:1px solid var(--line)}
 .table-row:last-child{border-bottom:0}
@@ -109,7 +109,7 @@ button{cursor:pointer}
 .node.selectable{grid-template-columns:auto 1fr;align-items:start}
 .node-content{display:grid;gap:9px}
 .btn{
-  min-height:42px;border:1px solid var(--line-strong);background:#fff;color:var(--text);border-radius:10px;padding:10px 16px;
+  min-height:42px;border:1px solid var(--line-strong);background:#fff;color:var(--text);border-radius:8px;padding:10px 16px;
   display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:750;line-height:1.2;
   transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease;color:inherit;
   box-shadow:0 4px 12px rgba(20,30,40,.05)
@@ -123,11 +123,11 @@ button{cursor:pointer}
 .btn.ghost{background:transparent;border-color:transparent;box-shadow:none;color:var(--muted)}
 .btn.danger{border-color:#f0b8b8;color:#b42323;background:#fff5f5}
 .btn.block{width:100%;display:flex}
-.btn.small{min-height:34px;padding:7px 12px;font-size:12px;border-radius:8px;font-weight:750;box-shadow:none}
+.btn.small{min-height:38px;padding:8px 12px;font-size:13px;border-radius:8px;font-weight:750;box-shadow:none}
 .field{display:grid;gap:8px}
 .field label{font-size:13px;font-weight:800;color:#40515d}
 input,textarea,select{
-  width:100%;min-height:44px;border:1px solid var(--line-strong);border-radius:10px;background:#fff;color:var(--text);
+  width:100%;min-height:44px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--text);
   padding:11px 13px;outline:none;transition:.16s ease;
 }
 textarea{resize:vertical;min-height:240px;font-family:var(--mono);font-size:13px;line-height:1.55}
@@ -145,9 +145,10 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .toggle-row input{margin-top:1px}
 .toggle-row strong{display:block}
 .toggle-row span{display:block;margin-top:2px;color:var(--muted);font-size:12px}
-.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:stretch}
-.settings-wide{grid-column:1/-1}
-.settings-section{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.settings-grid{display:grid;gap:20px}
+.settings-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.settings-column{display:grid;gap:20px;align-content:start;min-width:0}
+.settings-section{background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
 .settings-section-head{padding:18px 20px;border-bottom:1px solid var(--line);background:#fbfdff;display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
 .settings-section-head h2{margin:0;font-size:18px}
 .settings-section-head p{margin:4px 0 0;color:var(--muted)}
@@ -157,6 +158,23 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .settings-highlight{border:1px solid #c6d7ff;background:#f3f7ff;border-radius:10px;padding:14px;display:grid;gap:6px}
 .settings-highlight strong{font-size:15px}
 .settings-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;padding-top:4px}
+.settings-compact{align-self:start}
+.chain-import-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
+.chain-import-actions{display:flex;gap:8px;align-items:center}
+.chain-list{display:grid;gap:10px}
+.chain-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:14px;background:#fbfdff}
+.chain-main{min-width:0;display:grid;gap:7px}
+.chain-row-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.chain-dialog{width:min(560px,100%);padding:0;overflow:hidden}
+.chain-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 22px 16px;border-bottom:1px solid var(--line)}
+.chain-dialog-head h2{margin:0;font-size:20px}
+.chain-dialog-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.chain-dialog-body{padding:20px 22px;display:grid;gap:16px}
+.chain-dialog-body textarea{min-height:128px;max-height:220px}
+.chain-dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid var(--line);background:#fbfdff}
+.inline-status{min-height:20px;font-size:13px;color:var(--muted)}
+.inline-status.good{color:#087a55;font-weight:700}
+.inline-status.bad{color:#bd352f;font-weight:700}
 .backup-file{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fbfdff}
 .backup-file-main{min-width:0;display:grid;gap:3px}
 .backup-file-main strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -185,7 +203,7 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .node-name{font-weight:800;word-break:break-word}
 .node-uri{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all}
 .meta{display:flex;gap:7px;flex-wrap:wrap}
-.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;background:#dff4ff;color:var(--blue-deep)}
+.pill{display:inline-flex;align-items:center;gap:5px;min-height:28px;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:800;background:#dff4ff;color:var(--blue-deep)}
 .pill.green{background:#dcf7ec;color:#087a55}
 .pill.red{background:#ffe9e7;color:#bd352f}
 .pill.amber{background:#fff4d8;color:#9c6500}
@@ -197,24 +215,31 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .group-item[draggable=true]{cursor:grab}
 .group-item.dragging{opacity:.45}
 .group-main{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.drag-handle{color:var(--muted);font-weight:900;letter-spacing:.08em}
+.drag-handle{color:var(--muted);font-weight:900;letter-spacing:0}
 .muted{color:var(--muted)}
-.empty{text-align:center;color:var(--muted);padding:42px 12px;border:1px dashed var(--line-strong);border-radius:16px;background:rgba(255,255,255,.5)}
+.empty{text-align:center;color:var(--muted);padding:42px 12px;border:1px dashed var(--line-strong);border-radius:8px;background:rgba(255,255,255,.5)}
 .status{min-height:22px;color:var(--muted)}
 .toast-wrap{position:fixed;right:22px;top:22px;z-index:30;display:grid;gap:10px}
-.toast{background:#fff;border:2px solid var(--green);box-shadow:var(--shadow);border-radius:14px;padding:12px 14px;max-width:360px}
+.toast{background:#fff;border:2px solid var(--green);box-shadow:var(--shadow);border-radius:8px;padding:12px 14px;max-width:360px}
 .toast.err{border-color:var(--red)}
 .modal{position:fixed;inset:0;background:rgba(20,51,68,.22);display:none;align-items:center;justify-content:center;z-index:20;padding:20px}
 .modal.show{display:flex}
 .modal.refresh-modal{background:transparent;pointer-events:none;align-items:flex-end;justify-content:flex-end;padding:24px}
 .modal.refresh-modal .dialog{pointer-events:auto;max-height:calc(100vh - 48px);overflow:auto}
-.dialog{width:min(430px,100%);background:#fff;border-radius:20px;border:1px solid var(--line);box-shadow:var(--shadow);padding:22px}
+.dialog{width:min(430px,100%);background:#fff;border-radius:8px;border:1px solid var(--line);box-shadow:var(--shadow);padding:22px}
 .dialog.wide{width:min(920px,100%)}
+#resultDialog.standard-dialog{display:flex;flex-direction:column;max-height:min(84vh,820px);padding:0;overflow:hidden}
+.dialog-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid var(--line);background:#fbfdff}
+.dialog-header h2{margin:0;font-size:20px}
+#resultDialog .dialog-header h2{margin:0}
+.dialog-close{width:38px;height:38px;min-height:38px;padding:0;font-size:20px;line-height:1}
+.dialog-body{padding:20px;overflow:auto;overscroll-behavior:contain}
+.dialog-footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--line);background:#fbfdff;flex-wrap:wrap}
 .dialog-back{position:fixed;inset:0;background:rgba(20,51,68,.22);display:flex;align-items:center;justify-content:center;z-index:30;padding:20px}
 .progress-bar{height:10px;background:#eef3f5;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
 .progress-fill{height:100%;background:var(--green)}
 .dialog h2{margin:0 0 14px}
-pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:12px;color:#315467;background:#f5fbff;border:1px solid var(--line);border-radius:14px;padding:14px;max-height:460px;overflow:auto}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:13px;color:#315467;background:#f5fbff;border:1px solid var(--line);border-radius:8px;padding:14px;max-height:460px;overflow:auto}
 pre.log-view{height:100%;max-height:none}
 .log-card{height:calc(100vh - 112px);display:flex;flex-direction:column}
 .log-card .card-body{flex:1;min-height:0}
@@ -236,6 +261,64 @@ pre.log-view{height:100%;max-height:none}
 .refresh-progress span{display:block;height:100%;background:var(--green)}
 .refresh-progress span.indeterminate{width:100%;opacity:.55}
 .refresh-detail-list{display:grid;gap:12px;max-height:min(56vh,560px);overflow:auto;padding-right:4px}
+.connectivity-layout{display:grid;gap:18px}
+.connectivity-scope-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.connectivity-scope-summary{display:flex;align-items:center;gap:10px;color:var(--muted)}
+.tag-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-height:250px;overflow:auto;padding:2px}
+.tag-option{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:11px 12px;background:#fbfdff;cursor:pointer}
+.tag-option:hover{border-color:#bcd0ff;background:#f3f7ff}
+.tag-option span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:750}
+.connectivity-scope-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;border-top:1px solid var(--line);padding-top:16px}
+.site-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.site-indicator,.site-selector{border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px;display:grid;gap:3px;text-align:left}
+.site-indicator{display:flex;align-items:center;gap:7px;padding:7px 10px;background:#f7f9fb;min-width:0}
+.site-indicator strong,.site-selector strong{font-size:14px}
+.site-indicator span,.site-selector span{font-size:12px;color:var(--muted)}
+.site-indicator span{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.site-selector{cursor:pointer;transition:.16s ease}
+.site-selector.selected{border-color:#70c7aa;background:var(--green-soft);box-shadow:inset 0 0 0 1px #70c7aa}
+.site-selector.selected strong{color:#087a55}
+.connectivity-progress{display:grid;gap:12px;border:1px solid #bcd0ff;background:#f7faff;border-radius:8px;padding:16px}
+.connectivity-idle{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--muted)}
+.connectivity-progress-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.connectivity-matrix{border:1px solid var(--line);border-radius:8px;overflow:auto;background:#fff}
+.connectivity-matrix-row{display:grid;grid-template-columns:minmax(150px,1fr) repeat(4,minmax(150px,1fr));min-width:780px;border-bottom:1px solid var(--line)}
+.connectivity-matrix-row:last-child{border-bottom:0}
+.connectivity-matrix-row>div{padding:13px;border-right:1px solid var(--line);min-width:0}
+.connectivity-matrix-row>div:last-child{border-right:0}
+.connectivity-matrix-head{background:#f7f9fb;font-weight:800}
+.connectivity-cell{display:grid;gap:4px}
+.connectivity-cell strong{font-size:16px}
+.connectivity-cell span{font-size:12px;color:var(--muted)}
+.connectivity-cell.good strong{color:#087a55}
+.connectivity-cell.partial strong{color:#9c6500}
+.connectivity-cell.bad strong{color:#bd352f}
+.connectivity-table{border:1px solid var(--line);border-radius:8px;overflow:auto;background:#fff}
+.connectivity-detail-row{display:grid;grid-template-columns:minmax(190px,1.4fr) minmax(120px,.7fr) 110px 100px 110px minmax(220px,1.4fr);gap:12px;align-items:center;min-width:900px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.connectivity-detail-row:last-child{border-bottom:0}
+.connectivity-detail-head{font-weight:800;background:#f7f9fb}
+.connectivity-detail-collapsed{padding:16px 20px;color:var(--muted)}
+.port-preview-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.connectivity-history-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.connectivity-change-list{display:grid;gap:8px;max-height:320px;overflow:auto;margin-top:12px}
+.connectivity-change-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(130px,.7fr) auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfdff}
+.connectivity-change-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row-actions{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.row-menu{position:relative}
+.row-menu summary{list-style:none;min-width:64px}
+.row-menu summary::-webkit-details-marker{display:none}
+.row-menu-panel{position:absolute;right:0;top:calc(100% + 6px);z-index:8;display:grid;gap:6px;width:152px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:var(--shadow)}
+.row-menu-panel .btn{width:100%;justify-content:flex-start}
+.section-summary{display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer;padding:18px 20px;background:#fbfdff;font-weight:800}
+.section-summary::marker{color:var(--muted)}
+.section-summary span{color:var(--muted);font-size:13px;font-weight:500}
+.result-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.result-metrics .metric strong.good{color:#087a55}
+.result-metrics .metric strong.bad{color:#bd352f}
+.bulk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.bulk-group{display:grid;gap:10px;padding:16px;border:1px solid var(--line);border-radius:8px;background:#fbfdff}
+.bulk-option{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;min-height:42px}
+.port-list-limited{max-height:520px;overflow:auto;padding-right:4px}
 @media(max-width:980px){
   .app{grid-template-columns:1fr}
   .side{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}
@@ -243,8 +326,7 @@ pre.log-view{height:100%;max-height:none}
   .grid{grid-template-columns:1fr}
   .filters{grid-template-columns:1fr}
   .filters.compact select,.filters.compact input{width:100%}
-  .settings-grid{grid-template-columns:1fr}
-  .settings-wide{grid-column:auto}
+  .settings-columns{grid-template-columns:1fr}
   .settings-form{grid-template-columns:1fr}
   .backup-settings-grid{grid-template-columns:1fr}
   .backup-pane+.backup-pane{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:22px}
@@ -259,6 +341,11 @@ pre.log-view{height:100%;max-height:none}
   .topbar{align-items:flex-start;flex-direction:column}
   .topbar-actions{width:100%;justify-content:space-between}
   .toolbar{justify-content:flex-start}
+  .connectivity-controls{grid-template-columns:1fr}
+  .site-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tag-picker{grid-template-columns:1fr}
+  .port-preview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .result-metrics,.bulk-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -296,6 +383,7 @@ pre.log-view{height:100%;max-height:none}
       <button class="format-choice" onclick="chooseImportKind('uri')"><strong>URI 格式</strong><span>每行一个 ss://、trojan://、vmess://、vless://、http://、https://、socks5://、socks4:// 等节点。</span></button>
       <button class="format-choice" onclick="chooseImportKind('base64')"><strong>Base64 格式</strong><span>粘贴 Base64 编码后的节点列表。</span></button>
       <button class="format-choice" onclick="chooseImportKind('clash')"><strong>Clash YAML 格式</strong><span>粘贴包含 proxies: 的 Clash 配置；只提取节点。</span></button>
+      <button class="format-choice" onclick="chooseImportKind('host_port')"><strong>Host:Port 代理列表</strong><span>每行一个 host:port 或 user:pass@host:port，导入时选择 HTTP 或 SOCKS5。</span></button>
     </div>
     <div class="row" style="margin-top:14px"><button class="btn" onclick="closeImportTypeModal()">关闭</button></div>
   </div>
@@ -303,18 +391,45 @@ pre.log-view{height:100%;max-height:none}
 <div class="modal" id="resultModal">
   <div class="dialog" id="resultDialog"></div>
 </div>
+<div class="modal" id="chainProfileModal" role="presentation" onclick="if(event.target===this)closeChainProfileEditor()">
+  <div class="dialog chain-dialog" role="dialog" aria-modal="true" aria-labelledby="chainProfileTitle">
+    <div class="chain-dialog-head">
+      <div><h2 id="chainProfileTitle">添加前置代理</h2><p id="chainProfileSubtitle">保存后可用于导入节点的链式连接。</p></div>
+      <button class="btn small ghost" type="button" onclick="closeChainProfileEditor()">关闭</button>
+    </div>
+    <div class="chain-dialog-body">
+      <input id="chainEditID" type="hidden">
+      <div class="field"><label for="chainEditName">名称</label><input id="chainEditName" placeholder="例如：海外入口" autocomplete="off"></div>
+      <div class="field"><label for="chainEditURI">节点 URI</label><textarea id="chainEditURI" placeholder="vless://...&#10;hysteria2://...&#10;socks5://..."></textarea><div class="field-help">填写一个可独立连接的代理节点 URI。</div></div>
+      <label class="toggle-row"><input id="chainEditEnabled" type="checkbox" checked><div><strong>启用</strong><span>启用后才会出现在导入页的前置代理列表中。</span></div></label>
+      <div id="chainEditUsage" class="settings-highlight" hidden></div>
+      <div id="chainEditStatus" class="inline-status" aria-live="polite"></div>
+    </div>
+    <div class="chain-dialog-actions">
+      <button class="btn ghost" type="button" onclick="closeChainProfileEditor()">取消</button>
+      <button class="btn secondary" id="chainTestButton" type="button" onclick="testChainProfileDraft()">测试连接</button>
+      <button class="btn primary" id="chainSaveButton" type="button" onclick="saveChainProfileDraft()">保存</button>
+    </div>
+  </div>
+</div>
 <div class="toast-wrap" id="toasts"></div>
 
 <script>
 const ACTIVE_IMPORT_JOB_KEY='easy_proxies_active_import_job';
 const ACTIVE_BATCH_JOB_KEY='easy_proxies_active_batch_job';
 const ACTIVE_REFRESH_JOB_KEY='easy_proxies_active_refresh_job';
+const CONNECTIVITY_JOB_KEY='easy_proxies_connectivity_job';
 const S={
   token:localStorage.getItem('easy_proxies_token')||'',
   page:'import',
   importKind:'sub_url',
   importText:'',
   tagPrefix:'',
+  chainProfileID:'',
+  proxyProtocol:'http',
+  chainProfiles:[],
+  chainUsage:{},
+  chainEditorOrigin:'settings',
   importAutoPromote:localStorage.getItem('easy_proxies_import_auto_promote')!=='0',
   importSummary:null,
   nodes:[],
@@ -344,6 +459,20 @@ const S={
   activeImportJob:localStorage.getItem(ACTIVE_IMPORT_JOB_KEY)||'',
   activeBatchJob:localStorage.getItem(ACTIVE_BATCH_JOB_KEY)||'',
   activeRefreshJob:localStorage.getItem(ACTIVE_REFRESH_JOB_KEY)||'',
+  connectivityJobID:localStorage.getItem(CONNECTIVITY_JOB_KEY)||'',
+  connectivityScopes:null,
+  connectivityJob:null,
+  connectivityPollingJob:'',
+  connectivitySelectedTags:new Set(),
+  connectivityTagsInitialized:false,
+  connectivityTestTargets:new Set(['outlook']),
+  connectivitySelectedTargets:new Set(['outlook']),
+  connectivityHistory:null,
+  connectivityResultPage:null,
+  connectivityResultFilters:{tag:'',target:'',status:'',page:1},
+  connectivityDetailsOpen:false,
+  connectivityPreviewRequest:null,
+  connectivityPreview:null,
   importPollingJob:'',
   batchPollingJob:'',
   refreshPollingJob:'',
@@ -376,6 +505,7 @@ const pages=[
   ['nodes','候选节点','测速成功但尚未生成端口的节点'],
   ['failed','失败节点','保留失败节点，避免误删可用节点'],
   ['bulk','批量工具','手动批量测速 / 测试国家 / 入池'],
+  ['connectivity','站点检测','按 Tag 检测 Google、GitHub、Outlook 和 ProxySpace'],
   ['ports','端口状态','扫描本机端口占用'],
   ['logs','日志','查看最近运行日志'],
   ['settings','设置','运行参数和订阅刷新']
@@ -390,8 +520,9 @@ function toast(msg,type='ok'){const el=document.createElement('div');el.classNam
 function setStatus(id,msg){const el=qs(id);if(el)el.textContent=msg||''}
 function setActionStatus(msg,type='ok'){S.actionStatus=msg||'';S.actionStatusType=type}
 function statePill(s){
-  const cls=s==='in_pool'||s==='passed'?'green':s==='failed'||s==='excluded'?'red':s==='testing'?'amber':'';
-  return `<span class="pill ${cls}">${esc(s||'unknown')}</span>`;
+  const cls=s==='in_pool'||s==='passed'?'green':s==='failed'||s==='blocked_by_chain'||s==='excluded'?'red':s==='testing'?'amber':'';
+  const text={in_pool:'池内',passed:'候选',failed:'失败',blocked_by_chain:'前置不可用',excluded:'已排除',testing:'检测中',parsed:'待检测',finished:'已完成',running:'进行中',canceled:'已终止'}[s]||'未知';
+  return `<span class="pill ${cls}">${esc(text)}</span>`;
 }
 function valuePill(text,cls='muted'){return `<span class="value-pill ${cls}">${esc(text||'-')}</span>`}
 function latencyPill(n){
@@ -419,7 +550,7 @@ async function api(path,opt={}){
   if(!res.ok){const err=new Error(message||res.statusText);err.status=res.status;throw err}
   return data;
 }
-function jobEventValue(event){return event?.kind==='test'?event.test:event?.kind==='refresh'?event.refresh:null}
+function jobEventValue(event){return event?.kind==='test'?event.test:event?.kind==='refresh'?event.refresh:event?.kind==='connectivity'?event.connectivity:null}
 function storeJobEvent(event){
   const job=jobEventValue(event);if(!job||!event.id)return;
   const key=`${event.kind}:${event.id}`;
@@ -496,15 +627,22 @@ function renderNav(){
     return `<button class="${S.page===id?'active':''}" onclick="go('${id}')"><span>${label}</span>${count!==''?`<span class="badge">${count}</span>`:''}</button>`;
   }).join('');
 }
-async function go(page){
-  if(S.page!==page)resetFilters();
-  S.page=page;
+function pageFromHash(){
+  const page=decodeURIComponent(location.hash.replace(/^#/,''));
+  return pages.some(item=>item[0]===page)?page:'import';
+}
+async function go(page,fromHash=false){
+  if(!pages.some(item=>item[0]===page))page='import';
+  if(!fromHash&&location.hash!==`#${page}`){location.hash=page;return}
+	if(S.page!==page)resetFilters();
+	S.page=page;
   const p=pages.find(x=>x[0]===page);
   qs('#pageTitle').textContent=p[1];
   qs('#pageDesc').textContent=p[2];
-  renderNav();
-  await refresh();
+	renderNav();
+	await refresh();
 }
+window.addEventListener('hashchange',()=>go(pageFromHash(),true));
 function resetFilters(){S.filters={scope:'all',country:'',tag:'',source:'',latency:'',q:'',sort:'latency'};S.candSortDir='asc';S.managedPage=1}
 function beginPageRequest(){
   S.pageController?.abort();
@@ -535,7 +673,7 @@ async function refresh(){
       if(!isCurrentPageRequest(request))return;
       renderLogs();
     }else if(S.page==='settings'){
-      await Promise.all([loadSettings(request),loadSubscriptionConfig(request),loadImportSources(request),loadBackupData(request)]);
+      await Promise.all([loadSettings(request),loadSubscriptionConfig(request),loadImportSources(request),loadBackupData(request),loadChainProfiles(request)]);
       if(!isCurrentPageRequest(request))return;
       renderSettings();
 	  if(S.webdav.address)loadWebDAVFiles(request);
@@ -543,8 +681,12 @@ async function refresh(){
 	  await loadImportSummary(request);
 	  if(!isCurrentPageRequest(request))return;
 	  renderBulk();
+	}else if(S.page==='connectivity'){
+	  await loadConnectivityScopes(request);
+	  if(!isCurrentPageRequest(request))return;
+	  renderConnectivity();
 	}else{
-      await Promise.all([loadSubscriptionConfig(request), loadImportSummary(request), loadPortPreview(request)]);
+      await Promise.all([loadSubscriptionConfig(request), loadImportSummary(request), loadPortPreview(request),loadChainProfiles(request)]);
       if(!isCurrentPageRequest(request))return;
       renderImport();
     }
@@ -581,7 +723,7 @@ async function loadImportSummary(request){
   return S.summary;
 }
 async function loadPortPreview(request){
-  const ports=await api('/api/ui/ports?limit=80',{signal:request?.signal});
+  const ports=await api('/api/ui/ports?limit=12',{signal:request?.signal});
   if(!isCurrentPageRequest(request))return null;
   S.portPreview=Array.isArray(ports)?ports:[];
   return S.portPreview;
@@ -596,7 +738,8 @@ async function loadPorts(request){
   if(!isCurrentPageRequest(request))return null;
   S.ports=ports;
 }
-function openDialog(title, html){
+let dialogReturnFocus=null;
+function openDialog(title,html,options={}){
   let modal=qs('#resultModal');
   if(!modal){
     modal=document.createElement('div');
@@ -606,14 +749,40 @@ function openDialog(title, html){
     document.body.appendChild(modal);
   }
   const dialog=qs('#resultDialog')||modal.firstElementChild;
+  dialogReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
   S.refreshDialogOpen=false;
   modal.classList.remove('refresh-modal');
-  dialog.className='dialog';
+  dialog.className=`dialog standard-dialog${options.wide?' wide':''}`;
   delete dialog.dataset.refreshShell;
-  dialog.innerHTML=`<h2>${esc(title)}</h2><div class="stack">${html}</div><div class="row" style="justify-content:flex-end;margin-top:16px"><button class="btn primary" onclick="closeDialog()">确定</button></div>`;
+  const actions=options.actions===undefined?'<button class="btn primary" type="button" onclick="closeDialog()">确定</button>':options.actions;
+  dialog.innerHTML=`<div class="dialog-header"><h2 id="resultDialogTitle">${esc(title)}</h2><button class="btn ghost dialog-close" type="button" onclick="closeDialog()" aria-label="关闭">×</button></div><div class="dialog-body"><div class="stack">${html}</div></div>${actions!==''?`<div class="dialog-footer">${actions}</div>`:''}`;
+  dialog.setAttribute('role','dialog');
+  dialog.setAttribute('aria-modal','true');
+  dialog.setAttribute('aria-labelledby','resultDialogTitle');
+  modal.onclick=event=>{if(event.target===modal)closeDialog()};
   modal.classList.add('show');
+  document.addEventListener('keydown',handleDialogKeydown);
+  requestAnimationFrame(()=>dialog.querySelector('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])')?.focus());
 }
-function closeDialog(){const modal=qs('#resultModal');S.refreshDialogOpen=false;modal?.classList.remove('show','refresh-modal')}
+function handleDialogKeydown(event){
+  const modal=qs('#resultModal'),dialog=qs('#resultDialog');
+  if(!modal?.classList.contains('show')||!dialog)return;
+  if(event.key==='Escape'){event.preventDefault();closeDialog();return}
+  if(event.key!=='Tab')return;
+  const focusable=qsa('#resultDialog button:not([disabled]),#resultDialog input:not([disabled]),#resultDialog select:not([disabled]),#resultDialog textarea:not([disabled]),#resultDialog a[href]').filter(el=>el.offsetParent!==null);
+  if(!focusable.length){event.preventDefault();dialog.focus();return}
+  const first=focusable[0],last=focusable[focusable.length-1];
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
+}
+function closeDialog(){
+  const modal=qs('#resultModal');
+  S.refreshDialogOpen=false;
+  modal?.classList.remove('show','refresh-modal');
+  document.removeEventListener('keydown',handleDialogKeydown);
+  const target=dialogReturnFocus;dialogReturnFocus=null;
+  if(target?.isConnected)requestAnimationFrame(()=>target.focus());
+}
 async function loadLogs(request){
   const data=await api('/api/logs',{signal:request?.signal});
   if(!isCurrentPageRequest(request))return null;
@@ -636,6 +805,14 @@ async function loadImportSources(request){
   const sources=await api('/api/import/sources',{signal:request?.signal}).catch(err=>{if(isAbortError(err))throw err;return []});
   if(!isCurrentPageRequest(request))return null;
   S.importSources=Array.isArray(sources)?sources:[];
+}
+async function loadChainProfiles(request){
+  const data=await api('/api/chain-profiles',{signal:request?.signal});
+  if(!isCurrentPageRequest(request))return null;
+  S.chainProfiles=Array.isArray(data.profiles)?data.profiles:[];
+  S.chainUsage=data.usage&&typeof data.usage==='object'?data.usage:{};
+  if(S.chainProfileID&&!S.chainProfiles.some(profile=>profile.id===S.chainProfileID&&profile.enabled))S.chainProfileID='';
+  return S.chainProfiles;
 }
 async function loadBackupData(request){
   const webdav=await api('/api/backup/webdav/settings',{signal:request?.signal});
@@ -778,7 +955,7 @@ function renderNodeRow(n,kind,index=0){
   return `<div class="table-row" data-id="${esc(n.id)}" data-name="${esc(searchText(n))}">
     <input class="check" type="checkbox" ${S.selected.has(n.id)?'checked':''} onchange="toggleNode('${esc(n.id)}',this.checked)">
     <div>${valuePill(index+1,'muted')}</div>
-    <div class="table-name"><strong>${esc(nodeName(n))}</strong>${n.last_error?`<div class="table-uri">错误: ${esc(n.last_error)}</div>`:''}</div>
+    <div class="table-name"><strong title="${esc(nodeName(n))}">${esc(nodeName(n))}</strong>${n.last_error?`<div class="table-uri" title="${esc(n.last_error)}">错误：${esc(shortError(n.last_error))}</div>`:''}</div>
     <div>${statePill(n.state)}</div>
     <div>${latencyPill(n)}</div>
     <div>${countryPill(n)}</div>
@@ -805,17 +982,19 @@ async function setListSort(target,mode){
 function renderNodeActions(n,kind){
   const del=`<button class="btn small danger" onclick="deleteManagedNode('${esc(n.id)}')">删除</button>`;
   const exportBtn=`<button class="btn small secondary" onclick="openNodeExportDialog(['${esc(n.id)}'])">导出</button>`;
-  if(kind==='pool')return `<div class="row"><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">测速</button><button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>${exportBtn}${del}</div>`;
-  if(n.state==='failed')return `<div class="row"><button class="btn small primary" onclick="retestFailedNodes(['${esc(n.id)}'])">测速</button>${exportBtn}${del}</div>`;
-  if(candidate(n))return `<div class="row"><button class="btn small green" onclick="managedAction('${esc(n.id)}','promote')">加入节点池</button><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">测速</button><button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>${exportBtn}${del}</div>`;
-  if(n.state==='parsed')return `<div class="row"><button class="btn small primary" onclick="managedAction('${esc(n.id)}','retest')">测速</button>${exportBtn}${del}</div>`;
+  const more=items=>`<details class="row-menu"><summary class="btn small">更多</summary><div class="row-menu-panel">${items.join('')}</div></details>`;
+  if(kind==='pool')return `<div class="row-actions"><button class="btn small primary" onclick="managedAction('${esc(n.id)}','retest')">测速</button>${more([`<button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>`,exportBtn,del])}</div>`;
+  if(n.state==='failed')return `<div class="row-actions"><button class="btn small primary" onclick="retestFailedNodes(['${esc(n.id)}'])">测速</button>${more([exportBtn,del])}</div>`;
+  if(candidate(n))return `<div class="row-actions"><button class="btn small green" onclick="managedAction('${esc(n.id)}','promote')">加入池</button>${more([`<button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">测速</button>`,`<button class="btn small" onclick="managedAction('${esc(n.id)}','country')">测试国家</button>`,exportBtn,del])}</div>`;
+  if(n.state==='parsed')return `<div class="row-actions"><button class="btn small primary" onclick="managedAction('${esc(n.id)}','retest')">测速</button>${more([exportBtn,del])}</div>`;
   if(n.state==='excluded')return '';
-  return `<div class="row"><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">重新测速</button>${exportBtn}${del}</div>`;
+  return `<div class="row-actions"><button class="btn small" onclick="managedAction('${esc(n.id)}','retest')">重新测速</button>${more([exportBtn,del])}</div>`;
 }
 function inPool(n){return n.state==='in_pool'||n.in_pool}
 function candidate(n){return !inPool(n)&&n.state==='passed'}
 function unique(a){return [...new Set(a)].sort((x,y)=>String(x).localeCompare(String(y)))}
 function shortSource(s){s=String(s||'');return s.length>42?s.slice(0,39)+'...':s}
+function shortError(s){s=String(s||'');return s.length>54?s.slice(0,51)+'...':s}
 function searchText(n){return [nodeName(n),n.original_name,n.uri,n.tag_prefix,n.country_code,countryLabel(n.country_code),n.import_source,n.import_format,n.state].filter(Boolean).join(' ').toLowerCase()}
 function filteredManaged(scope=S.filters.scope){
   let items=S.nodes.slice();
@@ -979,6 +1158,7 @@ function updateProgress(job,title){
   const phaseLabel={probe:'测速中',country:'测试国家',promote:'入池',done:'完成',protected:'已回滚',failed:'失败',queued:'排队中',empty:'空',canceling:'正在终止',canceled:'已终止'}[job.phase]||job.phase||'';
   const progressText=probing?`第 ${job.probe_round}/${job.probe_rounds||3} 轮 · 本轮 ${progressDone}/${progressTotal} (${pct}%) · 剩余 ${job.probe_pending||0}`:`${done}/${total} (${pct}%)`;
   const stats=[];
+  if(Array.isArray(job.chain_probes))job.chain_probes.forEach(probe=>stats.push(probe.error?`前置 ${probe.profile_name||probe.profile_id} 失败`:`前置 ${probe.profile_name||probe.profile_id} ${probe.latency_ms||0} ms`));
   if(job.passed!=null)stats.push(`成功 ${job.passed}`);
   if(job.failed!=null)stats.push(`失败 ${job.failed}`);
   if(job.country_ok)stats.push(`国家OK ${job.country_ok}`);
@@ -1282,7 +1462,11 @@ function renderImport(){
           <button class="btn green format-main" onclick="directImport()">导入并测试</button>
         </div>
         <div class="meta"><span class="pill green">${esc(importKindLabel())}</span><span class="pill">${S.importAutoPromote?'成功节点自动加入节点池':'成功节点进入候选池'}</span><span class="pill red">失败节点保留待重测</span></div>
-        <div class="field"><label>Tag 前缀</label><input id="tagPrefix" value="" placeholder="例如：Glados" oninput="S.tagPrefix=this.value"></div>
+        <div class="field"><label for="tagPrefix">Tag 前缀</label><input id="tagPrefix" value="" placeholder="例如：Glados" oninput="S.tagPrefix=this.value"></div>
+        <div class="chain-import-row">
+          <div class="field"><label for="importChain">前置代理（可选）</label><select id="importChain" onchange="selectImportChain(this.value)"><option value="">不使用前置代理</option>${S.chainProfiles.filter(profile=>profile.enabled).map(profile=>`<option value="${esc(profile.id)}">${esc(profile.name)}</option>`).join('')}</select></div>
+          <div class="chain-import-actions"><button class="btn secondary" type="button" onclick="openChainProfileEditor('', 'import')">添加</button><button class="btn" id="editImportChain" type="button" onclick="openChainProfileEditor(S.chainProfileID,'import')" ${S.chainProfileID?'':'disabled'}>编辑</button></div>
+        </div>
         <label class="row"><input id="importAutoPromote" type="checkbox" ${S.importAutoPromote?'checked':''} style="width:auto" onchange="setImportAutoPromote(this.checked)"> 测速成功后自动加入节点池 <span class="muted">默认开启；关闭后成功节点进入候选节点。</span></label>
         ${importFields()}
         <div class="progress"><div id="jobBar"></div></div>
@@ -1305,7 +1489,10 @@ function renderImport(){
   </div>`;
   qs('#tagPrefix').value=S.tagPrefix||'';
   if(qs('#importContent'))qs('#importContent').value=S.importText||'';
+  if(qs('#importChain'))qs('#importChain').value=S.chainProfileID||'';
+  if(qs('#proxyProtocol'))qs('#proxyProtocol').value=S.proxyProtocol||'http';
 }
+function selectImportChain(value){S.chainProfileID=value||'';const button=qs('#editImportChain');if(button)button.disabled=!S.chainProfileID}
 function renderGeneratedPorts(ports,total=ports.length){
   if(!ports.length)return '<div class="empty">还没有生成端口。粘贴订阅链接后点击“导入并测试”。</div>';
   return `<div class="table">${ports.map(n=>`<div class="port"><b>${esc(n.port||'-')}</b><span class="muted">${esc(nodeName(n))}</span><button class="btn small" onclick="copyPort('${esc(n.port||'')}')">复制</button></div>`).join('')}</div>${total>ports.length?`<p class="muted">已显示前 ${ports.length} 个端口，其余可在“可用端口”页面查看。</p>`:''}`;
@@ -1333,22 +1520,25 @@ function chooseImportKind(kind){
   closeImportTypeModal();
   renderImport();
 }
-function importKindLabel(){return {sub_url:'订阅链接格式',uri:'URI 格式',base64:'Base64 格式',clash:'Clash YAML 格式'}[S.importKind]||'URI 格式'}
-function importKindHelp(){return {sub_url:'每行一个 http/https 订阅链接，链接内容会自动识别。',uri:'每行一个节点 URI，支持 ss / trojan / vmess / vless / http / https / socks5 / socks4 等协议。',base64:'粘贴 Base64 编码后的节点列表。',clash:'粘贴 Clash YAML，只提取 proxies 节点。'}[S.importKind]||'每行一个节点 URI。'}
-function importInputLabel(){return S.importKind==='sub_url'?'订阅链接（每行一个）':S.importKind==='uri'?'URI 节点（每行一个）':S.importKind==='base64'?'Base64 内容':'Clash YAML 内容'}
+function importKindLabel(){return {sub_url:'订阅链接格式',uri:'URI 格式',base64:'Base64 格式',clash:'Clash YAML 格式',host_port:'Host:Port 代理列表'}[S.importKind]||'URI 格式'}
+function importKindHelp(){return {sub_url:'每行一个 http/https 订阅链接，链接内容会自动识别。',uri:'每行一个节点 URI，支持 ss / trojan / vmess / vless / http / https / socks5 / socks4 等协议。',base64:'粘贴 Base64 编码后的节点列表。',clash:'粘贴 Clash YAML，只提取 proxies 节点。',host_port:'每行一个 host:port 或 user:pass@host:port；同一批次使用一种协议。'}[S.importKind]||'每行一个节点 URI。'}
+function importInputLabel(){return S.importKind==='sub_url'?'订阅链接（每行一个）':S.importKind==='uri'?'URI 节点（每行一个）':S.importKind==='base64'?'Base64 内容':S.importKind==='host_port'?'代理地址（每行一个）':'Clash YAML 内容'}
 function importPlaceholder(){
   if(S.importKind==='sub_url')return 'https://example.com/sub1\nhttps://example.com/sub2';
   if(S.importKind==='uri')return 'ss://...\ntrojan://...\nvmess://...\nhttp://1.2.3.4:8080\nsocks5://1.2.3.4:1080\nsocks4://1.2.3.4:1080';
   if(S.importKind==='base64')return '粘贴 Base64 编码后的节点列表';
+  if(S.importKind==='host_port')return '1.2.3.4:8080\nuser:pass@1.2.3.4:8080\nuser:pass@[2001:db8::1]:8080';
   return 'proxies:\n  - name: ...';
 }
 function importFields(){
-  return `<div class="field"><label>${esc(importInputLabel())}</label><textarea id="importContent" placeholder="${esc(importPlaceholder())}" oninput="S.importText=this.value"></textarea></div>`;
+  return `${S.importKind==='host_port'?`<div class="row"><div class="field" style="min-width:220px"><label for="proxyProtocol">代理协议</label><select id="proxyProtocol" onchange="S.proxyProtocol=this.value"><option value="http">HTTP</option><option value="socks5">SOCKS5</option></select></div><button class="btn secondary" onclick="qs('#hostPortFile').click()">选择 TXT 文件</button><input id="hostPortFile" type="file" accept=".txt,text/plain" hidden onchange="loadHostPortFile(this.files?.[0])"></div>`:''}<div class="field"><label for="importContent">${esc(importInputLabel())}</label><textarea id="importContent" placeholder="${esc(importPlaceholder())}" oninput="S.importText=this.value"></textarea></div>`;
 }
+async function loadHostPortFile(file){if(!file)return;S.importText=await file.text();renderImport()}
 function importPayload(){
   S.tagPrefix=(qs('#tagPrefix')?.value||'').trim();
   S.importText=qs('#importContent')?.value||'';
-  const body={mode:S.importKind==='sub_url'?'url':'content',tag_prefix:S.tagPrefix};
+  const body={mode:S.importKind==='sub_url'?'url':'content',tag_prefix:S.tagPrefix,chain_profile_id:S.chainProfileID||''};
+  if(S.importKind==='host_port'){body.content_format='host_port';body.proxy_protocol=S.proxyProtocol||'http'}
   if(body.mode==='url')body.url=S.importText.trim();else body.content=S.importText.trim();
   return body;
 }
@@ -1370,7 +1560,7 @@ async function importSubscriptionURLs(body){
   if(!urls.length){toast('订阅链接不能为空','err');return}
   const invalid=urls.find(u=>!/^https?:\/\//i.test(u));
   if(invalid){toast('订阅链接必须以 http:// 或 https:// 开头: '+invalid,'err');return}
-  await importOne({mode:'url',url:urls.join('\n'),tag_prefix:body.tag_prefix},`订阅 ${urls.length} 个`);
+  await importOne({...body,url:urls.join('\n')},`订阅 ${urls.length} 个`);
   await registerSubscriptionURLs(urls,body.tag_prefix);
 }
 async function importOne(body,label){
@@ -1421,10 +1611,11 @@ async function pollJob(id){
       last=j;
       const done=(j.passed||0)+(j.failed||0);
       const pct=j.total?Math.min(100,Math.round(done*100/j.total)):0;
-      const line=`${j.status}: ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
+      const front=j.chain_probe?(j.chain_probe.error?'前置失败':`前置 ${j.chain_probe.latency_ms||0} ms`):'';
+      const line=`${j.status}: ${front?front+'，':''}${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
       if(bar)bar.style.width=pct+'%';
       if(status)status.textContent=line;
-      S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`进度 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
+      S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`${front?front+'；':''}完整链路 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
       if(j.status==='completed'||j.status==='failed'||j.status==='canceled'){
         toast(j.status==='canceled'?'导入任务已终止':'导入任务结束');
         await refresh();
@@ -1484,7 +1675,266 @@ function restoreActiveJobs(){
     renderRefreshStatusHost();
     pollRefreshSourceJob(refreshId).catch(handleRefreshPollError);
   }
+  const connectivityId=localStorage.getItem(CONNECTIVITY_JOB_KEY);
+  if(connectivityId&&!S.connectivityPollingJob&&(!S.connectivityJob||S.connectivityJob.id!==connectivityId||S.connectivityJob.status==='running')){
+    S.connectivityJobID=connectivityId;
+    pollConnectivityJob(connectivityId,true).catch(handleConnectivityPollError);
+  }
 }
+
+async function loadConnectivityScopes(request){
+  const data=await api('/api/connectivity/scopes',{signal:request?.signal});
+  if(!isCurrentPageRequest(request))return null;
+  S.connectivityScopes=data;
+  const available=new Set((data.tags||[]).map(item=>item.tag));
+  for(const tag of [...S.connectivitySelectedTags])if(!available.has(tag))S.connectivitySelectedTags.delete(tag);
+  if(!S.connectivityTagsInitialized){
+    for(const tag of available)S.connectivitySelectedTags.add(tag);
+    S.connectivityTagsInitialized=true;
+  }
+  return data;
+}
+
+function connectivityTargetName(id){return {google:'Google',github:'GitHub',outlook:'Outlook',proxyspace:'ProxySpace'}[id]||id}
+function connectivityPhaseText(job){
+  return {first_pass:'首轮检测',retry_wait:'等待重试',retry:'失败项重试',saving_results:'正在保存结果',canceling:'正在终止',finished:'检测完成',failed:'检测失败',canceled:'已终止'}[job?.phase]||'等待检测';
+}
+function connectivityStatusText(status){return {running:'检测中',finished:'已完成',failed:'失败',canceled:'已终止'}[status]||'等待中'}
+function renderConnectivity(){
+  const scopes=S.connectivityScopes||{tags:[],targets:[]};
+  const tagRows=(scopes.tags||[]).map((item,index)=>`<label class="tag-option"><input type="checkbox" ${S.connectivitySelectedTags.has(item.tag)?'checked':''} onchange="toggleConnectivityTagAt(${index},this.checked)"><span title="${esc(item.tag)}">${esc(item.tag)}</span><small class="muted">${esc(item.nodes)} 节点</small></label>`).join('');
+  const running=S.connectivityJob?.status==='running';
+  const sites=(scopes.targets||[]).map(target=>`<button class="site-selector ${S.connectivityTestTargets.has(target.id)?'selected':''}" ${running?'disabled':''} onclick="toggleConnectivityTestTarget('${esc(target.id)}')" title="${esc(target.url||'')}"><strong>${esc(target.name)}</strong><span>${S.connectivityTestTargets.has(target.id)?'本轮检测':'不检测'}</span></button>`).join('');
+  qs('#view').innerHTML=`<div class="connectivity-layout">
+    <section class="settings-section"><div class="settings-section-head connectivity-scope-head"><div><h2>检测范围</h2><p>选择Tag和本轮需要实际访问的站点，默认仅检测Outlook。</p></div><div class="row"><button class="btn small secondary" onclick="setAllConnectivityTags(true)">全选</button><button class="btn small ghost" onclick="setAllConnectivityTags(false)">清空</button></div></div><div class="settings-section-body"><div class="connectivity-scope-summary"><span>已选 <strong id="connectivityTagCount">${S.connectivitySelectedTags.size}</strong> / ${esc((scopes.tags||[]).length)} 个 Tag</span><span>共 ${esc((scopes.tags||[]).reduce((sum,item)=>sum+(Number(item.nodes)||0),0))} 个节点</span></div><div class="tag-picker">${tagRows||'<div class="connectivity-idle" style="grid-column:1/-1"><span>暂无带 Tag 的节点</span></div>'}</div><div class="connectivity-scope-footer"><div class="site-strip">${sites}</div><div id="connectivityActions" class="row">${connectivityActionsHTML()}</div></div></div></section>
+    <section id="connectivityProgressHost"></section>
+    <section id="connectivityCriteria"></section>
+    <section id="connectivityMatrixHost"></section>
+    <section id="connectivityHistoryHost"></section>
+    <section id="connectivityResults"></section>
+  </div>`;
+  updateConnectivityJobView(S.connectivityJob);
+}
+
+function connectivityActionsHTML(){
+  const job=S.connectivityJob,running=job?.status==='running';
+  if(running)return job.phase==='canceling'?'<button class="btn danger" disabled>正在终止</button>':'<button class="btn danger" onclick="cancelConnectivityJob()">终止检测</button>';
+  const disabled=!(S.connectivityScopes?.tags||[]).length?'disabled':'';
+  return `<button class="btn primary" ${disabled} onclick="startConnectivityJob()">开始检测</button>`;
+}
+
+function toggleConnectivityTagAt(index,checked){
+  const tag=S.connectivityScopes?.tags?.[index]?.tag;if(typeof tag!=='string')return;
+  if(checked)S.connectivitySelectedTags.add(tag);else S.connectivitySelectedTags.delete(tag);
+  const count=qs('#connectivityTagCount');if(count)count.textContent=S.connectivitySelectedTags.size;
+}
+function setAllConnectivityTags(selected){
+  S.connectivitySelectedTags.clear();
+  if(selected)for(const item of S.connectivityScopes?.tags||[])S.connectivitySelectedTags.add(item.tag);
+  renderConnectivity();
+}
+
+function toggleConnectivityTestTarget(id){
+  if(S.connectivityTestTargets.has(id)){
+    if(S.connectivityTestTargets.size===1){toast('至少选择一个检测站点','err');return}
+    S.connectivityTestTargets.delete(id);
+  }else S.connectivityTestTargets.add(id);
+  renderConnectivity();
+}
+
+async function startConnectivityJob(){
+  const tags=[...S.connectivitySelectedTags];
+  const targets=[...S.connectivityTestTargets];
+  if(!tags.length){toast('请至少选择一个 Tag','err');return}
+  if(!targets.length){toast('请至少选择一个检测站点','err');return}
+  try{
+    const started=await api('/api/connectivity/jobs/start',{method:'POST',body:JSON.stringify({tags,targets})});
+    S.connectivityJobID=started.job_id;S.connectivityJob={id:started.job_id,status:'running',phase:'first_pass',tags,targets,total_routes:0,total_checks:0,done_checks:0,retry_checks:0,retry_done:0,recovered:0};S.connectivityResultPage=null;S.connectivityHistory=null;S.connectivitySelectedTargets=new Set(targets);
+    localStorage.setItem(CONNECTIVITY_JOB_KEY,started.job_id);
+    renderConnectivity();
+    await pollConnectivityJob(started.job_id,false);
+  }catch(err){toast(err.message,'err')}
+}
+
+async function pollConnectivityJob(jobID,silent=false){
+  if(!jobID||S.connectivityPollingJob===jobID)return;
+  S.connectivityPollingJob=jobID;
+  let last=null,failures=0;
+  try{
+    last=await api('/api/connectivity/jobs/status?id='+encodeURIComponent(jobID));
+    if(last.targets?.length){S.connectivityTestTargets=new Set(last.targets);S.connectivitySelectedTargets=new Set(last.targets);S.connectivityJob=last;if(S.page==='connectivity')renderConnectivity()}
+    while(true){
+      S.connectivityJob=last;updateConnectivityJobView(last);
+      if(last.status!=='running')break;
+      try{
+        const pushed=await waitForJobEvent('connectivity',jobID,last.updated_at,30000);
+        last=pushed||await api('/api/connectivity/jobs/status?id='+encodeURIComponent(jobID));
+        failures=0;
+      }catch(err){
+        if(err.status===401||err.status===404)throw err;
+        failures++;await new Promise(resolve=>setTimeout(resolve,Math.min(5000,500*Math.pow(2,Math.min(failures,3)))));
+        last=await api('/api/connectivity/jobs/status?id='+encodeURIComponent(jobID));
+      }
+    }
+    S.connectivityJob=last;updateConnectivityJobView(last);
+    if(last.status==='finished'){
+      await Promise.all([loadConnectivityResults(),loadConnectivityHistory()]);
+      if(!silent)toast('站点检测完成');
+    }else if(!silent){toast(last.status==='canceled'?'站点检测已终止':last.error||'站点检测失败','err')}
+  }finally{S.connectivityPollingJob=''}
+}
+
+function handleConnectivityPollError(err){
+  S.connectivityPollingJob='';
+  if(err.status===404){S.connectivityJobID='';localStorage.removeItem(CONNECTIVITY_JOB_KEY)}
+  toast(err.status===404?'站点检测任务已失效':err.message,'err');
+}
+
+async function cancelConnectivityJob(){
+  const id=S.connectivityJob?.id||S.connectivityJobID;if(!id)return;
+  if(!confirm('确认终止当前站点检测？\n\n已经完成的结果会保留，但不能用于生成端口。'))return;
+  try{S.connectivityJob=await api('/api/connectivity/jobs/cancel?id='+encodeURIComponent(id),{method:'POST'});updateConnectivityJobView(S.connectivityJob);toast('正在终止检测')}catch(err){toast(err.message,'err')}
+}
+
+function connectivityProgressHTML(job){
+  if(!job)return '<div class="connectivity-idle"><span>尚未执行站点检测</span></div>';
+  if(job.status!=='running')return `<div class="connectivity-progress"><div class="connectivity-progress-head"><div><strong>${esc(connectivityPhaseText(job))}</strong><div class="muted">已检测 ${esc(job.total_routes||0)} 条路由 · ${(job.targets||[]).map(connectivityTargetName).map(esc).join(' / ')}</div></div><span class="pill ${job.status==='finished'?'green':'red'}">${esc(connectivityStatusText(job.status))}</span></div>${job.error?`<div class="action-status err">${esc(job.error)}</div>`:''}${job.history_error?`<div class="action-status err">${esc(job.history_error)}</div>`:''}</div>`;
+  const retry=job.phase==='retry'||job.phase==='retry_wait';
+  const done=retry?(job.retry_done||0):(job.done_checks||0),total=retry?(job.retry_checks||0):(job.total_checks||0);
+  const pct=total?Math.min(100,Math.round(done*100/total)):0;
+  return `<div class="connectivity-progress"><div class="connectivity-progress-head"><div><strong>${esc(connectivityPhaseText(job))}</strong><div class="muted">路由 ${esc(job.total_routes||0)} · 站点 ${(job.targets||[]).map(connectivityTargetName).map(esc).join(' / ')} · 首轮 ${esc(job.done_checks||0)}/${esc(job.total_checks||0)} · 重试 ${esc(job.retry_done||0)}/${esc(job.retry_checks||0)}</div></div><span class="pill amber">${esc(connectivityStatusText(job.status))}</span></div><div class="progress"><div style="width:${pct}%"></div></div>${job.error?`<div class="action-status err">${esc(job.error)}</div>`:''}</div>`;
+}
+
+function connectivityMatrixHTML(job){
+  if(!job||!(job.summaries||[]).length)return '';
+  const targets=job.targets||[];
+  const columns=`grid-template-columns:minmax(150px,1fr) repeat(${targets.length},minmax(150px,1fr))`;
+  const head=`<div class="connectivity-matrix-row connectivity-matrix-head" style="${columns}"><div>Tag</div>${targets.map(id=>`<div>${esc(connectivityTargetName(id))}</div>`).join('')}</div>`;
+  const rows=(job.summaries||[]).map(summary=>{
+    const byTarget=Object.fromEntries((summary.targets||[]).map(item=>[item.target_id,item]));
+    const cells=targets.map(id=>{
+      const item=byTarget[id]||{},total=Number(item.total)||0,passed=Number(item.passed)||0,partial=Number(item.partial)||0,rate=total?Math.round(passed*1000/total)/10:0;
+      const cls=total&&passed===total?'good':partial?'partial':total&&passed===0?'bad':'';
+      return `<div class="connectivity-cell ${cls}"><strong>${passed}/${total} · ${rate}%</strong><span>部分可用 ${partial} · 失败 ${item.failed||0}</span><span>首轮 ${item.first_passed||0} · 恢复 ${item.recovered||0} · 中位 ${item.median_latency_ms?esc(item.median_latency_ms)+' ms':'-'}</span></div>`;
+    }).join('');
+    return `<div class="connectivity-matrix-row" style="${columns}"><div><strong>${esc(summary.tag)}</strong><div class="muted">${esc(summary.routes||0)} 条路由</div></div>${cells}</div>`;
+  }).join('');
+  return `<section class="settings-section"><details><summary class="section-summary">成功率矩阵<span>按 Tag 查看各站点结果</span></summary><div class="settings-section-body"><div class="connectivity-matrix">${head}${rows}</div></div></details></section>`;
+}
+
+function updateConnectivityJobView(job){
+  if(S.page!=='connectivity')return;
+  const progress=qs('#connectivityProgressHost'),matrix=qs('#connectivityMatrixHost'),actions=qs('#connectivityActions');
+  if(progress)progress.innerHTML=connectivityProgressHTML(job);
+  if(matrix)matrix.innerHTML=connectivityMatrixHTML(job);
+  if(actions)actions.innerHTML=connectivityActionsHTML();
+  renderConnectivityHistory();
+  renderConnectivityCriteria();
+  renderConnectivityResults();
+}
+
+async function loadConnectivityHistory(){
+  const jobID=S.connectivityJob?.id||S.connectivityJobID;if(!jobID)return;
+  S.connectivityHistory=await api('/api/connectivity/history?id='+encodeURIComponent(jobID));
+  renderConnectivityHistory();
+}
+
+function connectivityVerdictText(value){return {usable:'成功',partial:'部分可用',failed:'失败',missing:'无记录'}[value]||value||'-'}
+function renderConnectivityHistory(){
+  const host=qs('#connectivityHistoryHost');if(!host)return;
+  const job=S.connectivityJob,history=S.connectivityHistory;
+  if(!job||job.status!=='finished'){host.innerHTML='';return}
+  if(!history){host.innerHTML='<div class="connectivity-idle"><span>正在读取历史对比...</span></div>';return}
+  if(!history.available){host.innerHTML='<div class="connectivity-idle"><span>没有同范围历史结果，本轮已保存为后续对比基线。</span></div>';return}
+  const c=history.overall||{};
+  const metric=(label,value,cls='')=>`<div class="metric"><span>${label}</span><strong class="${cls}">${esc(value||0)}</strong></div>`;
+  const targets=(history.targets||[]).map(item=>`<span class="pill">${esc(connectivityTargetName(item.target_id))}：继续成功 ${esc(item.continued_success||0)} / 新成功 ${esc(item.newly_successful||0)} / 新失败 ${esc(item.newly_failed||0)}</span>`).join('');
+  const changes=(history.changes||[]).map(item=>`<div class="connectivity-change-row"><div><strong>${esc(item.node_name||item.route_fingerprint)}</strong><div class="muted">${(item.tags||[]).map(esc).join(' · ')}</div></div><span>${esc(connectivityVerdictText(item.previous))} → ${esc(connectivityVerdictText(item.current))}</span><span class="pill ${item.current==='usable'?'green':item.current==='partial'?'amber':item.current==='missing'?'':'red'}">${esc(connectivityVerdictText(item.current))}</span></div>`).join('');
+  host.innerHTML=`<section class="settings-section"><details><summary class="section-summary">相比上一次同范围检测<span>新成功 ${esc(c.newly_successful||0)} · 新失败 ${esc(c.newly_failed||0)}</span></summary><div class="settings-section-body"><div class="connectivity-history-grid">${metric('继续成功',c.continued_success,'')}${metric('新成功',c.newly_successful,'good')}${metric('新失败',c.newly_failed,'')}${metric('继续未成功',c.continued_unsuccessful,'')}${metric('新增且无历史',c.no_history,'')}${metric('已移出范围',c.removed,'')}</div><div class="site-strip">${targets}</div>${changes?`<details><summary>查看状态发生变化的节点（${esc((history.changes||[]).length)}）</summary><div class="connectivity-change-list">${changes}</div></details>`:'<div class="muted">没有节点在成功、部分可用和失败之间发生变化。</div>'}</div></details></section>`;
+}
+
+function toggleConnectivityTarget(id){
+  if(S.connectivitySelectedTargets.has(id)){if(S.connectivitySelectedTargets.size===1){toast('至少保留一个站点条件','err');return}S.connectivitySelectedTargets.delete(id)}else S.connectivitySelectedTargets.add(id);
+  renderConnectivityCriteria();refreshConnectivityPreviewSummary();
+}
+
+function renderConnectivityCriteria(){
+  const host=qs('#connectivityCriteria');if(!host)return;
+  const job=S.connectivityJob;
+  if(!job||job.status!=='finished'){host.innerHTML='';return}
+  const buttons=(job.targets||[]).map(id=>`<button class="site-selector ${S.connectivitySelectedTargets.has(id)?'selected':''}" onclick="toggleConnectivityTarget('${id}')"><strong>${connectivityTargetName(id)}</strong><span>${S.connectivitySelectedTargets.has(id)?'必须成功':'不参与筛选'}</span></button>`).join('');
+  host.innerHTML=`<section class="settings-section"><div class="settings-section-head"><div><h2>检测结论与端口应用</h2><p>选择筛选条件后先预览；确认前不会修改节点状态或端口。</p></div><button class="btn secondary" onclick="openConnectivityPortPreview()">预览并应用</button></div><div class="settings-section-body"><div class="site-strip">${buttons}</div><div id="connectivityPreviewSummary" class="settings-highlight"><span class="muted">正在计算检测结论...</span></div></div></section>`;
+  refreshConnectivityPreviewSummary();
+}
+
+function connectivityPortRequest(allowEmpty=false){return {job_id:S.connectivityJob?.id||'',tags:S.connectivityJob?.tags||[],targets:[...S.connectivitySelectedTargets],allow_empty:allowEmpty}}
+async function refreshConnectivityPreviewSummary(){
+  const host=qs('#connectivityPreviewSummary');if(!host||S.connectivityJob?.status!=='finished')return;
+  const request=connectivityPortRequest();
+  try{
+    const preview=await api('/api/connectivity/ports/preview',{method:'POST',body:JSON.stringify(request)});
+    if(!qs('#connectivityPreviewSummary'))return;
+    const total=Number(preview.qualifying||0)+Number(preview.non_qualifying||0);
+    const metric=(label,value,cls='')=>`<div class="metric"><span>${label}</span><strong class="${cls}">${esc(value||0)}</strong></div>`;
+    host.innerHTML=`<div class="result-metrics">${metric('检测总数',total)}${metric('成功',preview.qualifying,'good')}${metric('失败',preview.non_qualifying,'bad')}${metric('当前端口',preview.current_pool)}${metric('应用后端口',preview.projected_pool)}</div><span class="muted">确认应用后：新建 ${esc(preview.added||0)} 个端口，停止 ${esc(preview.removed||0)} 个端口，${esc(preview.will_fail||0)} 个节点进入失败区${preview.shared_retained?`，${esc(preview.shared_retained)} 个跨 Tag 节点继续保留`:''}。</span><span class="pill amber">尚未应用</span>`;
+  }catch(err){host.innerHTML=`<span style="color:var(--red)">${esc(err.message)}</span>`}
+}
+
+async function openConnectivityPortPreview(){
+  try{
+    const request=connectivityPortRequest(),preview=await api('/api/connectivity/ports/preview',{method:'POST',body:JSON.stringify(request)});
+    S.connectivityPreview=preview;S.connectivityPreviewRequest={...request,preview_token:preview.preview_token};
+    const metric=(label,value,cls='')=>`<div class="metric"><span>${label}</span><strong class="${cls}">${esc(value)}</strong></div>`;
+    const empty=preview.empty_blocked?'<div class="action-status err">没有节点满足条件。确认应用会清空所选 Tag 的非共享端口。</div>':'';
+    const list=(title,items,total)=>!(items||[]).length?'':`<details><summary>${title}（共 ${esc(total||items.length)} 个，显示 ${esc(Math.min(items.length,10))} 个）</summary><div class="connectivity-change-list">${items.slice(0,10).map(item=>`<div class="connectivity-change-row"><div><strong>${esc(item.node_name||'-')}</strong><div class="muted">${(item.tags||[]).map(esc).join(' · ')}</div></div><span>${item.port?`当前端口 ${esc(item.port)}`:'尚无端口'}</span>${statePill(item.state)}</div>`).join('')}</div></details>`;
+    const warning=preview.removed?`<div class="action-status err">应用后将停止 ${esc(preview.removed)} 个现有端口，请先检查明细。</div>`:'';
+    const actions=`<button class="btn" type="button" onclick="closeDialog()">取消</button><button id="connectivityApplyButton" class="btn ${preview.removed||preview.empty_blocked?'danger':'primary'}" type="button" onclick="applyConnectivityPorts(${preview.empty_blocked?'true':'false'})">${preview.empty_blocked?'确认清空所选 Tag':'确认应用'}</button>`;
+    openDialog('预览端口变更',`<div class="port-preview-grid">${metric('检测总数',(preview.qualifying||0)+(preview.non_qualifying||0))}${metric('成功',preview.qualifying,'good')}${metric('失败',preview.non_qualifying,'bad')}${metric('当前端口',preview.current_pool)}${metric('应用后端口',preview.projected_pool)}${metric('进入失败区',preview.will_fail)}</div><div class="settings-highlight"><strong>端口池尚未修改</strong><span class="muted">确认后才会应用；取消或关闭弹窗不会改变现有端口。</span></div>${warning}${empty}${list('新建端口示例',preview.added_items,preview.added)}${list('停止端口示例',preview.removed_items,preview.removed)}`,{wide:true,actions});
+  }catch(err){toast(err.message,'err')}
+}
+
+async function applyConnectivityPorts(allowEmpty){
+  const button=qs('#connectivityApplyButton'),oldText=button?.textContent;
+  if(button){button.disabled=true;button.textContent='正在应用...'}
+  try{
+    const request={...(S.connectivityPreviewRequest||connectivityPortRequest()),allow_empty:!!allowEmpty};
+    const result=await api('/api/connectivity/ports/apply',{method:'POST',body:JSON.stringify(request)});
+    closeDialog();toast(`端口已更新，当前池内 ${result.pool_count||0} 个节点`);
+    S.connectivityPreview=null;S.connectivityPreviewRequest=null;
+    await loadImportSummary();renderNav();refreshConnectivityPreviewSummary();
+  }catch(err){toast(err.message,'err');if(button){button.disabled=false;button.textContent=oldText}}
+}
+
+async function loadConnectivityResults(){
+  const jobID=S.connectivityJob?.id||S.connectivityJobID;if(!jobID)return;
+  const f=S.connectivityResultFilters,params=new URLSearchParams({id:jobID,page:String(f.page||1),page_size:'100'});
+  if(f.tag)params.set('tag',f.tag);if(f.target)params.set('target',f.target);if(f.status)params.set('status',f.status);
+  S.connectivityResultPage=await api('/api/connectivity/results?'+params.toString());
+  renderConnectivityResults();
+}
+
+function renderConnectivityResults(){
+  const host=qs('#connectivityResults');if(!host)return;
+  const job=S.connectivityJob,page=S.connectivityResultPage;
+  if(!job||job.status!=='finished'){host.innerHTML='';return}
+  const tags=(job.tags||[]).map(tag=>`<option value="${esc(tag)}" ${S.connectivityResultFilters.tag===tag?'selected':''}>${esc(tag)}</option>`).join('');
+  const targetOptions=(job.targets||[]).map(id=>`<option value="${id}" ${S.connectivityResultFilters.target===id?'selected':''}>${connectivityTargetName(id)}</option>`).join('');
+  const rows=(page?.items||[]).map(item=>{
+    const verdict=item.verdict||(item.success?'usable':'failed');
+    const badge=verdict==='usable'?'<span class="pill green">完整可用</span>':verdict==='partial'?'<span class="pill amber">部分可用</span>':'<span class="pill red">失败</span>';
+    const http=[item.http_status||'',item.final_host||''].filter(Boolean).join(' · ')||item.failure_stage||'-';
+    const components=(item.components||[]).map(component=>`${component.name||component.id}：${component.success?'成功':component.error||'失败'}`).join('；');
+    const detail=components||item.error||'-';
+    return `<div class="connectivity-detail-row"><div><strong>${esc(item.node_name||item.node_id)}</strong><div class="muted">${(item.tags||[]).map(tag=>esc(tag)).join(' · ')}</div></div><div>${esc(connectivityTargetName(item.target_id))}</div><div>${badge}</div><div>${item.latency_ms?esc(item.latency_ms)+' ms':'-'}</div><div title="${esc(item.content_type||'')}">${esc(http)}</div><div class="muted" title="${esc(detail)}">${esc(item.error||components||'-')}</div></div>`;
+  }).join('');
+  const total=page?.total||0,current=page?.page||1,pages=Math.max(1,Math.ceil(total/(page?.page_size||100)));
+  host.innerHTML=`<section class="settings-section"><div class="settings-section-head"><div><h2>节点明细</h2><p>共 ${esc(total)} 条站点结果。</p></div><button class="btn small secondary" onclick="toggleConnectivityDetails()">${S.connectivityDetailsOpen?'收起明细':'查看明细'}</button></div>${S.connectivityDetailsOpen?`<div class="settings-section-body"><div class="row"><select style="width:170px" onchange="setConnectivityResultFilter('tag',this.value)"><option value="">全部 Tag</option>${tags}</select><select style="width:150px" onchange="setConnectivityResultFilter('target',this.value)"><option value="">全部站点</option>${targetOptions}</select><select style="width:140px" onchange="setConnectivityResultFilter('status',this.value)"><option value="">全部结果</option><option value="success" ${S.connectivityResultFilters.status==='success'?'selected':''}>完整可用</option><option value="partial" ${S.connectivityResultFilters.status==='partial'?'selected':''}>部分可用</option><option value="failed" ${S.connectivityResultFilters.status==='failed'?'selected':''}>失败</option></select></div><div class="connectivity-table"><div class="connectivity-detail-row connectivity-detail-head"><div>节点 / Tag</div><div>站点</div><div>结果</div><div>耗时</div><div>HTTP / 阶段</div><div>页面检查</div></div>${rows||'<div class="empty">没有符合筛选条件的结果</div>'}</div><div class="row" style="justify-content:flex-end"><button class="btn small" ${current<=1?'disabled':''} onclick="changeConnectivityResultPage(-1)">上一页</button><span class="muted">${current} / ${pages}</span><button class="btn small" ${current>=pages?'disabled':''} onclick="changeConnectivityResultPage(1)">下一页</button></div></div>`:'<div class="connectivity-detail-collapsed">明细已收起</div>'}</section>`;
+}
+function toggleConnectivityDetails(){S.connectivityDetailsOpen=!S.connectivityDetailsOpen;renderConnectivityResults()}
+
+async function setConnectivityResultFilter(name,value){S.connectivityResultFilters[name]=value;S.connectivityResultFilters.page=1;await loadConnectivityResults()}
+async function changeConnectivityResultPage(delta){S.connectivityResultFilters.page=Math.max(1,(S.connectivityResultFilters.page||1)+delta);await loadConnectivityResults()}
+
 function renderConfig(){
   qs('#view').innerHTML=`<div class="grid">
     <div class="card"><div class="card-head"><h2>手动节点（高级）</h2></div><div class="card-body"><div class="list">${S.configNodes.length?S.configNodes.map(renderConfigNode).join(''):'<div class="empty">没有手动节点</div>'}</div></div></div>
@@ -1523,11 +1973,12 @@ function renderPorts(){
   const basePort=(S.ports&&S.ports.base_port)||0;
   const endPort=ports.length?ports[ports.length-1].port:basePort;
   const skipped=(S.ports&&S.ports.skipped_ports)||[];
+  const visibleOccupied=occupied.slice(0,80);
   qs('#view').innerHTML=`<div class="card"><div class="card-head"><h2>端口状态</h2><button class="btn small" onclick="refreshPorts()">重新扫描</button></div><div class="card-body stack">
     <p class="muted">扫描范围 <b>${esc(basePort)}</b> – <b>${esc(endPort)}</b>（起始端口由 <code>multi_port.base_port</code> 控制，可在「设置」中修改）。</p>
     <p class="muted">节点池占用 <b>${esc(occupied.length)}</b> 个，其他进程占用 <b>${esc(conflicts.length)}</b> 个，空闲 <b>${esc(free.length)}</b> 个。</p>
     ${skipped.length?`<p class="status err">分配端口时跳过了被外部进程占用的 ${esc(skipped.length)} 个端口：${esc(skipped.join(' / '))}</p>`:''}
-    <div class="section"><h3>节点池监听端口</h3><div class="table">${occupied.length?occupied.map(p=>`<div class="port"><b>${p.port}</b><span class="muted">${esc(p.node_name||'')}</span></div>`).join(''):'<div class="empty">节点池为空</div>'}</div></div>
+    <div class="section"><h3>节点池监听端口</h3><div class="table port-list-limited">${visibleOccupied.length?visibleOccupied.map(p=>`<div class="port"><b>${p.port}</b><span class="muted">${esc(p.node_name||'')}</span></div>`).join(''):'<div class="empty">节点池为空</div>'}</div>${occupied.length>visibleOccupied.length?`<p class="muted">仅显示前 ${visibleOccupied.length} 个，完整节点请在“可用端口”页面查看。</p>`:''}</div>
     ${conflicts.length?`<div class="section"><h3>冲突端口</h3><div class="table">${conflicts.map(p=>`<div class="port"><b>${p.port}</b><span class="pill red">${esc(reasonText(p.reason))}</span><span class="muted">${esc(reasonDetail(p.reason))}</span></div>`).join('')}</div></div>`:''}
   </div></div>`;
   maybeNotifySkippedPorts(skipped, S.ports&&S.ports.skipped_at);
@@ -1602,22 +2053,28 @@ function renderBulk(){
   };
   qs('#view').innerHTML=`<div class="grid">
     <div class="card"><div class="card-head"><h2>批量测试</h2></div><div class="card-body stack">
-      <p class="muted">在范围与操作中各至少勾选一项；测速失败的节点默认进入失败节点。</p>
-      <div class="stack">
-        <strong>测试范围（多选）</strong>
-        <label class="row"><input type="checkbox" id="bulkCandidate" ${sel.candidate?'checked':''} style="width:auto"> 候选节点 <span class="muted">${counts.candidate}</span></label>
-        <label class="row"><input type="checkbox" id="bulkPool" ${sel.pool?'checked':''} style="width:auto"> 节点池 <span class="muted">${counts.pool}</span></label>
-        <label class="row"><input type="checkbox" id="bulkFailed" ${sel.failed?'checked':''} style="width:auto"> 失败节点 <span class="muted">${counts.failed}</span></label>
-      </div>
-      <div class="stack">
-        <strong>操作（多选）</strong>
-        <label class="row"><input type="checkbox" id="bulkRetest" ${sel.retest?'checked':''} style="width:auto"> 测速</label>
-        <label class="row"><input type="checkbox" id="bulkCountry" ${sel.country?'checked':''} style="width:auto"> 测试国家</label>
-      </div>
-      <label class="row"><input type="checkbox" id="bulkPromote" ${sel.promote?'checked':''} style="width:auto"> 测速成功后自动加入节点池 <span class="muted">（失败节点会自动补测国家）</span></label>
-      <div class="row"><button class="btn primary" onclick="runBulkTest()">开始</button></div>
+      <div class="bulk-grid"><div class="bulk-group"><strong>测试范围</strong>
+        <label class="bulk-option"><input type="checkbox" id="bulkCandidate" ${sel.candidate?'checked':''} onchange="updateBulkSummary()"><span>候选节点</span><span class="value-pill muted">${counts.candidate}</span></label>
+        <label class="bulk-option"><input type="checkbox" id="bulkPool" ${sel.pool?'checked':''} onchange="updateBulkSummary()"><span>节点池</span><span class="value-pill green">${counts.pool}</span></label>
+        <label class="bulk-option"><input type="checkbox" id="bulkFailed" ${sel.failed?'checked':''} onchange="updateBulkSummary()"><span>失败节点</span><span class="value-pill red">${counts.failed}</span></label>
+      </div><div class="bulk-group"><strong>执行操作</strong>
+        <label class="bulk-option"><input type="checkbox" id="bulkRetest" ${sel.retest?'checked':''} onchange="updateBulkSummary()"><span>重新测速</span></label>
+        <label class="bulk-option"><input type="checkbox" id="bulkCountry" ${sel.country?'checked':''} onchange="updateBulkSummary()"><span>检测国家</span></label>
+        <label class="bulk-option"><input type="checkbox" id="bulkPromote" ${sel.promote?'checked':''} onchange="updateBulkSummary()"><span>成功后加入节点池</span></label>
+      </div></div>
+      <div id="bulkExecutionSummary" class="settings-highlight"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" onclick="runBulkTest()">执行批量测试</button></div>
     </div></div>
   </div>`;
+  updateBulkSummary();
+}
+function updateBulkSummary(){
+  const selected=[];
+  if(qs('#bulkCandidate')?.checked)selected.push('候选节点');if(qs('#bulkPool')?.checked)selected.push('节点池');if(qs('#bulkFailed')?.checked)selected.push('失败节点');
+  const actions=[];
+  if(qs('#bulkRetest')?.checked)actions.push('重新测速');if(qs('#bulkCountry')?.checked)actions.push('检测国家');
+  const host=qs('#bulkExecutionSummary');if(!host)return;
+  host.innerHTML=`<strong>${selected.length&&actions.length?'准备执行':'选择尚未完成'}</strong><span class="muted">范围：${esc(selected.join('、')||'未选择')} · 操作：${esc(actions.join('、')||'未选择')}${qs('#bulkPromote')?.checked?' · 成功节点加入池':''}</span>`;
 }
 async function runBulkTest(){
   const scopes={candidate:qs('#bulkCandidate').checked,pool:qs('#bulkPool').checked,failed:qs('#bulkFailed').checked};
@@ -1675,6 +2132,87 @@ function exportTagGroups(sources){
   }
   return [...groups.values()].map(group=>({...group,types:[...group.types]})).sort((a,b)=>a.tag.localeCompare(b.tag));
 }
+function chainProfileName(id){return S.chainProfiles.find(profile=>profile.id===id)?.name||id}
+function maskProxyURI(uri){return String(uri||'').replace(/^(\w[\w+.-]*:\/\/)[^@/]+@/,'$1***@').replace(/#.*$/,'')}
+function openChainProfileEditor(id='',origin=S.page){
+  const profile=S.chainProfiles.find(item=>item.id===id)||{id:'',name:'',enabled:true,hops:[{uri:''}]};
+  S.chainEditorOrigin=origin||S.page;
+  qs('#chainProfileTitle').textContent=id?'编辑前置代理':'添加前置代理';
+  qs('#chainProfileSubtitle').textContent=id?'修改后会应用到所有关联链式节点。':'保存后可用于导入节点的链式连接。';
+  qs('#chainEditID').value=profile.id||'';
+  qs('#chainEditName').value=profile.name||'';
+  qs('#chainEditURI').value=profile.hops?.[0]?.uri||'';
+  qs('#chainEditEnabled').checked=profile.enabled!==false;
+  const usage=S.chainUsage?.[profile.id]||{nodes:0,ports:0},usageHost=qs('#chainEditUsage');
+  usageHost.hidden=!id||!usage.nodes;
+  usageHost.innerHTML=usage.nodes?`<strong>正在使用</strong><span class="muted">关联 ${esc(usage.nodes)} 个节点，当前 ${esc(usage.ports||0)} 个端口。节点 URI 变更后将重新检测关联节点。</span>`:'';
+  setChainEditorStatus('');
+  setChainEditorBusy(false);
+  qs('#chainProfileModal').classList.add('show');
+  requestAnimationFrame(()=>qs('#chainEditName')?.focus());
+}
+function closeChainProfileEditor(){if(qs('#chainSaveButton')?.disabled)return;qs('#chainProfileModal')?.classList.remove('show')}
+function chainProfileDraft(){return {id:qs('#chainEditID')?.value||'',name:qs('#chainEditName')?.value.trim()||'',enabled:!!qs('#chainEditEnabled')?.checked,hops:[{uri:qs('#chainEditURI')?.value.trim()||''}]}}
+function validateChainProfileDraft(profile){
+  if(!profile.name)return '请填写前置代理名称';
+  if(!profile.hops[0].uri)return '请填写节点 URI';
+  if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(profile.hops[0].uri))return '节点 URI 必须包含协议，例如 vless:// 或 socks5://';
+  return '';
+}
+function setChainEditorStatus(message,type=''){const host=qs('#chainEditStatus');if(!host)return;host.textContent=message||'';host.className='inline-status '+(type||'')}
+function setChainEditorBusy(busy,action=''){
+  for(const id of ['chainTestButton','chainSaveButton'])if(qs('#'+id))qs('#'+id).disabled=!!busy;
+  if(qs('#chainTestButton'))qs('#chainTestButton').textContent=busy&&action==='test'?'正在测试':'测试连接';
+  if(qs('#chainSaveButton'))qs('#chainSaveButton').textContent=busy&&action==='save'?'正在保存':'保存';
+}
+async function testChainProfileDraft(){
+  const profile=chainProfileDraft(),error=validateChainProfileDraft(profile);if(error){setChainEditorStatus(error,'bad');return false}
+  setChainEditorBusy(true,'test');setChainEditorStatus('正在建立前置代理连接...');
+  try{const result=await api('/api/chain-profiles/test',{method:'POST',body:JSON.stringify({profile})});setChainEditorStatus(`连接成功，延迟 ${result.latency_ms||0} ms`,'good');return true}catch(err){setChainEditorStatus(err.message,'bad');return false}finally{setChainEditorBusy(false)}
+}
+async function saveChainProfileDraft(){
+  const id=qs('#chainEditID')?.value||'',name=qs('#chainEditName')?.value.trim()||'',uri=qs('#chainEditURI')?.value.trim()||'';
+  const profile={id,name,enabled:!!qs('#chainEditEnabled')?.checked,hops:[{uri}]},error=validateChainProfileDraft(profile);
+  if(error){setChainEditorStatus(error,'bad');return}
+  const usage=S.chainUsage?.[id]||{nodes:0,ports:0};
+  const cascade=!!(id&&usage.nodes&&!profile.enabled);
+  const oldProfile=S.chainProfiles.find(item=>item.id===id),routeChanged=oldProfile?.hops?.[0]?.uri!==uri;
+  const impact=cascade?`禁用会同时删除 ${usage.nodes} 个关联链式节点和 ${usage.ports||0} 个端口，无法撤销。`:routeChanged?`将影响 ${usage.nodes} 个链式节点和 ${usage.ports||0} 个端口，保存后会自动重新检测。`:`只修改名称，不会中断或重新检测关联节点。`;
+  if(id&&usage.nodes&&!confirm(`确认修改前置代理“${name}”？\n\n${impact}`))return;
+  const next=S.chainProfiles.map(profile=>({...profile,hops:(profile.hops||[]).map(hop=>({...hop}))}));
+  const index=next.findIndex(item=>item.id===id&&id);
+  if(index>=0)next[index]=profile;else next.push(profile);
+  setChainEditorBusy(true,'save');setChainEditorStatus('正在验证并保存...');
+  try{
+    const data=await api('/api/chain-profiles',{method:'PUT',body:JSON.stringify({profiles:next,cascade})});
+    S.chainProfiles=data.profiles||[];S.chainUsage=data.usage||{};
+    const saved=S.chainProfiles.find(item=>item.id===id)||(S.chainProfiles.find(item=>item.name===name&&item.hops?.[0]?.uri===uri));
+    if(S.chainEditorOrigin==='import'&&saved?.enabled)S.chainProfileID=saved.id;
+    qs('#chainProfileModal').classList.remove('show');
+    toast(data.retest_job_id?'前置代理已保存，关联节点正在重新检测':'前置代理已保存');
+    if(S.page==='settings')renderSettings();else if(S.page==='import')renderImport();
+  }catch(err){setChainEditorStatus(err.message,'bad')}finally{setChainEditorBusy(false)}
+}
+async function deleteChainProfile(id){
+  const profile=S.chainProfiles.find(item=>item.id===id);if(!profile)return;
+  const usage=S.chainUsage?.[id]||{nodes:0,ports:0};
+  const warning=usage.nodes?`\n\n这会同时删除 ${usage.nodes} 个关联链式节点和 ${usage.ports||0} 个端口，无法撤销。`:'';
+  if(!confirm(`确认删除前置代理“${profile.name}”？${warning}`))return;
+  try{const data=await api('/api/chain-profiles',{method:'PUT',body:JSON.stringify({profiles:S.chainProfiles.filter(item=>item.id!==id),cascade:usage.nodes>0})});S.chainProfiles=data.profiles||[];S.chainUsage=data.usage||{};if(S.chainProfileID===id)S.chainProfileID='';toast(data.deleted_nodes?`已删除前置代理和 ${data.deleted_nodes} 个关联节点`:'前置代理已删除');renderSettings()}catch(err){toast(err.message,'err')}
+}
+async function testChainProfile(id){
+  const button=document.querySelector(`[data-chain-test="${CSS.escape(id)}"]`),old=button?.textContent;if(button){button.disabled=true;button.textContent='测试中'}
+  try{const result=await api('/api/chain-profiles/test',{method:'POST',body:JSON.stringify({id})});toast(`前置代理可用，延迟 ${result.latency_ms||0} ms`)}catch(err){toast(err.message,'err')}finally{if(button){button.disabled=false;button.textContent=old}}
+}
+function chainProfilesHTML(){
+  if(!S.chainProfiles.length)return '<div class="connectivity-idle"><span>尚未配置前置代理</span><button class="btn small secondary" onclick="openChainProfileEditor(\'\', \'settings\')">添加前置代理</button></div>';
+  const rows=S.chainProfiles.map(profile=>{
+    const usage=S.chainUsage?.[profile.id]||{nodes:0,ports:0};
+    const counts=usage.nodes?`<span class="pill">${esc(usage.nodes)} 节点</span><span class="pill green">${esc(usage.ports||0)} 端口</span>`:'';
+    return `<div class="chain-row"><div class="chain-main"><div class="row"><strong>${esc(profile.name)}</strong><span class="pill ${profile.enabled?'green':'amber'}">${profile.enabled?'已启用':'已禁用'}</span>${counts}</div><code class="source-value">${esc(maskProxyURI(profile.hops?.[0]?.uri||''))}</code></div><div class="chain-row-actions"><button class="btn small green" data-chain-test="${esc(profile.id)}" data-id="${esc(profile.id)}" onclick="testChainProfile(this.dataset.id)">测试</button><button class="btn small secondary" data-id="${esc(profile.id)}" onclick="openChainProfileEditor(this.dataset.id,'settings')">编辑</button><button class="btn small danger" data-id="${esc(profile.id)}" onclick="deleteChainProfile(this.dataset.id)">删除</button></div></div>`;
+  }).join('');
+  return `<div class="chain-list">${rows}</div>`;
+}
 function renderSettings(){
   const s=S.settings||{};
   const listener=s.listener||{},multi=s.multi_port||{},pool=s.pool||{},management=s.management||{};
@@ -1692,7 +2230,17 @@ function renderSettings(){
   const availableTags=new Set(exportTags.map(group=>group.tag));
   for(const tag of S.selectedExportTags)if(!availableTags.has(tag))S.selectedExportTags.delete(tag);
   qs('#view').innerHTML=`<div class="settings-grid">
-      <section class="settings-section">
+      <section class="settings-section settings-compact" data-settings-column="left">
+        <div class="settings-section-head">
+          <div><h2>前置代理</h2><p>链式节点先连接前置代理，再连接导入节点。</p></div>
+          <button class="btn small primary" onclick="openChainProfileEditor('', 'settings')">添加</button>
+        </div>
+        <div class="settings-section-body">
+          ${chainProfilesHTML()}
+        </div>
+      </section>
+
+      <section class="settings-section" data-settings-column="right">
         <div class="settings-section-head">
           <div><h2>基础运行</h2><p>控制运行模式、测速目标和管理入口。</p></div>
           <span class="pill green">${esc(s.mode||'pool')}</span>
@@ -1712,7 +2260,7 @@ function renderSettings(){
         </div>
       </section>
 
-      <section class="settings-section">
+      <section class="settings-section" data-settings-column="left">
         <div class="settings-section-head">
           <div><h2>端口与监听</h2><p>这些设置决定用户最终复制和使用的本地端口。</p></div>
           <span class="pill">起始端口 ${esc(multi.base_port||0)}</span>
@@ -1734,7 +2282,7 @@ function renderSettings(){
         </div>
       </section>
 
-      <section class="settings-section">
+      <section class="settings-section" data-settings-column="right">
         <div class="settings-section-head">
           <div><h2>节点池策略</h2><p>控制节点轮换、失败判定和临时拉黑。</p></div>
           <span class="pill amber">失败阈值 ${esc(pool.failure_threshold||2)}</span>
@@ -1750,7 +2298,7 @@ function renderSettings(){
         </div>
       </section>
 
-      <section class="settings-section">
+      <section class="settings-section" data-settings-column="right">
         <div class="settings-section-head">
           <div><h2>订阅刷新</h2><p>管理订阅定时刷新和手动刷新。</p></div>
           <span class="pill green">${esc((sub.subscriptions||[]).length)} 个订阅</span>
@@ -1778,6 +2326,7 @@ function renderSettings(){
           <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
             <span class="pill green">${esc(src.tag_prefix||'local')}</span>
             <span class="pill">${esc(importSourceType(src))}</span>
+            ${src.chain_profile_id?`<span class="pill amber">前置 ${esc(chainProfileName(src.chain_profile_id))}</span>`:''}
             <span class="value-pill muted">总数 ${esc(src.total||0)}</span>
             <span class="value-pill green">池内 ${esc(src.pool||0)}</span>
             <span class="value-pill red">失败 ${esc(src.failed||0)}</span>
@@ -1832,9 +2381,18 @@ function renderSettings(){
         </div>
       </section>
   </div>`;
+  arrangeSettingsLayout();
   qs('#setMode').value=s.mode||'pool';
   qs('#setProbe').value=probeTarget;
   qs('#setPoolMode').value=pool.mode||'rotate';
+}
+function arrangeSettingsLayout(){
+  const grid=qs('#view .settings-grid');if(!grid)return;
+  const sections=qsa('#view [data-settings-column]');if(!sections.length)return;
+  const columns=document.createElement('div');columns.className='settings-columns';
+  const left=document.createElement('div'),right=document.createElement('div');
+  left.className='settings-column';right.className='settings-column';columns.append(left,right);grid.insertBefore(columns,grid.firstChild);
+  for(const section of sections)(section.dataset.settingsColumn==='left'?left:right).appendChild(section);
 }
 function allowedProbeTarget(value){
   const allowed=['https://www.gstatic.com/generate_204','https://cp.cloudflare.com/generate_204'];
@@ -2010,9 +2568,10 @@ function renderRefreshJobDialog(job){
   const modal=qs('#resultModal'),dialog=qs('#resultDialog');
   if(!modal||!dialog)return;
   modal.classList.add('refresh-modal');
-  dialog.className='dialog wide';
+  dialog.className='dialog wide standard-dialog';
+  dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-labelledby','refreshDialogTitle');
   if(dialog.dataset.refreshShell!=='1'){
-    dialog.innerHTML='<h2 id="refreshDialogTitle"></h2><div class="stack"><div id="refreshDialogProgress"></div><div class="refresh-stats" id="refreshDialogStats"></div><div id="refreshDialogNotice"></div><div class="refresh-detail-list" id="refreshDialogList"></div></div><div class="refresh-actions" id="refreshDialogActions" style="margin-top:16px"></div>';
+    dialog.innerHTML='<div class="dialog-header"><h2 id="refreshDialogTitle"></h2><button class="btn ghost dialog-close" type="button" onclick="closeDialog()" aria-label="关闭">×</button></div><div class="dialog-body"><div class="stack"><div id="refreshDialogProgress"></div><div class="refresh-stats" id="refreshDialogStats"></div><div id="refreshDialogNotice"></div><div class="refresh-detail-list" id="refreshDialogList"></div></div></div><div class="dialog-footer refresh-actions" id="refreshDialogActions"></div>';
     dialog.dataset.refreshShell='1';
   }
   const titleHost=qs('#refreshDialogTitle'),progressHost=qs('#refreshDialogProgress'),statsHost=qs('#refreshDialogStats'),noticeHost=qs('#refreshDialogNotice'),listHost=qs('#refreshDialogList'),actionsHost=qs('#refreshDialogActions');
@@ -2024,6 +2583,7 @@ function renderRefreshJobDialog(job){
     listHost.innerHTML='';
     actionsHost.innerHTML='<button class="btn" onclick="closeDialog()">收起</button>';
     modal.classList.add('show');
+    document.addEventListener('keydown',handleDialogKeydown);
     return;
   }
   const groups=Array.isArray(job.groups)?job.groups:[];
@@ -2038,7 +2598,8 @@ function renderRefreshJobDialog(job){
       const source=local?'使用已保存的节点重新检测':maskedSubscriptionURL(r.url);
       const attempt=r.attempt?` · 拉取尝试 ${r.attempt}/${r.attempts||2}`:'';
       const probe=r.probe_round?`节点检测第 ${r.probe_round}/${r.probe_rounds||3} 轮 · 本轮 ${r.probe_round_done||0}/${r.probe_round_total||0} · 剩余 ${r.probe_pending||0} · ${probeTargetLabel(r.probe_target)} · 并发 ${r.probe_concurrency||'-'}`:'';
-      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>${esc(title)}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span>${r.cached?'<span class="pill amber">缓存节点</span>':''}${r.protected?'<span class="pill red">结果未应用</span>':''}</div><div class="muted">${esc(source+attempt)}</div><div class="muted">${esc(progress)}</div>${probe?`<div class="muted">${esc(probe)}</div>`:''}${r.total?`<div class="muted">${esc(counts)}</div>`:''}${r.warning?`<div class="muted" style="color:#9a6700">${esc(r.warning)}</div>`:''}${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
+      const front=r.chain_probe?(r.chain_probe.error?`前置 ${r.chain_probe.profile_name||r.chain_probe.profile_id} 失败：${r.chain_probe.error}`:`前置 ${r.chain_probe.profile_name||r.chain_probe.profile_id} · ${r.chain_probe.latency_ms||0} ms`):'';
+      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>${esc(title)}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span>${r.cached?'<span class="pill amber">缓存节点</span>':''}${r.protected?'<span class="pill red">结果未应用</span>':''}</div><div class="muted">${esc(source+attempt)}</div><div class="muted">${esc(progress)}</div>${front?`<div class="muted">${esc(front)}</div>`:''}${probe?`<div class="muted">${esc(probe)}</div>`:''}${r.total?`<div class="muted">${esc(counts)}</div>`:''}${r.warning?`<div class="muted" style="color:#9a6700">${esc(r.warning)}</div>`:''}${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
     }).join('');
     return `<div class="stack" style="gap:10px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">来源 ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
   }).join('');
@@ -2051,10 +2612,12 @@ function renderRefreshJobDialog(job){
   listHost.scrollTop=scrollTop;
   actionsHost.innerHTML=`${job.status==='running'?'<button class="btn danger" onclick="cancelRefreshSourceJob()">取消检测</button>':''}<button class="btn ${job.status==='running'?'secondary':'primary'}" onclick="closeDialog()">${job.status==='running'?'收起':'关闭'}</button>`;
   modal.classList.add('show');
+  document.addEventListener('keydown',handleDialogKeydown);
 }
 function openRefreshJobDetails(){
   const jobID=S.refreshJob?.id||S.activeRefreshJob;
   if(!jobID){toast('没有刷新任务','err');return}
+  dialogReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
   S.refreshDialogJob=jobID;
   S.refreshDialogOpen=true;
   renderRefreshJobDialog(S.refreshJob?.id===jobID?S.refreshJob:null);
@@ -2192,7 +2755,7 @@ function openNodeExportDialog(ids){
   ids=Array.isArray(ids)?ids.filter(Boolean):[];
   if(!ids.length){toast('请先选择节点','err');return}
   S.pendingExportNodeIDs=ids;
-  openDialog('导出节点',`<p>将导出 ${ids.length} 个节点，请选择格式。</p><div class="row"><button class="btn secondary" onclick="exportPendingNodes('uri')">URI</button><button class="btn secondary" onclick="exportPendingNodes('yaml')">YAML</button><button class="btn secondary" onclick="exportPendingNodes('base64')">Base64</button></div>`);
+  openDialog('导出节点',`<p>将导出 ${ids.length} 个节点，请选择格式。</p><div class="row"><button class="btn secondary" onclick="exportPendingNodes('uri')">URI</button><button class="btn secondary" onclick="exportPendingNodes('yaml')">YAML</button><button class="btn secondary" onclick="exportPendingNodes('base64')">Base64</button></div>`,{actions:'<button class="btn" type="button" onclick="closeDialog()">取消</button>'});
 }
 async function exportPendingNodes(format){
   const ids=S.pendingExportNodeIDs||[];
@@ -2329,11 +2892,14 @@ async function downloadExport(){
     openDialog('导出完成','<p>已生成导出文件。</p>');
   }catch(err){openDialog('导出失败',`<p>${esc(err.message)}</p>`)}
 }
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&qs('#chainProfileModal')?.classList.contains('show'))closeChainProfileEditor();
+});
 (async function boot(){
   renderNav();
   try{await api('/api/ui/summary');qs('#authModal').classList.remove('show');startJobEventStream()}catch(e){}
   setupAllAutoProbe();
-  await go('import');
+  await go(pageFromHash(),true);
 })();
 </script>
 </body>

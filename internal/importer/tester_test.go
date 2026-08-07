@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"easy_proxies/internal/proxychain"
+
 	"github.com/sagernet/sing-box/option"
 )
 
@@ -407,5 +409,20 @@ func TestNodeTesterRecoverPanic(t *testing.T) {
 	}
 	if !strings.Contains(result.Error.Error(), "node test panic: bad outbound") {
 		t.Fatalf("unexpected error: %v", result.Error)
+	}
+}
+
+func TestFetchViaChainWithoutBuilderReturnsError(t *testing.T) {
+	tester := NewNodeTester(nil)
+	profile := proxychain.Profile{
+		ID:      "front",
+		Name:    "front",
+		Enabled: true,
+		Hops:    []proxychain.Hop{{URI: "socks5://127.0.0.1:1080"}},
+	}
+
+	_, err := tester.FetchViaChain(context.Background(), profile, "https://example.com", nil, time.Second)
+	if err == nil || !strings.Contains(err.Error(), "chain outbound builder is not configured") {
+		t.Fatalf("FetchViaChain() error = %v", err)
 	}
 }

@@ -56,5 +56,6 @@ webdav:
   folder: /easy_proxies
 
 subscriptions: []
+chain_profiles: []
 nodes: []
 skip_cert_verify: false

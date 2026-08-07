@@ -52,7 +52,7 @@ func (s *Service) syncRuntimePagePorts(nodes []ManagedNode) []ManagedNode {
 	keys := make([]string, 0, len(nodes))
 	for _, node := range nodes {
 		if (node.InPool || node.State == StateInPool) && node.URI != "" {
-			keys = append(keys, node.URI)
+			keys = append(keys, node.URI+"\x00"+node.ChainProfileID)
 		}
 	}
 	if len(keys) == 0 {
@@ -63,7 +63,7 @@ func (s *Service) syncRuntimePagePorts(nodes []ManagedNode) []ManagedNode {
 		return nodes
 	}
 	for i := range nodes {
-		if port, ok := ports[nodes[i].URI]; ok {
+		if port, ok := ports[nodes[i].URI+"\x00"+nodes[i].ChainProfileID]; ok {
 			nodes[i].Port = port
 		}
 	}
@@ -139,7 +139,7 @@ func (s *Service) resolveBatchTestNodeIDs(req BatchTestRequest) ([]string, error
 			ids = append(ids, node.ID)
 			continue
 		}
-		if _, ok := scopes["failed"]; ok && node.State == StateFailed {
+		if _, ok := scopes["failed"]; ok && (node.State == StateFailed || node.State == StateBlocked) {
 			ids = append(ids, node.ID)
 		}
 	}
@@ -192,7 +192,7 @@ func matchesUIScope(node ManagedNode, scope string) bool {
 	case "pool":
 		return node.InPool || node.State == StateInPool
 	case "failed":
-		return node.State == StateFailed
+		return node.State == StateFailed || node.State == StateBlocked
 	default:
 		return true
 	}

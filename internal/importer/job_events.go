@@ -3,10 +3,11 @@ package importer
 import "sync"
 
 type JobEvent struct {
-	Kind    string            `json:"kind"`
-	ID      string            `json:"id"`
-	Test    *TestJob          `json:"test,omitempty"`
-	Refresh *SourceRefreshJob `json:"refresh,omitempty"`
+	Kind         string            `json:"kind"`
+	ID           string            `json:"id"`
+	Test         *TestJob          `json:"test,omitempty"`
+	Refresh      *SourceRefreshJob `json:"refresh,omitempty"`
+	Connectivity *ConnectivityJob  `json:"connectivity,omitempty"`
 }
 
 type JobEventStats struct {
@@ -57,6 +58,12 @@ func (s *Service) JobEventSnapshot() []JobEvent {
 		events = append(events, JobEvent{Kind: "refresh", ID: job.ID, Refresh: &copyJob})
 	}
 	s.refreshJobsMu.RUnlock()
+	s.connectivityJobsMu.RLock()
+	for _, state := range s.connectivityJobs {
+		job := connectivityJobSnapshot(state)
+		events = append(events, JobEvent{Kind: "connectivity", ID: job.ID, Connectivity: &job})
+	}
+	s.connectivityJobsMu.RUnlock()
 	return events
 }
 
@@ -101,6 +108,17 @@ func cloneRefreshJob(job *SourceRefreshJob) SourceRefreshJob {
 	for i, group := range job.Groups {
 		copyJob.Groups[i] = group
 		copyJob.Groups[i].URLs = append([]SourceRefreshURL(nil), group.URLs...)
+		for j := range copyJob.Groups[i].URLs {
+			copyJob.Groups[i].URLs[j].ChainProbe = cloneChainProbe(group.URLs[j].ChainProbe)
+		}
 	}
 	return copyJob
+}
+
+func cloneChainProbe(probe *ChainProbeResult) *ChainProbeResult {
+	if probe == nil {
+		return nil
+	}
+	copyProbe := *probe
+	return &copyProbe
 }

@@ -78,28 +78,29 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	// On fresh installs (empty pool) we leave cfg.Nodes untouched so the
 	// initial subscription-loaded nodes remain usable until first promote.
 	if poolNodes := nodeStore.ListPoolNodes(); len(poolNodes) > 0 {
-		poolByURI := make(map[string]importer.ManagedNode, len(poolNodes))
+		poolByRoute := make(map[string]importer.ManagedNode, len(poolNodes))
 		for _, pn := range poolNodes {
 			if pn.URI != "" {
-				poolByURI[pn.URI] = pn
+				poolByRoute[pn.URI+"\x00"+pn.ChainProfileID] = pn
 			}
 		}
-		filtered := make([]config.NodeConfig, 0, len(poolByURI))
-		seen := make(map[string]struct{}, len(poolByURI))
+		filtered := make([]config.NodeConfig, 0, len(poolByRoute))
+		seen := make(map[string]struct{}, len(poolByRoute))
 		for _, n := range cfg.Nodes {
-			if pn, ok := poolByURI[n.URI]; ok {
+			key := n.URI + "\x00" + n.ChainProfileID
+			if pn, ok := poolByRoute[key]; ok {
 				if pn.Name != "" {
 					n.Name = pn.Name
 				}
 				filtered = append(filtered, n)
-				seen[n.URI] = struct{}{}
+				seen[key] = struct{}{}
 			}
 		}
 		// Include pool entries that have no matching subscription URI yet
 		// (e.g. user manually imported them). These arrive with Port=0
 		// and will be assigned by RebuildPortAssignments below.
-		for uri, pn := range poolByURI {
-			if _, ok := seen[uri]; ok {
+		for route, pn := range poolByRoute {
+			if _, ok := seen[route]; ok {
 				continue
 			}
 			filtered = append(filtered, pn.ToConfigNode())
@@ -120,6 +121,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		importer.WithProbeTarget(cfg.Management.ProbeTarget),
 		importer.WithTesterTimeout(cfg.SubscriptionRefresh.HealthCheckTimeout),
 		importer.WithSkipCertVerify(cfg.SkipCertVerify),
+		importer.WithChainProfiles(cfg.ChainProfiles),
+		importer.WithChainOutboundBuilder(builder.BuildChainOutbounds),
 	}
 	if cfg.Mode == "multi-port" || cfg.Mode == "hybrid" {
 		testerOptions = append(testerOptions, importer.WithRuntimeProxy(

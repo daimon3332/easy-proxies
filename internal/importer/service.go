@@ -18,10 +18,17 @@ import (
 	"time"
 
 	"easy_proxies/internal/config"
+	"easy_proxies/internal/proxychain"
 	"easy_proxies/internal/subfetch"
 )
 
 var ErrNoRefreshSources = errors.New("no refreshable import sources")
+
+const (
+	FetchDirect    = "direct"
+	FetchAuto      = "auto"
+	FetchChainOnly = "chain_only"
+)
 
 type NodeManager interface {
 	CreateNode(ctx context.Context, node config.NodeConfig) (config.NodeConfig, error)
@@ -74,25 +81,30 @@ type Service struct {
 	nodeMgr    NodeManager
 	httpClient *http.Client
 
-	importCancelsMu   sync.Mutex
-	importCancels     map[string]context.CancelFunc
-	testJobsMu        sync.RWMutex
-	testJobs          map[string]*TestJob
-	testCancelsMu     sync.Mutex
-	testCancels       map[string]context.CancelFunc
-	refreshJobsMu     sync.RWMutex
-	refreshJobs       map[string]*SourceRefreshJob
-	refreshStartMu    sync.Mutex
-	refreshCancelsMu  sync.Mutex
-	refreshCancels    map[string]context.CancelFunc
-	jobEventsMu       sync.Mutex
-	jobEventSubs      map[uint64]chan JobEvent
-	jobEventNext      uint64
-	jobEventsClosed   bool
-	jobEventCoalesced atomic.Uint64
-	lifecycleMu       sync.Mutex
-	jobsWG            sync.WaitGroup
-	closing           bool
+	importCancelsMu       sync.Mutex
+	importCancels         map[string]context.CancelFunc
+	testJobsMu            sync.RWMutex
+	testJobs              map[string]*TestJob
+	testCancelsMu         sync.Mutex
+	testCancels           map[string]context.CancelFunc
+	refreshJobsMu         sync.RWMutex
+	refreshJobs           map[string]*SourceRefreshJob
+	refreshStartMu        sync.Mutex
+	refreshCancelsMu      sync.Mutex
+	refreshCancels        map[string]context.CancelFunc
+	connectivityJobsMu    sync.RWMutex
+	connectivityJobs      map[string]*connectivityJobState
+	connectivityCancelsMu sync.Mutex
+	connectivityCancels   map[string]context.CancelFunc
+	connectivityProbePass func(context.Context, []ManagedNode, map[string]map[string]struct{}, int) <-chan connectivityProbeEvent
+	jobEventsMu           sync.Mutex
+	jobEventSubs          map[uint64]chan JobEvent
+	jobEventNext          uint64
+	jobEventsClosed       bool
+	jobEventCoalesced     atomic.Uint64
+	lifecycleMu           sync.Mutex
+	jobsWG                sync.WaitGroup
+	closing               bool
 
 	refreshConcurrency     int
 	refreshRetryDelay      time.Duration
@@ -113,6 +125,61 @@ func (s *Service) ProbeSchedulerStats() ProbeSchedulerStats {
 		return ProbeSchedulerStats{}
 	}
 	return s.tester.ProbeSchedulerStats()
+}
+
+func (s *Service) SetChainProfiles(profiles []proxychain.Profile) error {
+	if s == nil || s.tester == nil {
+		return fmt.Errorf("node tester is unavailable")
+	}
+	return s.tester.SetChainProfiles(profiles)
+}
+
+func (s *Service) ChainProfiles() []proxychain.Profile {
+	if s == nil || s.tester == nil {
+		return nil
+	}
+	return s.tester.ChainProfiles()
+}
+
+func (s *Service) TestChainProfile(ctx context.Context, id string) ChainProbeResult {
+	result := ChainProbeResult{ProfileID: strings.TrimSpace(id)}
+	if s == nil || s.tester == nil {
+		result.Error = "node tester is unavailable"
+		return result
+	}
+	profile, ok := s.tester.ChainProfile(result.ProfileID)
+	if !ok {
+		result.Error = "前置代理不存在"
+		return result
+	}
+	result.ProfileName = profile.Name
+	probe := s.tester.TestChainProfile(ctx, profile)
+	result.LatencyMs = probe.LatencyMs
+	if probe.Error != nil {
+		result.Error = probe.Error.Error()
+	}
+	return result
+}
+
+func (s *Service) TestChainProfileValue(ctx context.Context, profile proxychain.Profile) ChainProbeResult {
+	result := ChainProbeResult{ProfileID: strings.TrimSpace(profile.ID), ProfileName: strings.TrimSpace(profile.Name)}
+	if s == nil || s.tester == nil {
+		result.Error = "node tester is unavailable"
+		return result
+	}
+	normalized, err := proxychain.NormalizeProfile(profile)
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+	result.ProfileID = normalized.ID
+	result.ProfileName = normalized.Name
+	probe := s.tester.TestChainProfile(ctx, normalized)
+	result.LatencyMs = probe.LatencyMs
+	if probe.Error != nil {
+		result.Error = probe.Error.Error()
+	}
+	return result
 }
 
 const (
@@ -142,6 +209,8 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 		testCancels:            make(map[string]context.CancelFunc),
 		refreshJobs:            make(map[string]*SourceRefreshJob),
 		refreshCancels:         make(map[string]context.CancelFunc),
+		connectivityJobs:       make(map[string]*connectivityJobState),
+		connectivityCancels:    make(map[string]context.CancelFunc),
 		jobEventSubs:           make(map[uint64]chan JobEvent),
 		refreshConcurrency:     defaultRefreshConcurrency,
 		refreshRetryDelay:      defaultRefreshRetryDelay,
@@ -195,6 +264,11 @@ func (s *Service) Close(ctx context.Context) error {
 			cancel()
 		}
 		s.refreshCancelsMu.Unlock()
+		s.connectivityCancelsMu.Lock()
+		for _, cancel := range s.connectivityCancels {
+			cancel()
+		}
+		s.connectivityCancelsMu.Unlock()
 	}
 	s.lifecycleMu.Unlock()
 	s.closeJobEvents()
@@ -250,6 +324,7 @@ type sourceRefreshTarget struct {
 	Key          string
 	TagPrefix    string
 	URLs         []string
+	URLRefs      map[string]NodeSourceRef
 	LocalNodeIDs []string
 	LocalFormats []string
 	Revision     uint64
@@ -453,7 +528,7 @@ func (s *Service) sourceRefreshTargets(key string) ([]sourceRefreshTarget, error
 			}
 			target := targetByTag[tagPrefix]
 			if target == nil {
-				target = &sourceRefreshTarget{Key: "tag:" + tagPrefix, TagPrefix: tagPrefix}
+				target = &sourceRefreshTarget{Key: "tag:" + tagPrefix, TagPrefix: tagPrefix, URLRefs: make(map[string]NodeSourceRef)}
 				targetByTag[tagPrefix] = target
 				urlSeen[tagPrefix] = make(map[string]struct{})
 				formatSeen[tagPrefix] = make(map[string]struct{})
@@ -461,11 +536,15 @@ func (s *Service) sourceRefreshTargets(key string) ([]sourceRefreshTarget, error
 			source := strings.TrimSpace(ref.Source)
 			if isURLSourceRef(ref) && source != "" {
 				for _, rawURL := range splitSubscriptionURLs(source) {
-					if _, exists := urlSeen[tagPrefix][rawURL]; exists {
+					urlRef := ref
+					urlRef.Source = rawURL
+					identity := sourceRefIdentity(urlRef)
+					if _, exists := urlSeen[tagPrefix][identity]; exists {
 						continue
 					}
-					urlSeen[tagPrefix][rawURL] = struct{}{}
+					urlSeen[tagPrefix][identity] = struct{}{}
 					target.URLs = append(target.URLs, rawURL)
+					target.URLRefs[rawURL] = urlRef
 				}
 				continue
 			}
@@ -520,6 +599,7 @@ type sourceRefreshWork struct {
 	rowIdx   int
 	target   sourceRefreshTarget
 	rawURL   string
+	ref      NodeSourceRef
 }
 
 func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sourceRefreshTarget, snapshot sourceRefreshSnapshot) {
@@ -542,7 +622,7 @@ func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sou
 	works := make([]sourceRefreshWork, 0)
 	for groupIdx, target := range targets {
 		for rowIdx, rawURL := range target.URLs {
-			works = append(works, sourceRefreshWork{groupIdx: groupIdx, rowIdx: rowIdx, target: target, rawURL: rawURL})
+			works = append(works, sourceRefreshWork{groupIdx: groupIdx, rowIdx: rowIdx, target: target, rawURL: rawURL, ref: target.URLRefs[rawURL]})
 		}
 		if len(target.LocalNodeIDs) > 0 {
 			works = append(works, sourceRefreshWork{groupIdx: groupIdx, rowIdx: len(target.URLs), target: target})
@@ -836,7 +916,7 @@ func (s *Service) refreshURLSource(ctx context.Context, jobID string, work sourc
 		proxyTimeout = defaultRefreshProxyTimeout
 	}
 	fetchCtx, cancel := context.WithTimeout(ctx, timeout+time.Duration(s.refreshProxyCandidates)*proxyTimeout)
-	parsed, err := s.parseRefreshSubscriptionURLContext(fetchCtx, work.target.TagPrefix, work.rawURL, 0, func(current, total int) {
+	parsed, err := s.parseRefreshSubscriptionURLContextRef(fetchCtx, work.target.TagPrefix, work.rawURL, work.ref, 0, func(current, total int) {
 		s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
 			row.Stage = "proxy"
 			row.Detail = fmt.Sprintf("正在尝试节点池代理 %d/%d", current, total)
@@ -852,7 +932,7 @@ func (s *Service) refreshURLSource(ctx context.Context, jobID string, work sourc
 			})
 			return ctx.Err()
 		}
-		ids := s.existingURLRefreshNodeIDs(work.target.TagPrefix, work.rawURL)
+		ids := s.existingURLRefreshNodeIDs(work.target.TagPrefix, work.rawURL, work.ref.ChainProfileID)
 		warning := "订阅拉取失败，已改为检测保存节点：" + msg
 		if len(ids) == 0 {
 			s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
@@ -906,7 +986,7 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 			s.protectRefreshRow(jobID, work, len(parsed.Nodes), "清理无效订阅节点失败: "+compactRefreshError(err))
 			return err
 		}
-		existingIDs := s.existingURLRefreshNodeIDs(work.target.TagPrefix, work.rawURL)
+		existingIDs := s.existingURLRefreshNodeIDs(work.target.TagPrefix, work.rawURL, work.ref.ChainProfileID)
 		warning := fmt.Sprintf("订阅新节点 %d 个三轮检测全部失败", len(parsed.Nodes))
 		if len(existingIDs) > 0 {
 			return s.refreshExistingNodes(ctx, jobID, work, existingIDs, true, warning+"，已改为检测保存节点")
@@ -926,7 +1006,7 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 		row.Stage = "apply"
 		row.Detail = "测速完成，正在应用节点和端口"
 	})
-	promoted, err := s.applyStagedRefreshNodesRevision(ctx, work.target.TagPrefix, work.target.Revision, work.rawURL, nodeIDs, func() {
+	promoted, err := s.applyStagedRefreshNodesRevisionWithChain(ctx, work.target.TagPrefix, work.target.Revision, work.rawURL, work.ref.ChainProfileID, nodeIDs, func() {
 		s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
 			row.Status = "verifying"
 			row.Stage = "verify"
@@ -967,8 +1047,12 @@ func (s *Service) applyStagedRefreshNodes(ctx context.Context, sourceURL string,
 }
 
 func (s *Service) applyStagedRefreshNodesRevision(ctx context.Context, tagPrefix string, revision uint64, sourceURL string, nodeIDs []string, onVerify func()) (int, error) {
+	return s.applyStagedRefreshNodesRevisionWithChain(ctx, tagPrefix, revision, sourceURL, "", nodeIDs, onVerify)
+}
+
+func (s *Service) applyStagedRefreshNodesRevisionWithChain(ctx context.Context, tagPrefix string, revision uint64, sourceURL, chainProfileID string, nodeIDs []string, onVerify func()) (int, error) {
 	return s.applyStagedNodes(ctx, tagPrefix, revision, nodeIDs, "refresh_stage", "url", func(ref NodeSourceRef) bool {
-		return isURLSourceRef(ref) && strings.TrimSpace(ref.Source) == strings.TrimSpace(sourceURL)
+		return isURLSourceRef(ref) && strings.TrimSpace(ref.Source) == strings.TrimSpace(sourceURL) && strings.TrimSpace(ref.ChainProfileID) == strings.TrimSpace(chainProfileID)
 	}, true, onVerify)
 }
 
@@ -1012,15 +1096,21 @@ func (s *Service) applyStagedNodes(ctx context.Context, tagPrefix string, revisi
 			continue
 		}
 		stageIDs = append(stageIDs, node.ID)
-		node.ID = nodeID(node.URI)
+		node.ID = s.routeNodeID(node.URI, node.ChainProfileID)
 		refs := make([]NodeSourceRef, 0, len(node.SourceRefs))
+		var stageRef NodeSourceRef
 		for _, ref := range node.SourceRefs {
 			if ref.Mode != "refresh_stage" && ref.Mode != "import_stage" {
 				refs = append(refs, ref)
+			} else if stageRef.Mode == "" {
+				stageRef = ref
 			}
 		}
 		if len(refs) == 0 {
-			ref := sourceRefFromNode(node)
+			ref := stageRef
+			if ref.Mode == "" {
+				ref = sourceRefFromNode(node)
+			}
 			ref.Mode = fallbackMode
 			refs = append(refs, ref)
 		}
@@ -1241,11 +1331,11 @@ func (s *Service) ensurePoolRuntimeConsistency(ctx context.Context) error {
 	}
 	byID := make(map[string]config.NodeConfig, len(configured))
 	for _, node := range configured {
-		byID[nodeID(node.URI)] = node
+		byID[s.routeNodeID(node.URI, node.ChainProfileID)] = node
 	}
 	updates := make([]ManagedNode, 0, len(pool))
 	for _, node := range pool {
-		configuredNode, exists := byID[nodeID(node.URI)]
+		configuredNode, exists := byID[s.routeNodeID(node.URI, node.ChainProfileID)]
 		if !exists {
 			return fmt.Errorf("运行配置缺少节点池成员")
 		}
@@ -1405,11 +1495,11 @@ func (s *Service) existingLocalRefreshNodeIDs(target sourceRefreshTarget) []stri
 	return ids
 }
 
-func (s *Service) existingURLRefreshNodeIDs(tagPrefix, subURL string) []string {
+func (s *Service) existingURLRefreshNodeIDs(tagPrefix, subURL, chainProfileID string) []string {
 	ids := make([]string, 0)
 	for _, node := range s.store.ListNodes() {
 		if !nodeHasSource(node, func(ref NodeSourceRef) bool {
-			return ref.TagPrefix == tagPrefix && isURLSourceRef(ref) && strings.TrimSpace(ref.Source) == subURL
+			return ref.TagPrefix == tagPrefix && isURLSourceRef(ref) && strings.TrimSpace(ref.Source) == subURL && strings.TrimSpace(ref.ChainProfileID) == strings.TrimSpace(chainProfileID)
 		}) {
 			continue
 		}
@@ -1420,6 +1510,10 @@ func (s *Service) existingURLRefreshNodeIDs(tagPrefix, subURL string) []string {
 }
 
 func (s *Service) parseRefreshSubscriptionURLContext(ctx context.Context, tagPrefix, subURL string, proxyStart int, onProxyAttempt func(int, int)) (ParseResponse, error) {
+	return s.parseRefreshSubscriptionURLContextRef(ctx, tagPrefix, subURL, NodeSourceRef{FetchPolicy: FetchAuto}, proxyStart, onProxyAttempt)
+}
+
+func (s *Service) parseRefreshSubscriptionURLContextRef(ctx context.Context, tagPrefix, subURL string, ref NodeSourceRef, proxyStart int, onProxyAttempt func(int, int)) (ParseResponse, error) {
 	tagPrefix = strings.TrimSpace(tagPrefix)
 	if tagPrefix == "" {
 		tagPrefix = s.tagPrefixForImportSource(subURL)
@@ -1427,20 +1521,20 @@ func (s *Service) parseRefreshSubscriptionURLContext(ctx context.Context, tagPre
 	if tagPrefix == "" {
 		tagPrefix = "local"
 	}
-	return s.parseRefreshSubscriptionURLWithContextMode(ctx, tagPrefix, subURL, proxyStart, onProxyAttempt, true)
+	return s.parseRefreshSubscriptionURLWithContextMode(ctx, tagPrefix, subURL, ref, proxyStart, onProxyAttempt, true)
 }
 
 func (s *Service) parseRefreshSubscriptionURLOnce(tagPrefix, subURL string, timeout time.Duration) (ParseResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	return s.parseRefreshSubscriptionURLWithContextMode(ctx, tagPrefix, subURL, 0, nil, false)
+	return s.parseRefreshSubscriptionURLWithContextMode(ctx, tagPrefix, subURL, NodeSourceRef{}, 0, nil, false)
 }
 
 func (s *Service) parseRefreshSubscriptionURLWithContext(ctx context.Context, tagPrefix, subURL string, proxyStart int, onProxyAttempt func(int, int)) (ParseResponse, error) {
-	return s.parseRefreshSubscriptionURLWithContextMode(ctx, tagPrefix, subURL, proxyStart, onProxyAttempt, false)
+	return s.parseRefreshSubscriptionURLWithContextMode(ctx, tagPrefix, subURL, NodeSourceRef{FetchPolicy: FetchAuto}, proxyStart, onProxyAttempt, false)
 }
 
-func (s *Service) parseRefreshSubscriptionURLWithContextMode(ctx context.Context, tagPrefix, subURL string, proxyStart int, onProxyAttempt func(int, int), stage bool) (ParseResponse, error) {
+func (s *Service) parseRefreshSubscriptionURLWithContextMode(ctx context.Context, tagPrefix, subURL string, ref NodeSourceRef, proxyStart int, onProxyAttempt func(int, int), stage bool) (ParseResponse, error) {
 	subURL = strings.TrimSpace(subURL)
 	if subURL == "" {
 		return ParseResponse{}, fmt.Errorf("订阅 URL 不能为空")
@@ -1458,12 +1552,13 @@ func (s *Service) parseRefreshSubscriptionURLWithContextMode(ctx context.Context
 	if timeout <= 0 {
 		return ParseResponse{}, context.DeadlineExceeded
 	}
-	body, err := subfetch.Fetch(ctx, subURL, subfetch.Options{
-		Timeout: timeout,
-		ProxyFallback: func(proxyCtx context.Context, rawURL string, headers http.Header) ([]byte, error) {
-			return s.fetchSubscriptionViaPool(proxyCtx, rawURL, headers, tagPrefix, proxyStart, onProxyAttempt)
-		},
-	})
+	fetchPolicy := normalizeFetchPolicy(ref.FetchPolicy)
+	if ref.FetchPolicy == "" {
+		fetchPolicy = FetchAuto
+	}
+	body, err := s.fetchImportSubscription(ctx, subURL, ParseRequest{
+		TagPrefix: tagPrefix, ChainProfileID: ref.ChainProfileID, FetchPolicy: fetchPolicy,
+	}, timeout)
 	if err != nil {
 		return ParseResponse{}, fmt.Errorf("获取订阅失败: %w", err)
 	}
@@ -1483,7 +1578,7 @@ func (s *Service) parseRefreshSubscriptionURLWithContextMode(ctx context.Context
 	nodes := make([]ManagedNode, 0, len(configNodes))
 	nodeIDs := make([]string, 0, len(configNodes))
 	for _, cn := range configNodes {
-		canonicalID := nodeID(cn.URI)
+		canonicalID := s.routeNodeID(cn.URI, ref.ChainProfileID)
 		id := canonicalID
 		importMode := "url"
 		if stage {
@@ -1495,19 +1590,21 @@ func (s *Service) parseRefreshSubscriptionURLWithContextMode(ctx context.Context
 			name = cleanNodeName(extractNameFromURI(cn.URI))
 		}
 		mn := ManagedNode{
-			ID:           id,
-			URI:          cn.URI,
-			OriginalName: name,
-			Name:         tagPrefix + "-" + name,
-			TagPrefix:    tagPrefix,
-			ImportID:     importID,
-			ImportMode:   importMode,
-			ImportSource: subURL,
-			ImportFormat: format,
-			State:        StateParsed,
-			Enabled:      true,
-			CreatedAt:    now,
-			UpdatedAt:    now,
+			ID:             id,
+			URI:            cn.URI,
+			ChainProfileID: ref.ChainProfileID,
+			OriginalName:   name,
+			Name:           tagPrefix + "-" + name,
+			TagPrefix:      tagPrefix,
+			ImportID:       importID,
+			ImportMode:     importMode,
+			ImportSource:   subURL,
+			ImportFormat:   format,
+			State:          StateParsed,
+			Enabled:        true,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+			SourceRefs:     []NodeSourceRef{{TagPrefix: tagPrefix, ImportID: importID, Mode: importMode, Source: subURL, Format: format, ChainProfileID: ref.ChainProfileID, FetchPolicy: fetchPolicy}},
 		}
 		if idx, ok := seen[canonicalID]; ok {
 			nodes[idx] = mn
@@ -1526,16 +1623,18 @@ func (s *Service) parseRefreshSubscriptionURLWithContextMode(ctx context.Context
 		return ParseResponse{}, fmt.Errorf("保存节点: %w", err)
 	}
 	if err := s.store.UpsertJob(ImportJob{
-		ID:        importID,
-		Status:    ImportStatusParsed,
-		Mode:      "url",
-		Format:    format,
-		TagPrefix: tagPrefix,
-		Source:    subURL,
-		Total:     len(nodes),
-		NodeIDs:   nodeIDs,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:             importID,
+		Status:         ImportStatusParsed,
+		Mode:           "url",
+		Format:         format,
+		TagPrefix:      tagPrefix,
+		Source:         subURL,
+		ChainProfileID: ref.ChainProfileID,
+		FetchPolicy:    fetchPolicy,
+		Total:          len(nodes),
+		NodeIDs:        nodeIDs,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}); err != nil {
 		return ParseResponse{}, fmt.Errorf("保存导入任务: %w", err)
 	}
@@ -1677,6 +1776,7 @@ func applyImportJobProgress(row *SourceRefreshURL, job ImportJob) {
 	row.ProbePending = job.ProbePending
 	row.ProbeTarget = job.ProbeTarget
 	row.ProbeConcurrency = job.ProbeConcurrency
+	row.ChainProbe = cloneChainProbe(job.ChainProbe)
 	if job.ProbeRound > 0 {
 		row.Detail = fmt.Sprintf("第 %d/%d 轮，本轮 %d/%d，剩余 %d 个节点", job.ProbeRound, job.ProbeRounds, job.ProbeRoundDone, job.ProbeRoundTotal, job.ProbePending)
 	}
@@ -1705,6 +1805,10 @@ func applyTestJobProgress(row *SourceRefreshURL, job TestJob) {
 	row.ProbePending = job.ProbePending
 	row.ProbeTarget = job.ProbeTarget
 	row.ProbeConcurrency = job.ProbeConcurrency
+	if len(job.ChainProbes) > 0 {
+		probe := job.ChainProbes[0]
+		row.ChainProbe = &probe
+	}
 	row.Protected = job.Protected
 	if job.Protected && job.ProtectionReason != "" {
 		row.Warning = job.ProtectionReason
@@ -1875,11 +1979,22 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 	}
 	req.TagPrefix = strings.TrimSpace(req.TagPrefix)
 	req.URL = strings.TrimSpace(req.URL)
+	req.ChainProfileID = strings.TrimSpace(req.ChainProfileID)
+	req.FetchPolicy = normalizeFetchPolicy(req.FetchPolicy)
+	if req.ChainProfileID != "" {
+		profile, ok := s.tester.ChainProfile(req.ChainProfileID)
+		if !ok || !profile.Enabled {
+			return ParseResponse{}, fmt.Errorf("选择的前置代理不存在或未启用")
+		}
+	}
 	if req.Mode != "url" && req.Mode != "content" {
 		return ParseResponse{}, fmt.Errorf("mode 必须为 url 或 content")
 	}
 	if req.TagPrefix == "" {
 		return ParseResponse{}, fmt.Errorf("Tag 前缀不能为空")
+	}
+	if req.Mode == "url" {
+		req.FetchPolicy = FetchAuto
 	}
 
 	type parsedNode struct {
@@ -1913,12 +2028,7 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 		}
 		for _, subURL := range urls {
 			fetchCtx, cancel := context.WithTimeout(context.Background(), timeout)
-			body, err := subfetch.Fetch(fetchCtx, subURL, subfetch.Options{
-				Timeout: timeout,
-				ProxyFallback: func(ctx context.Context, rawURL string, headers http.Header) ([]byte, error) {
-					return s.fetchSubscriptionViaPool(ctx, rawURL, headers, req.TagPrefix, 0, nil)
-				},
-			})
+			body, err := s.fetchImportSubscription(fetchCtx, subURL, req, timeout)
 			cancel()
 			if err != nil {
 				return ParseResponse{}, fmt.Errorf("获取订阅失败: %w", err)
@@ -1936,11 +2046,20 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 	} else {
 		sourceRevision = s.nextSourceRevision(req.TagPrefix)
 		content := req.Content
-		configNodes, err := config.ParseSubscriptionContent(content)
+		var configNodes []config.NodeConfig
+		var err error
+		if strings.EqualFold(strings.TrimSpace(req.ContentFormat), "host_port") {
+			configNodes, err = parseHostPortList(content, req.ProxyProtocol)
+		} else {
+			configNodes, err = config.ParseSubscriptionContent(content)
+		}
 		if err != nil {
 			return ParseResponse{}, fmt.Errorf("解析订阅: %w", err)
 		}
 		format := detectFormat(content)
+		if strings.EqualFold(strings.TrimSpace(req.ContentFormat), "host_port") {
+			format = "host_port_" + strings.ToLower(strings.TrimSpace(req.ProxyProtocol))
+		}
 		for _, cn := range configNodes {
 			parsedNodes = append(parsedNodes, parsedNode{node: cn, source: req.Mode, format: format})
 		}
@@ -1958,7 +2077,7 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 
 	for _, item := range parsedNodes {
 		cn := item.node
-		canonicalID := nodeID(cn.URI)
+		canonicalID := s.routeNodeID(cn.URI, req.ChainProfileID)
 		id := canonicalID + "-import-" + importID
 		name := cn.Name
 		if name == "" {
@@ -1966,21 +2085,24 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 		}
 		name = cleanNodeName(name)
 		mn := ManagedNode{
-			ID:           id,
-			URI:          cn.URI,
-			OriginalName: name,
-			Name:         req.TagPrefix + "-" + name,
-			TagPrefix:    req.TagPrefix,
-			ImportID:     importID,
-			ImportMode:   "import_stage",
-			ImportSource: item.source,
-			ImportFormat: item.format,
+			ID:             id,
+			URI:            cn.URI,
+			ChainProfileID: req.ChainProfileID,
+			OriginalName:   name,
+			Name:           req.TagPrefix + "-" + name,
+			TagPrefix:      req.TagPrefix,
+			ImportID:       importID,
+			ImportMode:     "import_stage",
+			ImportSource:   item.source,
+			ImportFormat:   item.format,
 			SourceRefs: []NodeSourceRef{{
-				TagPrefix: req.TagPrefix,
-				ImportID:  importID,
-				Mode:      req.Mode,
-				Source:    item.source,
-				Format:    item.format,
+				TagPrefix:      req.TagPrefix,
+				ImportID:       importID,
+				Mode:           req.Mode,
+				Source:         item.source,
+				Format:         item.format,
+				ChainProfileID: req.ChainProfileID,
+				FetchPolicy:    req.FetchPolicy,
 			}},
 			State:     StateParsed,
 			Enabled:   true,
@@ -2011,6 +2133,8 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 		TagPrefix:      req.TagPrefix,
 		Source:         importSourceForParse(req),
 		SourceRevision: sourceRevision,
+		ChainProfileID: req.ChainProfileID,
+		FetchPolicy:    req.FetchPolicy,
 		Total:          len(nodes),
 		NodeIDs:        nodeIDs,
 		CreatedAt:      now,
@@ -2027,11 +2151,37 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 	}, nil
 }
 
+func (s *Service) fetchImportSubscription(ctx context.Context, rawURL string, req ParseRequest, timeout time.Duration) ([]byte, error) {
+	options := subfetch.Options{
+		Timeout: timeout,
+		ProxyFallback: func(fallbackCtx context.Context, target string, headers http.Header) ([]byte, error) {
+			return s.fetchSubscriptionViaPool(fallbackCtx, target, headers, req.TagPrefix, 0, nil)
+		},
+	}
+	return subfetch.Fetch(ctx, rawURL, options)
+}
+
 func importSourceForParse(req ParseRequest) string {
 	if req.Mode == "url" {
 		return req.URL
 	}
 	return req.Mode
+}
+
+func normalizeFetchPolicy(policy string) string {
+	_ = policy
+	return FetchAuto
+}
+
+func (s *Service) routeNodeID(uri, chainProfileID string) string {
+	if strings.TrimSpace(chainProfileID) == "" || s == nil || s.tester == nil {
+		return nodeID(uri)
+	}
+	profile, ok := s.tester.ChainProfile(chainProfileID)
+	if !ok {
+		return proxychain.RouteID(uri, &proxychain.Profile{ID: chainProfileID, Hops: []proxychain.Hop{{URI: "unknown://" + chainProfileID}}})
+	}
+	return proxychain.RouteID(uri, &profile)
 }
 
 func splitSubscriptionURLs(raw string) []string {
@@ -2236,6 +2386,8 @@ func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, er
 		TagPrefix:      job.TagPrefix,
 		Source:         job.Source,
 		SourceRevision: job.SourceRevision,
+		ChainProfileID: job.ChainProfileID,
+		FetchPolicy:    job.FetchPolicy,
 		Total:          len(nodes),
 		NodeIDs:        selectedIDs,
 		CreatedAt:      time.Now(),
@@ -2331,6 +2483,54 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 	updates := make([]ManagedNode, 0, len(nodes))
 	passedIDs := make([]string, 0, len(nodes))
 	processedIDs := make(map[string]struct{}, len(nodes))
+	if total > 0 && nodes[0].ChainProfileID != "" && ctx.Err() == nil {
+		profile, ok := s.tester.ChainProfile(nodes[0].ChainProfileID)
+		_ = s.store.UpdateJobProgress(jobID, func(job *ImportJob) {
+			job.Detail = "正在测试前置代理"
+			job.UpdatedAt = time.Now()
+		})
+		var baseline TestResult
+		chainResult := ChainProbeResult{ProfileID: nodes[0].ChainProfileID}
+		if !ok || !profile.Enabled {
+			baseline.Error = fmt.Errorf("前置代理不存在或未启用")
+		} else {
+			chainResult.ProfileName = profile.Name
+			baseline = s.tester.TestChainProfile(ctx, profile)
+		}
+		chainResult.LatencyMs = baseline.LatencyMs
+		if baseline.Error != nil {
+			chainResult.Error = baseline.Error.Error()
+		}
+		_ = s.store.UpdateJobProgress(jobID, func(job *ImportJob) {
+			job.ChainProbe = &chainResult
+			job.UpdatedAt = time.Now()
+		})
+		if baseline.Error != nil {
+			now := time.Now()
+			blocked := make([]ManagedNode, 0, len(nodes))
+			for _, node := range nodes {
+				node.State = StateBlocked
+				node.LastError = "blocked_by_chain: " + baseline.Error.Error()
+				node.LastTestAt = now
+				node.UpdatedAt = now
+				blocked = append(blocked, node)
+			}
+			_ = s.store.UpsertNodes(blocked)
+			_ = s.store.UpdateJob(jobID, func(job *ImportJob) {
+				job.Status = ImportStatusFailed
+				job.Failed = total
+				job.Detail = "前置代理测试失败，已停止完整链路测试"
+				job.Error = "blocked_by_chain: " + baseline.Error.Error()
+				job.ProbePending = 0
+				job.UpdatedAt = now
+			})
+			return
+		}
+		_ = s.store.UpdateJobProgress(jobID, func(job *ImportJob) {
+			job.Detail = fmt.Sprintf("前置代理可用（%d ms），正在测试完整链路", baseline.LatencyMs)
+			job.UpdatedAt = time.Now()
+		})
+	}
 
 	if ctx.Err() == nil {
 		for event := range s.tester.ProbeBatchWithProgress(ctx, nodes, func(progress ProbeRoundProgress) {
@@ -2888,7 +3088,60 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 		s.updateJob(jobID, func(j *TestJob) { j.Phase = "probe"; j.Done = 0 })
 		updates := make([]ManagedNode, 0, len(nodes))
 		poolNamesToDelete := make([]string, 0)
-		for event := range s.tester.ProbeBatchWithProgress(ctx, nodes, func(progress ProbeRoundProgress) {
+		probeNodes := nodes
+		profileNodes := make(map[string][]ManagedNode)
+		for _, node := range nodes {
+			if node.ChainProfileID != "" {
+				profileNodes[node.ChainProfileID] = append(profileNodes[node.ChainProfileID], node)
+			}
+		}
+		if len(profileNodes) > 0 {
+			blocked := make(map[string]struct{})
+			profileIDs := make([]string, 0, len(profileNodes))
+			for id := range profileNodes {
+				profileIDs = append(profileIDs, id)
+			}
+			sort.Strings(profileIDs)
+			for _, id := range profileIDs {
+				profile, ok := s.tester.ChainProfile(id)
+				probe := ChainProbeResult{ProfileID: id}
+				var result TestResult
+				if !ok || !profile.Enabled {
+					result.Error = fmt.Errorf("前置代理不存在或未启用")
+				} else {
+					probe.ProfileName = profile.Name
+					result = s.tester.TestChainProfile(ctx, profile)
+				}
+				probe.LatencyMs = result.LatencyMs
+				if result.Error != nil {
+					probe.Error = result.Error.Error()
+					now := time.Now()
+					for _, node := range profileNodes[id] {
+						blocked[node.ID] = struct{}{}
+						if !node.InPool && node.State != StateInPool {
+							node.State = StateBlocked
+						}
+						node.LastError = "blocked_by_chain: " + result.Error.Error()
+						node.LastTestAt = now
+						node.UpdatedAt = now
+						updates = append(updates, node)
+					}
+					s.updateJob(jobID, func(job *TestJob) {
+						job.Done += len(profileNodes[id])
+						job.Failed += len(profileNodes[id])
+					})
+					changed = true
+				}
+				s.updateJob(jobID, func(job *TestJob) { job.ChainProbes = append(job.ChainProbes, probe) })
+			}
+			probeNodes = make([]ManagedNode, 0, len(nodes)-len(blocked))
+			for _, node := range nodes {
+				if _, skip := blocked[node.ID]; !skip {
+					probeNodes = append(probeNodes, node)
+				}
+			}
+		}
+		for event := range s.tester.ProbeBatchWithProgress(ctx, probeNodes, func(progress ProbeRoundProgress) {
 			s.updateJob(jobID, func(job *TestJob) {
 				job.ProbeRound = progress.Round
 				job.ProbeRounds = progress.Rounds
@@ -3193,12 +3446,12 @@ func (s *Service) promoteManyContext(ctx context.Context, nodeIDs []string, auto
 	}
 	nodes := make([]ManagedNode, 0, len(nodeIDs))
 	duplicateIDs := make([]string, 0)
-	existingNames, existingURIs := s.existingConfigNodeKeys()
+	existingNames, existingRoutes := s.existingConfigNodeKeys()
 	usedNames := make(map[string]struct{}, len(existingNames)+len(nodeIDs))
 	for name := range existingNames {
 		usedNames[name] = struct{}{}
 	}
-	seenURIs := make(map[string]struct{}, len(nodeIDs))
+	seenRoutes := make(map[string]struct{}, len(nodeIDs))
 	for _, id := range nodeIDs {
 		node, ok := s.store.GetNode(id)
 		if !ok || node.InPool || node.State == StateInPool || node.State != StatePassed {
@@ -3207,15 +3460,16 @@ func (s *Service) promoteManyContext(ctx context.Context, nodeIDs []string, auto
 		name := strings.TrimSpace(node.Name)
 		uri := strings.TrimSpace(node.URI)
 		if uri != "" {
-			if _, ok := existingURIs[uri]; ok {
+			route := uri + "\x00" + node.ChainProfileID
+			if _, ok := existingRoutes[route]; ok {
 				duplicateIDs = append(duplicateIDs, node.ID)
 				continue
 			}
-			if _, ok := seenURIs[uri]; ok {
+			if _, ok := seenRoutes[route]; ok {
 				duplicateIDs = append(duplicateIDs, node.ID)
 				continue
 			}
-			seenURIs[uri] = struct{}{}
+			seenRoutes[route] = struct{}{}
 		}
 		if name == "" {
 			name = taggedOriginalName(node.TagPrefix, node.OriginalName)
@@ -3315,7 +3569,7 @@ func (s *Service) existingConfigNodeKeys() (map[string]struct{}, map[string]stru
 			names[name] = struct{}{}
 		}
 		if uri := strings.TrimSpace(cn.URI); uri != "" {
-			uris[uri] = struct{}{}
+			uris[uri+"\x00"+cn.ChainProfileID] = struct{}{}
 		}
 	}
 	return names, uris
@@ -3594,15 +3848,17 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 			group := groups[key]
 			if group == nil {
 				group = &ImportSourceSummary{
-					Key:         key,
-					ImportID:    view.ImportID,
-					Mode:        view.ImportMode,
-					Format:      view.ImportFormat,
-					TagPrefix:   view.TagPrefix,
-					Source:      view.ImportSource,
-					Refreshable: strings.TrimSpace(view.TagPrefix) != "",
-					CreatedAt:   node.CreatedAt,
-					UpdatedAt:   node.UpdatedAt,
+					Key:            key,
+					ImportID:       view.ImportID,
+					Mode:           view.ImportMode,
+					Format:         view.ImportFormat,
+					TagPrefix:      view.TagPrefix,
+					Source:         view.ImportSource,
+					ChainProfileID: view.ChainProfileID,
+					FetchPolicy:    ref.FetchPolicy,
+					Refreshable:    strings.TrimSpace(view.TagPrefix) != "",
+					CreatedAt:      node.CreatedAt,
+					UpdatedAt:      node.UpdatedAt,
 				}
 				groups[key] = group
 			}
@@ -3623,6 +3879,12 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 			} else if isURLSourceRef(ref) && strings.TrimSpace(view.ImportSource) != "" && !sourceListContains(group.Source, view.ImportSource) {
 				group.Source += "\n" + strings.TrimSpace(view.ImportSource)
 			}
+			if group.ChainProfileID == "" {
+				group.ChainProfileID = ref.ChainProfileID
+			}
+			if group.FetchPolicy == "" {
+				group.FetchPolicy = ref.FetchPolicy
+			}
 			if _, exists := counted[key]; exists {
 				continue
 			}
@@ -3639,7 +3901,7 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 				group.Pool++
 			case node.State == StatePassed:
 				group.Candidate++
-			case node.State == StateFailed:
+			case node.State == StateFailed || node.State == StateBlocked:
 				group.Failed++
 			}
 		}
@@ -3790,7 +4052,7 @@ func (s *Service) Summary() (DashboardSummary, error) {
 			summary.Testing++
 		case node.State == StatePassed:
 			summary.Passed++
-		case node.State == StateFailed:
+		case node.State == StateFailed || node.State == StateBlocked:
 			summary.Failed++
 		case node.State == StateExcluded:
 			summary.Excluded++

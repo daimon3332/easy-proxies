@@ -19,6 +19,7 @@ import (
 	"easy_proxies/internal/monitor"
 	"easy_proxies/internal/outbound/dispatch"
 	"easy_proxies/internal/outbound/pool"
+	"easy_proxies/internal/proxychain"
 
 	"github.com/sagernet/sing-box"
 	C "github.com/sagernet/sing-box/constant"
@@ -911,7 +912,10 @@ func (m *Manager) storePortIndex(cfg *config.Config) {
 	ports := make(map[string]uint16, len(cfg.Nodes))
 	for _, node := range cfg.Nodes {
 		if node.URI != "" && node.Port > 0 {
-			ports[node.URI] = node.Port
+			ports[node.NodeKey()] = node.Port
+			if node.ChainProfileID == "" {
+				ports[node.URI] = node.Port
+			}
 		}
 	}
 	m.portIndex.Store(ports)
@@ -1495,6 +1499,7 @@ func cloneConfig(cfg *config.Config) *config.Config {
 	cloned := *cfg
 	cloned.Nodes = cloneNodes(cfg.Nodes)
 	cloned.Subscriptions = append([]string(nil), cfg.Subscriptions...)
+	cloned.ChainProfiles = append([]proxychain.Profile(nil), cfg.ChainProfiles...)
 	cloned.SetFilePath(cfg.FilePath())
 	return &cloned
 }
@@ -1532,6 +1537,9 @@ func runtimeNodeSpecs(nodes []config.NodeConfig) map[string]runtimeNodeSpec {
 
 func canReconcileMultiPort(current, desired *config.Config) bool {
 	if current == nil || desired == nil || current.Mode != "multi-port" || desired.Mode != "multi-port" {
+		return false
+	}
+	if len(current.ChainProfiles) > 0 || len(desired.ChainProfiles) > 0 {
 		return false
 	}
 	return current.MultiPort == desired.MultiPort &&

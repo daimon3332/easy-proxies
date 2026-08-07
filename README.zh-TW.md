@@ -41,7 +41,12 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 
 - 🔗 面向一般使用者的訂閱優先 WebUI 流程。
 - 支援 HTTP/HTTPS 訂閱、URI 清單、Base64 內容和 Clash/Mihomo YAML。
+- 支援每行一個 `host:port` 或可選 `user:pass@host:port` 的 HTTP/SOCKS5 節點清單。
 - ⚡ 並行、非同步節點測速和即時進度。
+- 🔀 支援使用目前 sing-box 建置可識別的任意代理 URI 設定前置代理，並形成鏈式路由。
+- 訂閱拉取固定沿用直連優先、可用池內代理有限備援的策略；所選前置代理只用於組成節點鏈路。
+- 鏈式匯入分別顯示前置基線與完整鏈路結果，不對後置節點執行無前置的直連測試。
+- 站點檢測支援任意 TAG，分別檢測 Google、GitHub、Outlook 和 ProxySpace，並可依所選站點全部成功的嚴格交集重新產生連接埠。
 - 🧩 分別保留候選節點、節點池節點和失敗節點。
 - 匯入測速成功後預設自動加入節點池。
 - 🔌 預設 `multi-port` 模式下每個節點使用獨立連接埠。
@@ -106,9 +111,11 @@ Easy Proxies 可以把一個或多個代理訂閱 URL 轉換成本機 HTTP/SOCKS
 
 ## 匯入格式與協定
 
-支援 HTTP/HTTPS 訂閱 URL、代理 URI 清單、Base64 編碼 URI 清單，以及 Clash/Mihomo YAML 的 `proxies` 區段。
+支援 HTTP/HTTPS 訂閱 URL、代理 URI 清單、Base64 編碼 URI 清單、Clash/Mihomo YAML 的 `proxies` 區段，以及每行一個 `host:port` 或 `user:pass@host:port` 的純文字清單。匯入 Host:Port 清單時需要選擇 HTTP 或 SOCKS5 協定。
 
 常見協定包括 VLESS、VMess、Trojan、Shadowsocks、ShadowsocksR、Hysteria、Hysteria2、TUIC、AnyTLS、HTTP/HTTPS、SOCKS4 和 SOCKS5。實際協定能力取決於 sing-box 版本與建置標籤。
+
+鏈式匯入需要先在設定中配置前置代理，再於匯入時選擇該前置。訂閱內容仍依直連優先、可用池內代理有限備援的策略拉取。測試成功表示前置代理和 `前置代理 -> 匯入節點 -> 探測目標` 完整鏈路都可用。協定組合仍需符合傳輸相容性，例如依賴 UDP 的後置節點不能使用僅提供 TCP 通道的前置代理。
 
 ## 執行模式
 

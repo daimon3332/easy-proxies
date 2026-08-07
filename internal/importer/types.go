@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"easy_proxies/internal/config"
+	"easy_proxies/internal/proxychain"
 )
 
 type ManagedNodeState string
@@ -13,6 +14,7 @@ const (
 	StateTesting  ManagedNodeState = "testing"
 	StatePassed   ManagedNodeState = "passed"
 	StateFailed   ManagedNodeState = "failed"
+	StateBlocked  ManagedNodeState = "blocked_by_chain"
 	StateInPool   ManagedNodeState = "in_pool"
 	StateExcluded ManagedNodeState = "excluded"
 )
@@ -20,6 +22,7 @@ const (
 type ManagedNode struct {
 	ID                  string           `json:"id"`
 	URI                 string           `json:"uri"`
+	ChainProfileID      string           `json:"chain_profile_id,omitempty"`
 	OriginalName        string           `json:"original_name"`
 	Name                string           `json:"name"`
 	TagPrefix           string           `json:"tag_prefix"`
@@ -44,18 +47,21 @@ type ManagedNode struct {
 }
 
 type NodeSourceRef struct {
-	TagPrefix string `json:"tag_prefix"`
-	ImportID  string `json:"import_id,omitempty"`
-	Mode      string `json:"mode,omitempty"`
-	Source    string `json:"source,omitempty"`
-	Format    string `json:"format,omitempty"`
+	TagPrefix      string `json:"tag_prefix"`
+	ImportID       string `json:"import_id,omitempty"`
+	Mode           string `json:"mode,omitempty"`
+	Source         string `json:"source,omitempty"`
+	Format         string `json:"format,omitempty"`
+	ChainProfileID string `json:"chain_profile_id,omitempty"`
+	FetchPolicy    string `json:"fetch_policy,omitempty"`
 }
 
 func (n ManagedNode) ToConfigNode() config.NodeConfig {
 	return config.NodeConfig{
-		Name: n.Name,
-		URI:  n.URI,
-		Port: n.Port,
+		Name:           n.Name,
+		URI:            n.URI,
+		ChainProfileID: n.ChainProfileID,
+		Port:           n.Port,
 	}
 }
 
@@ -70,36 +76,43 @@ const (
 )
 
 type ImportJob struct {
-	ID               string       `json:"id"`
-	Status           ImportStatus `json:"status"`
-	Mode             string       `json:"mode,omitempty"`
-	Format           string       `json:"format,omitempty"`
-	TagPrefix        string       `json:"tag_prefix,omitempty"`
-	Source           string       `json:"source,omitempty"`
-	SourceRevision   uint64       `json:"source_revision,omitempty"`
-	Total            int          `json:"total"`
-	Passed           int          `json:"passed"`
-	Failed           int          `json:"failed"`
-	Promoted         int          `json:"promoted"`
-	ProbeRound       int          `json:"probe_round,omitempty"`
-	ProbeRounds      int          `json:"probe_rounds,omitempty"`
-	ProbeRoundDone   int          `json:"probe_round_done,omitempty"`
-	ProbeRoundTotal  int          `json:"probe_round_total,omitempty"`
-	ProbePending     int          `json:"probe_pending,omitempty"`
-	ProbeTarget      string       `json:"probe_target,omitempty"`
-	ProbeConcurrency int          `json:"probe_concurrency,omitempty"`
-	Detail           string       `json:"detail,omitempty"`
-	Error            string       `json:"error,omitempty"`
-	NodeIDs          []string     `json:"node_ids"`
-	CreatedAt        time.Time    `json:"created_at"`
-	UpdatedAt        time.Time    `json:"updated_at"`
+	ID               string            `json:"id"`
+	Status           ImportStatus      `json:"status"`
+	Mode             string            `json:"mode,omitempty"`
+	Format           string            `json:"format,omitempty"`
+	TagPrefix        string            `json:"tag_prefix,omitempty"`
+	Source           string            `json:"source,omitempty"`
+	SourceRevision   uint64            `json:"source_revision,omitempty"`
+	ChainProfileID   string            `json:"chain_profile_id,omitempty"`
+	FetchPolicy      string            `json:"fetch_policy,omitempty"`
+	Total            int               `json:"total"`
+	Passed           int               `json:"passed"`
+	Failed           int               `json:"failed"`
+	Promoted         int               `json:"promoted"`
+	ProbeRound       int               `json:"probe_round,omitempty"`
+	ProbeRounds      int               `json:"probe_rounds,omitempty"`
+	ProbeRoundDone   int               `json:"probe_round_done,omitempty"`
+	ProbeRoundTotal  int               `json:"probe_round_total,omitempty"`
+	ProbePending     int               `json:"probe_pending,omitempty"`
+	ProbeTarget      string            `json:"probe_target,omitempty"`
+	ProbeConcurrency int               `json:"probe_concurrency,omitempty"`
+	Detail           string            `json:"detail,omitempty"`
+	Error            string            `json:"error,omitempty"`
+	ChainProbe       *ChainProbeResult `json:"chain_probe,omitempty"`
+	NodeIDs          []string          `json:"node_ids"`
+	CreatedAt        time.Time         `json:"created_at"`
+	UpdatedAt        time.Time         `json:"updated_at"`
 }
 
 type ParseRequest struct {
-	Mode      string `json:"mode"`
-	URL       string `json:"url,omitempty"`
-	Content   string `json:"content,omitempty"`
-	TagPrefix string `json:"tag_prefix,omitempty"`
+	Mode           string `json:"mode"`
+	URL            string `json:"url,omitempty"`
+	Content        string `json:"content,omitempty"`
+	TagPrefix      string `json:"tag_prefix,omitempty"`
+	ChainProfileID string `json:"chain_profile_id,omitempty"`
+	FetchPolicy    string `json:"fetch_policy,omitempty"`
+	ContentFormat  string `json:"content_format,omitempty"`
+	ProxyProtocol  string `json:"proxy_protocol,omitempty"`
 }
 
 type ParseResponse struct {
@@ -109,19 +122,253 @@ type ParseResponse struct {
 }
 
 type ImportSourceSummary struct {
-	Key         string    `json:"key"`
-	ImportID    string    `json:"import_id,omitempty"`
-	Mode        string    `json:"mode"`
-	Format      string    `json:"format"`
-	TagPrefix   string    `json:"tag_prefix"`
-	Source      string    `json:"source"`
-	Total       int       `json:"total"`
-	Pool        int       `json:"pool"`
-	Candidate   int       `json:"candidate"`
-	Failed      int       `json:"failed"`
-	Refreshable bool      `json:"refreshable"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Key            string    `json:"key"`
+	ImportID       string    `json:"import_id,omitempty"`
+	Mode           string    `json:"mode"`
+	Format         string    `json:"format"`
+	TagPrefix      string    `json:"tag_prefix"`
+	Source         string    `json:"source"`
+	Total          int       `json:"total"`
+	Pool           int       `json:"pool"`
+	Candidate      int       `json:"candidate"`
+	Failed         int       `json:"failed"`
+	Refreshable    bool      `json:"refreshable"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	ChainProfileID string    `json:"chain_profile_id,omitempty"`
+	FetchPolicy    string    `json:"fetch_policy,omitempty"`
+}
+
+type ChainProbeResult struct {
+	ProfileID   string `json:"profile_id"`
+	ProfileName string `json:"profile_name"`
+	LatencyMs   int64  `json:"latency_ms,omitempty"`
+	Error       string `json:"error,omitempty"`
+}
+
+type ChainProfileResponse struct {
+	Profiles     []proxychain.Profile         `json:"profiles"`
+	Usage        map[string]ChainProfileUsage `json:"usage,omitempty"`
+	RetestJobID  string                       `json:"retest_job_id,omitempty"`
+	DeletedNodes int                          `json:"deleted_nodes,omitempty"`
+}
+
+type ChainProfileUsage struct {
+	Nodes int `json:"nodes"`
+	Ports int `json:"ports"`
+}
+
+type ChainProfileMutationRequest struct {
+	Profiles []proxychain.Profile `json:"profiles"`
+	Cascade  bool                 `json:"cascade,omitempty"`
+}
+
+type ConnectivityTarget struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Host string `json:"host"`
+	Port uint16 `json:"port"`
+	URL  string `json:"url"`
+}
+
+type ConnectivityTagScope struct {
+	Tag   string `json:"tag"`
+	Nodes int    `json:"nodes"`
+}
+
+type ConnectivityScopeResponse struct {
+	Targets []ConnectivityTarget   `json:"targets"`
+	Tags    []ConnectivityTagScope `json:"tags"`
+}
+
+type ConnectivityStartRequest struct {
+	Tags    []string `json:"tags"`
+	Targets []string `json:"targets,omitempty"`
+}
+
+type ConnectivityJobStatus string
+
+const (
+	ConnectivityJobRunning  ConnectivityJobStatus = "running"
+	ConnectivityJobFinished ConnectivityJobStatus = "finished"
+	ConnectivityJobFailed   ConnectivityJobStatus = "failed"
+	ConnectivityJobCanceled ConnectivityJobStatus = "canceled"
+)
+
+type ConnectivityTargetSummary struct {
+	TargetID        string `json:"target_id"`
+	Total           int    `json:"total"`
+	FirstPassed     int    `json:"first_passed"`
+	Passed          int    `json:"passed"`
+	Partial         int    `json:"partial"`
+	Failed          int    `json:"failed"`
+	Retried         int    `json:"retried"`
+	Recovered       int    `json:"recovered"`
+	MedianLatencyMs int64  `json:"median_latency_ms,omitempty"`
+}
+
+type ConnectivityTagSummary struct {
+	Tag     string                      `json:"tag"`
+	Routes  int                         `json:"routes"`
+	Targets []ConnectivityTargetSummary `json:"targets"`
+}
+
+type ConnectivityJob struct {
+	ID           string                   `json:"id"`
+	Status       ConnectivityJobStatus    `json:"status"`
+	Phase        string                   `json:"phase"`
+	Tags         []string                 `json:"tags"`
+	Targets      []string                 `json:"targets"`
+	TotalRoutes  int                      `json:"total_routes"`
+	TotalChecks  int                      `json:"total_checks"`
+	DoneChecks   int                      `json:"done_checks"`
+	RetryChecks  int                      `json:"retry_checks"`
+	RetryDone    int                      `json:"retry_done"`
+	Recovered    int                      `json:"recovered"`
+	Concurrency  int                      `json:"concurrency"`
+	Summaries    []ConnectivityTagSummary `json:"summaries"`
+	Error        string                   `json:"error,omitempty"`
+	HistoryError string                   `json:"history_error,omitempty"`
+	StartedAt    time.Time                `json:"started_at"`
+	UpdatedAt    time.Time                `json:"updated_at"`
+}
+
+type ConnectivityResult struct {
+	NodeID           string                        `json:"node_id"`
+	NodeName         string                        `json:"node_name"`
+	Tags             []string                      `json:"tags"`
+	RouteFingerprint string                        `json:"route_fingerprint"`
+	TargetID         string                        `json:"target_id"`
+	Verdict          ConnectivityVerdict           `json:"verdict"`
+	FirstSuccess     bool                          `json:"first_success"`
+	Success          bool                          `json:"success"`
+	Attempts         int                           `json:"attempts"`
+	LatencyMs        int64                         `json:"latency_ms,omitempty"`
+	TLSVersion       string                        `json:"tls_version,omitempty"`
+	HTTPStatus       int                           `json:"http_status,omitempty"`
+	FinalHost        string                        `json:"final_host,omitempty"`
+	ContentType      string                        `json:"content_type,omitempty"`
+	InspectedBytes   int64                         `json:"inspected_bytes,omitempty"`
+	Components       []ConnectivityComponentResult `json:"components,omitempty"`
+	FailureStage     string                        `json:"failure_stage,omitempty"`
+	Error            string                        `json:"error,omitempty"`
+	Retryable        bool                          `json:"-"`
+	TestedAt         time.Time                     `json:"tested_at"`
+}
+
+type ConnectivityVerdict string
+
+const (
+	ConnectivityVerdictUsable  ConnectivityVerdict = "usable"
+	ConnectivityVerdictPartial ConnectivityVerdict = "partial"
+	ConnectivityVerdictFailed  ConnectivityVerdict = "failed"
+)
+
+type ConnectivityComponentResult struct {
+	ID             string              `json:"id"`
+	Name           string              `json:"name"`
+	Verdict        ConnectivityVerdict `json:"verdict"`
+	Success        bool                `json:"success"`
+	Attempts       int                 `json:"attempts"`
+	LatencyMs      int64               `json:"latency_ms,omitempty"`
+	TLSVersion     string              `json:"tls_version,omitempty"`
+	HTTPStatus     int                 `json:"http_status,omitempty"`
+	FinalHost      string              `json:"final_host,omitempty"`
+	ContentType    string              `json:"content_type,omitempty"`
+	InspectedBytes int64               `json:"inspected_bytes,omitempty"`
+	FailureStage   string              `json:"failure_stage,omitempty"`
+	Error          string              `json:"error,omitempty"`
+	Retryable      bool                `json:"-"`
+}
+
+type ConnectivityResultQuery struct {
+	JobID    string
+	Tag      string
+	TargetID string
+	Status   string
+	Page     int
+	PageSize int
+}
+
+type ConnectivityResultPage struct {
+	Items    []ConnectivityResult `json:"items"`
+	Total    int                  `json:"total"`
+	Page     int                  `json:"page"`
+	PageSize int                  `json:"page_size"`
+}
+
+type ConnectivityPortRequest struct {
+	JobID        string   `json:"job_id"`
+	Tags         []string `json:"tags"`
+	Targets      []string `json:"targets"`
+	PreviewToken string   `json:"preview_token,omitempty"`
+	AllowEmpty   bool     `json:"allow_empty,omitempty"`
+}
+
+type ConnectivityPortChangeItem struct {
+	NodeName string           `json:"node_name"`
+	Tags     []string         `json:"tags"`
+	Port     uint16           `json:"port,omitempty"`
+	State    ManagedNodeState `json:"state"`
+}
+
+type ConnectivityPortPreview struct {
+	JobID          string                       `json:"job_id"`
+	Tags           []string                     `json:"tags"`
+	Targets        []string                     `json:"targets"`
+	Qualifying     int                          `json:"qualifying"`
+	NonQualifying  int                          `json:"non_qualifying"`
+	WillFail       int                          `json:"will_fail"`
+	CurrentPool    int                          `json:"current_pool"`
+	ProjectedPool  int                          `json:"projected_pool"`
+	Retained       int                          `json:"retained"`
+	Added          int                          `json:"added"`
+	Removed        int                          `json:"removed"`
+	Unaffected     int                          `json:"unaffected"`
+	SharedRetained int                          `json:"shared_retained"`
+	Stale          int                          `json:"stale"`
+	EmptyBlocked   bool                         `json:"empty_blocked"`
+	PreviewToken   string                       `json:"preview_token"`
+	AddedItems     []ConnectivityPortChangeItem `json:"added_items,omitempty"`
+	RemovedItems   []ConnectivityPortChangeItem `json:"removed_items,omitempty"`
+}
+
+type ConnectivityPortApplyResponse struct {
+	ConnectivityPortPreview
+	PoolCount int `json:"pool_count"`
+}
+
+type ConnectivityHistoryCounts struct {
+	ContinuedSuccess      int `json:"continued_success"`
+	NewlySuccessful       int `json:"newly_successful"`
+	NewlyFailed           int `json:"newly_failed"`
+	ContinuedUnsuccessful int `json:"continued_unsuccessful"`
+	NoHistory             int `json:"no_history"`
+	Removed               int `json:"removed"`
+}
+
+type ConnectivityHistoryTarget struct {
+	TargetID string `json:"target_id"`
+	ConnectivityHistoryCounts
+}
+
+type ConnectivityHistoryChange struct {
+	RouteFingerprint string   `json:"route_fingerprint"`
+	NodeName         string   `json:"node_name"`
+	Tags             []string `json:"tags"`
+	Previous         string   `json:"previous"`
+	Current          string   `json:"current"`
+}
+
+type ConnectivityHistoryComparison struct {
+	JobID               string                      `json:"job_id"`
+	Available           bool                        `json:"available"`
+	PreviousJobID       string                      `json:"previous_job_id,omitempty"`
+	PreviousCompletedAt time.Time                   `json:"previous_completed_at,omitempty"`
+	CurrentCompletedAt  time.Time                   `json:"current_completed_at"`
+	Overall             ConnectivityHistoryCounts   `json:"overall"`
+	Targets             []ConnectivityHistoryTarget `json:"targets"`
+	Changes             []ConnectivityHistoryChange `json:"changes,omitempty"`
 }
 
 type DashboardSummary struct {
@@ -257,29 +504,30 @@ const (
 // TestJob is a snapshot of an async batch test exposed over the WebUI polling
 // endpoint. Counts are cumulative across the probe and country phases.
 type TestJob struct {
-	ID               string        `json:"id"`
-	Status           TestJobStatus `json:"status"`
-	Total            int           `json:"total"`
-	Done             int           `json:"done"`
-	Passed           int           `json:"passed"`
-	Failed           int           `json:"failed"`
-	CountryOK        int           `json:"country_ok"`
-	CountryBad       int           `json:"country_bad"`
-	Promoted         int           `json:"promoted"`
-	ProbeRound       int           `json:"probe_round,omitempty"`
-	ProbeRounds      int           `json:"probe_rounds,omitempty"`
-	ProbeRoundDone   int           `json:"probe_round_done,omitempty"`
-	ProbeRoundTotal  int           `json:"probe_round_total,omitempty"`
-	ProbePending     int           `json:"probe_pending,omitempty"`
-	ProbeTarget      string        `json:"probe_target,omitempty"`
-	ProbeConcurrency int           `json:"probe_concurrency,omitempty"`
-	Applied          bool          `json:"applied"`
-	Protected        bool          `json:"protected,omitempty"`
-	ProtectionReason string        `json:"protection_reason,omitempty"`
-	Phase            string        `json:"phase"`
-	Error            string        `json:"error,omitempty"`
-	StartedAt        time.Time     `json:"started_at"`
-	UpdatedAt        time.Time     `json:"updated_at"`
+	ID               string             `json:"id"`
+	Status           TestJobStatus      `json:"status"`
+	Total            int                `json:"total"`
+	Done             int                `json:"done"`
+	Passed           int                `json:"passed"`
+	Failed           int                `json:"failed"`
+	CountryOK        int                `json:"country_ok"`
+	CountryBad       int                `json:"country_bad"`
+	Promoted         int                `json:"promoted"`
+	ProbeRound       int                `json:"probe_round,omitempty"`
+	ProbeRounds      int                `json:"probe_rounds,omitempty"`
+	ProbeRoundDone   int                `json:"probe_round_done,omitempty"`
+	ProbeRoundTotal  int                `json:"probe_round_total,omitempty"`
+	ProbePending     int                `json:"probe_pending,omitempty"`
+	ProbeTarget      string             `json:"probe_target,omitempty"`
+	ProbeConcurrency int                `json:"probe_concurrency,omitempty"`
+	Applied          bool               `json:"applied"`
+	Protected        bool               `json:"protected,omitempty"`
+	ProtectionReason string             `json:"protection_reason,omitempty"`
+	Phase            string             `json:"phase"`
+	Error            string             `json:"error,omitempty"`
+	ChainProbes      []ChainProbeResult `json:"chain_probes,omitempty"`
+	StartedAt        time.Time          `json:"started_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 type SourceRefreshJobStatus string
@@ -292,32 +540,33 @@ const (
 )
 
 type SourceRefreshURL struct {
-	URL              string    `json:"url"`
-	Kind             string    `json:"kind,omitempty"`
-	Label            string    `json:"label,omitempty"`
-	Status           string    `json:"status"`
-	Nodes            int       `json:"nodes"`
-	Done             int       `json:"done"`
-	Total            int       `json:"total"`
-	Passed           int       `json:"passed"`
-	Failed           int       `json:"failed"`
-	Promoted         int       `json:"promoted"`
-	Stage            string    `json:"stage,omitempty"`
-	Detail           string    `json:"detail,omitempty"`
-	Warning          string    `json:"warning,omitempty"`
-	Attempt          int       `json:"attempt,omitempty"`
-	Attempts         int       `json:"attempts,omitempty"`
-	Cached           bool      `json:"cached,omitempty"`
-	ProbeRound       int       `json:"probe_round,omitempty"`
-	ProbeRounds      int       `json:"probe_rounds,omitempty"`
-	ProbeRoundDone   int       `json:"probe_round_done,omitempty"`
-	ProbeRoundTotal  int       `json:"probe_round_total,omitempty"`
-	ProbePending     int       `json:"probe_pending,omitempty"`
-	ProbeTarget      string    `json:"probe_target,omitempty"`
-	ProbeConcurrency int       `json:"probe_concurrency,omitempty"`
-	Protected        bool      `json:"protected,omitempty"`
-	Error            string    `json:"error,omitempty"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	URL              string            `json:"url"`
+	Kind             string            `json:"kind,omitempty"`
+	Label            string            `json:"label,omitempty"`
+	Status           string            `json:"status"`
+	Nodes            int               `json:"nodes"`
+	Done             int               `json:"done"`
+	Total            int               `json:"total"`
+	Passed           int               `json:"passed"`
+	Failed           int               `json:"failed"`
+	Promoted         int               `json:"promoted"`
+	Stage            string            `json:"stage,omitempty"`
+	Detail           string            `json:"detail,omitempty"`
+	Warning          string            `json:"warning,omitempty"`
+	Attempt          int               `json:"attempt,omitempty"`
+	Attempts         int               `json:"attempts,omitempty"`
+	Cached           bool              `json:"cached,omitempty"`
+	ProbeRound       int               `json:"probe_round,omitempty"`
+	ProbeRounds      int               `json:"probe_rounds,omitempty"`
+	ProbeRoundDone   int               `json:"probe_round_done,omitempty"`
+	ProbeRoundTotal  int               `json:"probe_round_total,omitempty"`
+	ProbePending     int               `json:"probe_pending,omitempty"`
+	ProbeTarget      string            `json:"probe_target,omitempty"`
+	ProbeConcurrency int               `json:"probe_concurrency,omitempty"`
+	ChainProbe       *ChainProbeResult `json:"chain_probe,omitempty"`
+	Protected        bool              `json:"protected,omitempty"`
+	Error            string            `json:"error,omitempty"`
+	UpdatedAt        time.Time         `json:"updated_at"`
 }
 
 type SourceRefreshGroup struct {

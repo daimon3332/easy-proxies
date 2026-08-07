@@ -23,6 +23,7 @@ const probeLocalDNSTag = "probe-local-dns"
 
 type sharedProbeRuntime struct {
 	registry            *sbOutbound.Registry
+	manager             *sbOutbound.Manager
 	ctx                 context.Context
 	logFactory          log.Factory
 	dnsTransportManager *dns.TransportManager
@@ -80,13 +81,56 @@ func newSharedProbeRuntime() (*sharedProbeRuntime, error) {
 		_ = dnsTransportManager.Close()
 		return nil, fmt.Errorf("unexpected outbound registry type %T", service.FromContext[adapter.OutboundRegistry](ctx))
 	}
+	if err := outboundManager.Create(ctx, nil, logger, probeDirectTag, C.TypeDirect, &option.DirectOutboundOptions{}); err != nil {
+		_ = dnsRouter.Close()
+		_ = dnsTransportManager.Close()
+		return nil, fmt.Errorf("create probe direct outbound: %w", err)
+	}
+	for _, stage := range adapter.ListStartStages {
+		if err := outboundManager.Start(stage); err != nil {
+			_ = outboundManager.Close()
+			_ = dnsRouter.Close()
+			_ = dnsTransportManager.Close()
+			return nil, fmt.Errorf("start probe outbound manager at %s: %w", stage, err)
+		}
+	}
 	return &sharedProbeRuntime{
 		registry:            registry,
+		manager:             outboundManager,
 		ctx:                 ctx,
 		logFactory:          logFactory,
 		dnsTransportManager: dnsTransportManager,
 		dnsRouter:           dnsRouter,
 	}, nil
+}
+
+const probeDirectTag = "probe-direct"
+
+func (r *sharedProbeRuntime) BuildChain(configs []option.Outbound) (adapter.Outbound, func(), error) {
+	if len(configs) == 0 {
+		return nil, nil, fmt.Errorf("chain has no outbounds")
+	}
+	created := make([]string, 0, len(configs))
+	logger := r.logFactory.NewLogger("probe/chain")
+	for _, config := range configs {
+		if err := r.manager.Create(r.ctx, nil, logger, config.Tag, config.Type, config.Options); err != nil {
+			for index := len(created) - 1; index >= 0; index-- {
+				_ = r.manager.Remove(created[index])
+			}
+			return nil, nil, fmt.Errorf("create chain outbound %s: %w", config.Type, err)
+		}
+		created = append(created, config.Tag)
+	}
+	terminal, ok := r.manager.Outbound(configs[len(configs)-1].Tag)
+	if !ok {
+		return nil, nil, fmt.Errorf("chain terminal outbound was not registered")
+	}
+	cleanup := func() {
+		for index := len(created) - 1; index >= 0; index-- {
+			_ = r.manager.Remove(created[index])
+		}
+	}
+	return terminal, cleanup, nil
 }
 
 func (r *sharedProbeRuntime) Build(config option.Outbound) (adapter.Outbound, error) {
@@ -110,6 +154,9 @@ func (r *sharedProbeRuntime) Close() error {
 	}
 	r.closeOnce.Do(func() {
 		var errs []error
+		if r.manager != nil {
+			errs = append(errs, r.manager.Close())
+		}
 		if r.dnsRouter != nil {
 			errs = append(errs, r.dnsRouter.Close())
 		}

@@ -14,7 +14,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const stateSchemaVersion = 2
+const stateSchemaVersion = 3
 
 type stateDB struct {
 	path           string
@@ -61,6 +61,7 @@ func (s *stateDB) initialize() error {
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA synchronous=NORMAL",
 		"PRAGMA busy_timeout=5000",
+		"PRAGMA foreign_keys=ON",
 		"PRAGMA cache_size=-1024",
 		"PRAGMA wal_autocheckpoint=256",
 		`CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -96,6 +97,26 @@ func (s *stateDB) initialize() error {
 			updated_at INTEGER NOT NULL,
 			payload BLOB NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS connectivity_runs (
+			id TEXT PRIMARY KEY,
+			scope_key TEXT NOT NULL,
+			tags_json TEXT NOT NULL,
+			targets_json TEXT NOT NULL,
+			completed_at INTEGER NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS connectivity_results (
+			run_id TEXT NOT NULL,
+			route_fingerprint TEXT NOT NULL,
+			node_name TEXT NOT NULL,
+			tags_json TEXT NOT NULL,
+			target_id TEXT NOT NULL,
+			verdict TEXT NOT NULL,
+			success INTEGER NOT NULL,
+			latency_ms INTEGER NOT NULL,
+			tested_at INTEGER NOT NULL,
+			PRIMARY KEY(run_id, route_fingerprint, target_id),
+			FOREIGN KEY(run_id) REFERENCES connectivity_runs(id) ON DELETE CASCADE
+		)`,
 	} {
 		if _, err := s.db.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("initialize state database: %w", err)
@@ -118,6 +139,8 @@ func (s *stateDB) initialize() error {
 		`CREATE INDEX IF NOT EXISTS idx_ui_nodes_port ON managed_nodes((port <= 0), port, name, id)`,
 		`CREATE INDEX IF NOT EXISTS idx_ui_nodes_tag ON managed_nodes((tag_prefix = ''), tag_prefix, name, id)`,
 		`CREATE INDEX IF NOT EXISTS idx_import_jobs_updated ON import_jobs(updated_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_connectivity_runs_scope ON connectivity_runs(scope_key, completed_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_connectivity_results_run ON connectivity_results(run_id)`,
 	} {
 		if _, err := s.db.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("initialize state database indexes: %w", err)

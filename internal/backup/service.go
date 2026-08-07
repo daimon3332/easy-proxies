@@ -19,6 +19,7 @@ import (
 
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/importer"
+	"easy_proxies/internal/proxychain"
 
 	"github.com/studio-b12/gowebdav"
 )
@@ -219,7 +220,7 @@ func (s *Service) Restore(ctx context.Context, archive []byte) (RestoreResult, e
 	})
 	configuredURIs := make(map[string]struct{}, len(restoredCfg.Nodes)+len(poolNodes))
 	for _, node := range restoredCfg.Nodes {
-		configuredURIs[strings.TrimSpace(node.URI)] = struct{}{}
+		configuredURIs[strings.TrimSpace(node.URI)+"\x00"+node.ChainProfileID] = struct{}{}
 	}
 	for _, node := range poolNodes {
 		value := node.ToConfigNode()
@@ -227,12 +228,13 @@ func (s *Service) Restore(ctx context.Context, archive []byte) (RestoreResult, e
 		if uri == "" {
 			continue
 		}
-		if _, exists := configuredURIs[uri]; exists {
+		route := uri + "\x00" + value.ChainProfileID
+		if _, exists := configuredURIs[route]; exists {
 			continue
 		}
 		value.Source = config.NodeSourceInline
 		restoredCfg.Nodes = append(restoredCfg.Nodes, value)
-		configuredURIs[uri] = struct{}{}
+		configuredURIs[route] = struct{}{}
 	}
 	for i := range restoredCfg.Nodes {
 		restoredCfg.Nodes[i].Source = config.NodeSourceInline
@@ -265,10 +267,10 @@ func (s *Service) Restore(ctx context.Context, archive []byte) (RestoreResult, e
 		}
 		ports := make(map[string]uint16, len(runtimeNodes))
 		for _, node := range runtimeNodes {
-			ports[node.URI] = node.Port
+			ports[node.URI+"\x00"+node.ChainProfileID] = node.Port
 		}
 		for id, node := range restoredStore.Nodes {
-			if port, ok := ports[node.URI]; ok && (node.InPool || node.State == importer.StateInPool) {
+			if port, ok := ports[node.URI+"\x00"+node.ChainProfileID]; ok && (node.InPool || node.State == importer.StateInPool) {
 				node.Port = port
 				restoredStore.Nodes[id] = node
 			}
@@ -278,6 +280,18 @@ func (s *Service) Restore(ctx context.Context, archive []byte) (RestoreResult, e
 			_ = os.WriteFile(oldCfg.FilePath(), oldFile, 0o644)
 			_ = s.store.ReplaceSnapshot(oldStore)
 			return RestoreResult{}, fmt.Errorf("同步恢复后的端口失败，已回滚: %w", err)
+		}
+	}
+	if updater, ok := s.activity.(interface {
+		SetChainProfiles([]proxychain.Profile) error
+	}); ok {
+		if err := updater.SetChainProfiles(restoredCfg.ChainProfiles); err != nil {
+			if s.runtime != nil {
+				_ = s.runtime.ApplyRestoredConfig(ctx, oldCfg)
+			}
+			_ = os.WriteFile(oldCfg.FilePath(), oldFile, 0o644)
+			_ = s.store.ReplaceSnapshot(oldStore)
+			return RestoreResult{}, fmt.Errorf("恢复前置代理配置失败，已回滚: %w", err)
 		}
 	}
 	if s.subscriptions != nil {

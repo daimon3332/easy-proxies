@@ -1,13 +1,16 @@
 package monitor
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"easy_proxies/internal/importer"
+	"easy_proxies/internal/proxychain"
 )
 
 type ImportService interface {
@@ -46,6 +49,18 @@ type ImportService interface {
 	JobEventSnapshot() []importer.JobEvent
 	JobEventStats() importer.JobEventStats
 	ProbeSchedulerStats() importer.ProbeSchedulerStats
+	SetChainProfiles(profiles []proxychain.Profile) error
+	ChainProfiles() []proxychain.Profile
+	TestChainProfile(ctx context.Context, id string) importer.ChainProbeResult
+	TestChainProfileValue(ctx context.Context, profile proxychain.Profile) importer.ChainProbeResult
+	ConnectivityScopes() importer.ConnectivityScopeResponse
+	StartConnectivityJob(req importer.ConnectivityStartRequest) (string, error)
+	GetConnectivityJob(jobID string) (importer.ConnectivityJob, bool)
+	CancelConnectivityJob(jobID string) (importer.ConnectivityJob, error)
+	ListConnectivityResults(query importer.ConnectivityResultQuery) (importer.ConnectivityResultPage, error)
+	ConnectivityHistory(jobID string) (importer.ConnectivityHistoryComparison, error)
+	PreviewConnectivityPool(req importer.ConnectivityPortRequest) (importer.ConnectivityPortPreview, error)
+	ApplyConnectivityPool(ctx context.Context, req importer.ConnectivityPortRequest) (importer.ConnectivityPortApplyResponse, error)
 }
 
 func (s *Server) ensureImportService(w http.ResponseWriter) bool {
@@ -55,6 +70,210 @@ func (s *Server) ensureImportService(w http.ResponseWriter) bool {
 		return false
 	}
 	return true
+}
+
+func (s *Server) handleChainProfiles(w http.ResponseWriter, r *http.Request) {
+	if !s.ensureImportService(w) {
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, importer.ChainProfileResponse{Profiles: s.importSvc.ChainProfiles(), Usage: s.chainProfileUsage()})
+	case http.MethodPut:
+		var req importer.ChainProfileMutationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]string{"error": "请求格式错误"})
+			return
+		}
+		profiles, err := proxychain.NormalizeProfiles(req.Profiles)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]string{"error": err.Error()})
+			return
+		}
+		nodes, _ := s.importSvc.ListAll()
+		usage := chainProfileUsageFromNodes(nodes)
+		oldByID := make(map[string]proxychain.Profile)
+		oldProfiles := s.importSvc.ChainProfiles()
+		for _, profile := range oldProfiles {
+			oldByID[profile.ID] = profile
+		}
+		newByID := make(map[string]proxychain.Profile)
+		for _, profile := range profiles {
+			newByID[profile.ID] = profile
+		}
+		cascadeIDs := make([]string, 0)
+		retestIDs := make([]string, 0)
+		runtimeChanged := false
+		for id, counts := range usage {
+			if counts.Nodes == 0 {
+				continue
+			}
+			oldProfile, hadOld := oldByID[id]
+			newProfile, hasNew := newByID[id]
+			removed := !hasNew || !newProfile.Enabled
+			if removed && !req.Cascade {
+				w.WriteHeader(http.StatusConflict)
+				writeJSON(w, map[string]any{
+					"error":            fmt.Sprintf("前置代理正在被 %d 个节点和 %d 个端口使用", counts.Nodes, counts.Ports),
+					"requires_cascade": true,
+					"usage":            usage,
+				})
+				return
+			}
+			if removed {
+				for _, node := range nodes {
+					if node.ChainProfileID == id {
+						cascadeIDs = append(cascadeIDs, node.ID)
+					}
+				}
+				continue
+			}
+			if hadOld && proxychain.ContentID(oldProfile) != proxychain.ContentID(newProfile) {
+				ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+				probe := s.importSvc.TestChainProfileValue(ctx, newProfile)
+				cancel()
+				if probe.Error != "" {
+					w.WriteHeader(http.StatusBadGateway)
+					writeJSON(w, map[string]string{"error": "新的前置代理测试失败: " + probe.Error})
+					return
+				}
+				runtimeChanged = true
+				for _, node := range nodes {
+					if node.ChainProfileID == id {
+						retestIDs = append(retestIDs, node.ID)
+					}
+				}
+			}
+		}
+		s.cfgMu.Lock()
+		if s.cfgSrc == nil {
+			s.cfgMu.Unlock()
+			w.WriteHeader(http.StatusServiceUnavailable)
+			writeJSON(w, map[string]string{"error": "配置存储未初始化"})
+			return
+		}
+		previous := append([]proxychain.Profile(nil), s.cfgSrc.ChainProfiles...)
+		s.cfgSrc.ChainProfiles = profiles
+		if err := s.cfgSrc.SaveSettings(); err != nil {
+			s.cfgSrc.ChainProfiles = previous
+			s.cfgMu.Unlock()
+			w.WriteHeader(http.StatusInternalServerError)
+			writeJSON(w, map[string]string{"error": err.Error()})
+			return
+		}
+		s.cfgMu.Unlock()
+		if err := s.importSvc.SetChainProfiles(profiles); err != nil {
+			s.cfgMu.Lock()
+			s.cfgSrc.ChainProfiles = previous
+			_ = s.cfgSrc.SaveSettings()
+			s.cfgMu.Unlock()
+			w.WriteHeader(http.StatusInternalServerError)
+			writeJSON(w, map[string]string{"error": err.Error()})
+			return
+		}
+		rollbackProfiles := func() {
+			s.cfgMu.Lock()
+			s.cfgSrc.ChainProfiles = previous
+			_ = s.cfgSrc.SaveSettings()
+			s.cfgMu.Unlock()
+			_ = s.importSvc.SetChainProfiles(previous)
+			if s.nodeMgr != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				_ = s.nodeMgr.TriggerReload(ctx)
+				cancel()
+			}
+		}
+		deleted := 0
+		if len(cascadeIDs) > 0 {
+			var err error
+			deleted, err = s.importSvc.DeleteMany(cascadeIDs)
+			if err != nil {
+				rollbackProfiles()
+				w.WriteHeader(http.StatusInternalServerError)
+				writeJSON(w, map[string]string{"error": "删除关联链式节点失败: " + err.Error()})
+				return
+			}
+		}
+		if runtimeChanged && s.nodeMgr != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+			err := s.nodeMgr.TriggerReload(ctx)
+			cancel()
+			if err != nil {
+				rollbackProfiles()
+				w.WriteHeader(http.StatusInternalServerError)
+				writeJSON(w, map[string]string{"error": "应用前置代理失败，已恢复原配置: " + err.Error()})
+				return
+			}
+		}
+		retestJobID := ""
+		if len(retestIDs) > 0 {
+			retestJobID, _ = s.importSvc.StartBatchTest(importer.BatchTestRequest{
+				NodeIDs: retestIDs, Retest: true, PromotePassed: true, AutoReload: true,
+			})
+		}
+		writeJSON(w, importer.ChainProfileResponse{
+			Profiles: profiles, Usage: s.chainProfileUsage(), RetestJobID: retestJobID, DeletedNodes: deleted,
+		})
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 GET/PUT 请求"})
+	}
+}
+
+func (s *Server) chainProfileUsage() map[string]importer.ChainProfileUsage {
+	nodes, _ := s.importSvc.ListAll()
+	return chainProfileUsageFromNodes(nodes)
+}
+
+func chainProfileUsageFromNodes(nodes []importer.ManagedNode) map[string]importer.ChainProfileUsage {
+	usage := make(map[string]importer.ChainProfileUsage)
+	for _, node := range nodes {
+		id := strings.TrimSpace(node.ChainProfileID)
+		if id == "" {
+			continue
+		}
+		counts := usage[id]
+		counts.Nodes++
+		if node.InPool || node.State == importer.StateInPool || node.Port > 0 {
+			counts.Ports++
+		}
+		usage[id] = counts
+	}
+	return usage
+}
+
+func (s *Server) handleChainProfileTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]string{"error": "仅支持 POST 请求"})
+		return
+	}
+	if !s.ensureImportService(w) {
+		return
+	}
+	var req struct {
+		ID      string              `json:"id"`
+		Profile *proxychain.Profile `json:"profile,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Profile == nil && strings.TrimSpace(req.ID) == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]string{"error": "缺少前置代理 ID"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	result := importer.ChainProbeResult{}
+	if req.Profile != nil {
+		result = s.importSvc.TestChainProfileValue(ctx, *req.Profile)
+	} else {
+		result = s.importSvc.TestChainProfile(ctx, req.ID)
+	}
+	if result.Error != "" {
+		w.WriteHeader(http.StatusBadGateway)
+	}
+	writeJSON(w, result)
 }
 
 func (s *Server) handleImportSummary(w http.ResponseWriter, r *http.Request) {

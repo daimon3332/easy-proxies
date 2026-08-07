@@ -13,10 +13,11 @@ import (
 
 type connectivityImportStub struct {
 	ImportService
-	query   importer.ConnectivityResultQuery
-	request importer.ConnectivityPortRequest
-	page    importer.ConnectivityResultPage
-	history importer.ConnectivityHistoryComparison
+	startRequest importer.ConnectivityStartRequest
+	query        importer.ConnectivityResultQuery
+	request      importer.ConnectivityPortRequest
+	page         importer.ConnectivityResultPage
+	history      importer.ConnectivityHistoryComparison
 }
 
 func (s *connectivityImportStub) ConnectivityScopes() importer.ConnectivityScopeResponse {
@@ -24,6 +25,7 @@ func (s *connectivityImportStub) ConnectivityScopes() importer.ConnectivityScope
 }
 
 func (s *connectivityImportStub) StartConnectivityJob(req importer.ConnectivityStartRequest) (string, error) {
+	s.startRequest = req
 	return "job-1", nil
 }
 
@@ -64,8 +66,8 @@ func TestConnectivityHandlersLifecycle(t *testing.T) {
 	server := &Server{importSvc: stub}
 
 	start := httptest.NewRecorder()
-	server.handleConnectivityStart(start, httptest.NewRequest(http.MethodPost, "/api/connectivity/jobs/start", strings.NewReader(`{"tags":["A"]}`)))
-	if start.Code != http.StatusOK || !strings.Contains(start.Body.String(), `"job_id":"job-1"`) {
+	server.handleConnectivityStart(start, httptest.NewRequest(http.MethodPost, "/api/connectivity/jobs/start", strings.NewReader(`{"tags":["A"],"timeout_seconds":23}`)))
+	if start.Code != http.StatusOK || !strings.Contains(start.Body.String(), `"job_id":"job-1"`) || stub.startRequest.TimeoutSeconds != 23 {
 		t.Fatalf("start status=%d body=%s", start.Code, start.Body.String())
 	}
 
@@ -105,6 +107,25 @@ func TestConnectivityHandlersLifecycle(t *testing.T) {
 	server.handleConnectivityCancel(cancel, httptest.NewRequest(http.MethodPost, "/api/connectivity/jobs/cancel?id=job-1", nil))
 	if cancel.Code != http.StatusOK || !strings.Contains(cancel.Body.String(), `"status":"canceled"`) {
 		t.Fatalf("cancel status=%d body=%s", cancel.Code, cancel.Body.String())
+	}
+}
+
+func TestConnectivityWebUIIncludesTimeoutControl(t *testing.T) {
+	data, err := embeddedFS.ReadFile("assets/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(data)
+	for _, required := range []string{
+		`CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS=10`,
+		`id="connectivityTimeout"`,
+		`min="1" max="60" step="1"`,
+		`timeout_seconds`,
+		`单次超时`,
+	} {
+		if !strings.Contains(page, required) {
+			t.Fatalf("WebUI missing %q", required)
+		}
 	}
 }
 

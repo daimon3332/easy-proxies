@@ -44,11 +44,11 @@ func TestProbeConnectivityTargetRequiresRealHTMLPage(t *testing.T) {
 	pool := x509.NewCertPool()
 	pool.AddCert(server.Certificate())
 	target := ConnectivityTarget{ID: "fixture", Name: "Fixture", Host: host, Port: port, URL: server.URL}
-	passed := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, pool)
+	passed := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, pool, connectivityProbeTimeout)
 	if !passed.Success || passed.Verdict != ConnectivityVerdictUsable || passed.HTTPStatus != http.StatusOK || passed.FinalHost != host || passed.InspectedBytes < 512 || passed.FailureStage != "" || passed.TLSVersion == "" || !passed.FirstSuccess {
 		t.Fatalf("trusted result = %#v", passed)
 	}
-	failed := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, x509.NewCertPool())
+	failed := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, x509.NewCertPool(), connectivityProbeTimeout)
 	if failed.Success || failed.FailureStage != "tls" || failed.Retryable || failed.Error == "" {
 		t.Fatalf("untrusted result = %#v", failed)
 	}
@@ -84,7 +84,7 @@ func TestProbeConnectivityTargetFollowsRedirectWithCookies(t *testing.T) {
 	roots := x509.NewCertPool()
 	roots.AddCert(server.Certificate())
 	target := ConnectivityTarget{ID: "fixture", Name: "Fixture", Host: host, Port: port, URL: server.URL}
-	result := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, roots)
+	result := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, roots, connectivityProbeTimeout)
 	if !result.Success || result.HTTPStatus != http.StatusOK || len(result.Components) != 1 {
 		t.Fatalf("redirect result = %#v", result)
 	}
@@ -109,7 +109,7 @@ func TestProbeConnectivityTargetClassifiesHTTPAndContentFailures(t *testing.T) {
 	roots := x509.NewCertPool()
 	roots.AddCert(server.Certificate())
 	target := ConnectivityTarget{ID: "fixture", Name: "Fixture", Host: host, Port: port, URL: server.URL}
-	result := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, roots)
+	result := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, roots, connectivityProbeTimeout)
 	if result.Success || result.FailureStage != "http" || result.HTTPStatus != status || !result.Retryable {
 		t.Fatalf("HTTP result = %#v", result)
 	}
@@ -119,9 +119,9 @@ func TestProbeConnectivityTargetClassifiesHTTPAndContentFailures(t *testing.T) {
 		target:     target,
 		components: []connectivityComponentSpec{{id: "page", name: "Fixture", url: server.URL, allowedHosts: []string{host}, marker: "expected-marker"}},
 	}
-	client, transport := newConnectivityHTTPClient(outbound, roots)
+	client, transport := newConnectivityHTTPClient(outbound, roots, connectivityProbeTimeout)
 	defer transport.CloseIdleConnections()
-	result = probeConnectivityTargetSpecWithClient(context.Background(), client, ManagedNode{ID: "node"}, spec, 1)
+	result = probeConnectivityTargetSpecWithClient(context.Background(), client, ManagedNode{ID: "node"}, spec, 1, connectivityProbeTimeout)
 	if result.Success || result.FailureStage != "content" || result.Retryable {
 		t.Fatalf("content result = %#v", result)
 	}
@@ -158,17 +158,39 @@ func TestProbeConnectivityTargetBoundsRedirectsAndTimeouts(t *testing.T) {
 	roots := x509.NewCertPool()
 	roots.AddCert(server.Certificate())
 	target := ConnectivityTarget{ID: "fixture", Name: "Fixture", Host: host, Port: port, URL: server.URL + "/loop"}
-	redirected := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, roots)
+	redirected := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, roots, connectivityProbeTimeout)
 	if redirected.Success || redirected.FailureStage != "redirect" || redirected.Retryable {
 		t.Fatalf("redirect result = %#v", redirected)
 	}
 
 	target.URL = server.URL + "/wait"
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
-	defer cancel()
-	timedOut := probeConnectivityTarget(ctx, outbound, ManagedNode{ID: "node"}, target, 1, roots)
+	started := time.Now()
+	timedOut := probeConnectivityTarget(context.Background(), outbound, ManagedNode{ID: "node"}, target, 1, roots, 30*time.Millisecond)
 	if timedOut.Success || timedOut.Error != "检测超时" || !timedOut.Retryable {
 		t.Fatalf("timeout result = %#v", timedOut)
+	}
+	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+		t.Fatalf("custom timeout took %s", elapsed)
+	}
+}
+
+func TestNormalizeConnectivityTimeout(t *testing.T) {
+	tests := []struct {
+		seconds int
+		want    time.Duration
+		wantErr bool
+	}{
+		{seconds: 0, want: 10 * time.Second},
+		{seconds: 1, want: time.Second},
+		{seconds: 60, want: time.Minute},
+		{seconds: -1, wantErr: true},
+		{seconds: 61, wantErr: true},
+	}
+	for _, test := range tests {
+		got, err := normalizeConnectivityTimeout(test.seconds)
+		if (err != nil) != test.wantErr || got != test.want {
+			t.Errorf("normalizeConnectivityTimeout(%d) = %s, %v", test.seconds, got, err)
+		}
 	}
 }
 
@@ -422,9 +444,11 @@ func TestConnectivityJobRetriesOnlyRecoverableFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	attempts := make(chan int, 2)
-	svc.connectivityProbePass = func(ctx context.Context, nodes []ManagedNode, selected map[string]map[string]struct{}, attempt int) <-chan connectivityProbeEvent {
+	timeouts := make(chan time.Duration, 2)
+	svc.connectivityProbePass = func(ctx context.Context, nodes []ManagedNode, selected map[string]map[string]struct{}, attempt int, timeout time.Duration) <-chan connectivityProbeEvent {
 		events := make(chan connectivityProbeEvent, 4)
 		attempts <- attempt
+		timeouts <- timeout
 		if attempt == 1 {
 			for _, target := range connectivityTargets {
 				events <- connectivityProbeEvent{nodeID: node.ID, result: ConnectivityResult{
@@ -441,7 +465,7 @@ func TestConnectivityJobRetriesOnlyRecoverableFailures(t *testing.T) {
 		close(events)
 		return events
 	}
-	jobID, err := svc.StartConnectivityJob(ConnectivityStartRequest{Tags: []string{"A"}, Targets: []string{"google", "github", "outlook", "proxyspace"}})
+	jobID, err := svc.StartConnectivityJob(ConnectivityStartRequest{Tags: []string{"A"}, Targets: []string{"google", "github", "outlook", "proxyspace"}, TimeoutSeconds: 23})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -451,6 +475,9 @@ func TestConnectivityJobRetriesOnlyRecoverableFailures(t *testing.T) {
 	}
 	if first, second := <-attempts, <-attempts; first != 1 || second != 2 {
 		t.Fatalf("attempts = %d, %d", first, second)
+	}
+	if first, second := <-timeouts, <-timeouts; first != 23*time.Second || second != 23*time.Second || job.TimeoutSeconds != 23 {
+		t.Fatalf("timeouts = %s, %s; job = %d", first, second, job.TimeoutSeconds)
 	}
 	page, err := svc.ListConnectivityResults(ConnectivityResultQuery{JobID: jobID, TargetID: "github"})
 	if err != nil || len(page.Items) != 1 || !page.Items[0].Success || page.Items[0].FirstSuccess || page.Items[0].Attempts != 2 {
@@ -469,7 +496,7 @@ func TestConnectivityJobCancellationStopsProbe(t *testing.T) {
 		t.Fatal(err)
 	}
 	started := make(chan struct{})
-	svc.connectivityProbePass = func(ctx context.Context, _ []ManagedNode, _ map[string]map[string]struct{}, _ int) <-chan connectivityProbeEvent {
+	svc.connectivityProbePass = func(ctx context.Context, _ []ManagedNode, _ map[string]map[string]struct{}, _ int, _ time.Duration) <-chan connectivityProbeEvent {
 		events := make(chan connectivityProbeEvent)
 		go func() {
 			close(started)
@@ -520,10 +547,13 @@ func TestConnectivityJobDefaultsToOutlookOnly(t *testing.T) {
 	if err := store.UpsertNode(node); err != nil {
 		t.Fatal(err)
 	}
-	svc.connectivityProbePass = func(_ context.Context, nodes []ManagedNode, selected map[string]map[string]struct{}, attempt int) <-chan connectivityProbeEvent {
+	svc.connectivityProbePass = func(_ context.Context, nodes []ManagedNode, selected map[string]map[string]struct{}, attempt int, timeout time.Duration) <-chan connectivityProbeEvent {
 		events := make(chan connectivityProbeEvent, 1)
 		if attempt != 1 || len(nodes) != 1 || len(selected[node.ID]) != 1 {
 			t.Errorf("attempt=%d nodes=%d selected=%#v", attempt, len(nodes), selected)
+		}
+		if timeout != connectivityProbeTimeout {
+			t.Errorf("default timeout = %s", timeout)
 		}
 		if _, ok := selected[node.ID]["outlook"]; !ok {
 			t.Errorf("default targets = %#v", selected[node.ID])
@@ -537,7 +567,7 @@ func TestConnectivityJobDefaultsToOutlookOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := waitConnectivityJobTerminal(t, svc, jobID)
-	if job.Status != ConnectivityJobFinished || len(job.Targets) != 1 || job.Targets[0] != "outlook" || job.TotalChecks != 1 {
+	if job.Status != ConnectivityJobFinished || len(job.Targets) != 1 || job.Targets[0] != "outlook" || job.TotalChecks != 1 || job.TimeoutSeconds != connectivityDefaultTimeoutSeconds {
 		t.Fatalf("job = %#v", job)
 	}
 }

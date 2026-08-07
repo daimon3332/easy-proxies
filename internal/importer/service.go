@@ -96,7 +96,7 @@ type Service struct {
 	connectivityJobs      map[string]*connectivityJobState
 	connectivityCancelsMu sync.Mutex
 	connectivityCancels   map[string]context.CancelFunc
-	connectivityProbePass func(context.Context, []ManagedNode, map[string]map[string]struct{}, int) <-chan connectivityProbeEvent
+	connectivityProbePass func(context.Context, []ManagedNode, map[string]map[string]struct{}, int, time.Duration) <-chan connectivityProbeEvent
 	jobEventsMu           sync.Mutex
 	jobEventSubs          map[uint64]chan JobEvent
 	jobEventNext          uint64

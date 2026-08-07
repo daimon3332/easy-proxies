@@ -46,7 +46,7 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 - 🔀 Optional front-proxy profiles for chained routes, using any proxy URI protocol supported by the current sing-box build.
 - Subscription fetching keeps the standard direct-first strategy with bounded fallback through available pooled proxies; the selected front proxy is used only for the chained node route.
 - Chained imports report the front-proxy baseline and the complete route separately; terminal nodes are not tested by direct connection.
-- Site connectivity checks run against any selected tags for Google, GitHub, Outlook, and ProxySpace, then can rebuild ports from the strict intersection of selected sites.
+- Site connectivity checks run against any selected tags for Google, GitHub, Outlook, and ProxySpace, support a per-run 1-60 second timeout with a 10-second default, and can rebuild ports from the strict intersection of selected sites.
 - 🧩 Keeps candidate, pooled, and failed nodes instead of silently dropping failures.
 - Automatically promotes passed imports to the node pool by default.
 - 🔌 One local port per node in the default `multi-port` mode.

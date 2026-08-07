@@ -28,10 +28,13 @@ import (
 )
 
 const (
-	connectivityProbeTimeout = 10 * time.Second
-	connectivityRetryDelay   = time.Second
-	connectivityJobTTL       = 30 * time.Minute
-	connectivityBodyLimit    = 64 << 10
+	connectivityDefaultTimeoutSeconds = 10
+	connectivityMinTimeoutSeconds     = 1
+	connectivityMaxTimeoutSeconds     = 60
+	connectivityProbeTimeout          = connectivityDefaultTimeoutSeconds * time.Second
+	connectivityRetryDelay            = time.Second
+	connectivityJobTTL                = 30 * time.Minute
+	connectivityBodyLimit             = 64 << 10
 )
 
 type connectivityComponentSpec struct {
@@ -311,6 +314,10 @@ func (s *Service) StartConnectivityJob(req ConnectivityStartRequest) (string, er
 	if err != nil {
 		return "", err
 	}
+	probeTimeout, err := normalizeConnectivityTimeout(req.TimeoutSeconds)
+	if err != nil {
+		return "", err
+	}
 	routes, err := s.connectivityRoutes(tags)
 	if err != nil {
 		return "", err
@@ -321,7 +328,7 @@ func (s *Service) StartConnectivityJob(req ConnectivityStartRequest) (string, er
 		job: ConnectivityJob{
 			ID: jobID, Status: ConnectivityJobRunning, Phase: "first_pass", Tags: tags, Targets: targets,
 			TotalRoutes: len(routes), TotalChecks: len(routes) * len(targets),
-			Concurrency: s.tester.concurrency, StartedAt: now, UpdatedAt: now,
+			Concurrency: s.tester.concurrency, TimeoutSeconds: int(probeTimeout / time.Second), StartedAt: now, UpdatedAt: now,
 		},
 		routes:             make(map[string]connectivityRoute, len(routes)),
 		results:            make(map[string]ConnectivityResult, len(routes)*len(targets)),
@@ -353,6 +360,16 @@ func (s *Service) StartConnectivityJob(req ConnectivityStartRequest) (string, er
 	return jobID, nil
 }
 
+func normalizeConnectivityTimeout(seconds int) (time.Duration, error) {
+	if seconds == 0 {
+		return connectivityProbeTimeout, nil
+	}
+	if seconds < connectivityMinTimeoutSeconds || seconds > connectivityMaxTimeoutSeconds {
+		return 0, fmt.Errorf("单次超时必须为 %d-%d 秒的整数", connectivityMinTimeoutSeconds, connectivityMaxTimeoutSeconds)
+	}
+	return time.Duration(seconds) * time.Second, nil
+}
+
 func connectivityResultKey(nodeID, targetID string) string {
 	return nodeID + "\x00" + targetID
 }
@@ -370,8 +387,14 @@ func (s *Service) runConnectivityJob(ctx context.Context, jobID string, routes [
 		byNode[route.node.ID] = route
 	}
 	s.connectivityJobsMu.RLock()
-	jobTargets := append([]string(nil), s.connectivityJobs[jobID].job.Targets...)
+	job := s.connectivityJobs[jobID].job
+	jobTargets := append([]string(nil), job.Targets...)
 	s.connectivityJobsMu.RUnlock()
+	probeTimeout, err := normalizeConnectivityTimeout(job.TimeoutSeconds)
+	if err != nil {
+		s.finishConnectivityJob(jobID, ConnectivityJobFailed, "检测超时配置无效")
+		return
+	}
 	selectedTargets := make(map[string]map[string]struct{}, len(nodes))
 	for _, node := range nodes {
 		selectedTargets[node.ID] = make(map[string]struct{}, len(jobTargets))
@@ -384,7 +407,7 @@ func (s *Service) runConnectivityJob(ctx context.Context, jobID string, routes [
 	if probePass == nil {
 		probePass = s.tester.probeConnectivityPass
 	}
-	for event := range probePass(ctx, nodes, selectedTargets, 1) {
+	for event := range probePass(ctx, nodes, selectedTargets, 1, probeTimeout) {
 		if !containsConnectivityTarget(jobTargets, event.result.TargetID) {
 			continue
 		}
@@ -447,7 +470,7 @@ func (s *Service) runConnectivityJob(ctx context.Context, jobID string, routes [
 		}
 		s.connectivityJobsMu.Unlock()
 		s.publishConnectivityJob(jobID)
-		for event := range probePass(ctx, nodes, retryTargets, 2) {
+		for event := range probePass(ctx, nodes, retryTargets, 2, probeTimeout) {
 			route := byNode[event.nodeID]
 			key := connectivityResultKey(event.nodeID, event.result.TargetID)
 			s.connectivityJobsMu.Lock()
@@ -721,7 +744,7 @@ func containsString(values []string, value string) bool {
 	return false
 }
 
-func (t *NodeTester) probeConnectivityPass(ctx context.Context, nodes []ManagedNode, selected map[string]map[string]struct{}, attempt int) <-chan connectivityProbeEvent {
+func (t *NodeTester) probeConnectivityPass(ctx context.Context, nodes []ManagedNode, selected map[string]map[string]struct{}, attempt int, timeout time.Duration) <-chan connectivityProbeEvent {
 	events := make(chan connectivityProbeEvent)
 	go func() {
 		defer close(events)
@@ -743,7 +766,7 @@ func (t *NodeTester) probeConnectivityPass(ctx context.Context, nodes []ManagedN
 						case t.batchSem <- struct{}{}:
 						}
 					}
-					results := t.probeConnectivityNode(ctx, node, selected[node.ID], attempt)
+					results := t.probeConnectivityNode(ctx, node, selected[node.ID], attempt, timeout)
 					if t.batchSem != nil {
 						<-t.batchSem
 					}
@@ -775,7 +798,7 @@ func (t *NodeTester) probeConnectivityPass(ctx context.Context, nodes []ManagedN
 	return events
 }
 
-func (t *NodeTester) probeConnectivityNode(ctx context.Context, node ManagedNode, selected map[string]struct{}, attempt int) []ConnectivityResult {
+func (t *NodeTester) probeConnectivityNode(ctx context.Context, node ManagedNode, selected map[string]struct{}, attempt int, timeout time.Duration) []ConnectivityResult {
 	targets := connectivityTargets
 	if selected != nil {
 		targets = make([]ConnectivityTarget, 0, len(selected))
@@ -795,10 +818,10 @@ func (t *NodeTester) probeConnectivityNode(ctx context.Context, node ManagedNode
 		return results
 	}
 	defer session.cleanup()
-	client, transport := newConnectivityHTTPClient(session.outbound, nil)
+	client, transport := newConnectivityHTTPClient(session.outbound, nil, timeout)
 	defer transport.CloseIdleConnections()
 	for _, target := range targets {
-		results = append(results, probeConnectivityTargetWithClient(ctx, client, node, target, attempt))
+		results = append(results, probeConnectivityTargetWithClient(ctx, client, node, target, attempt, timeout))
 	}
 	return results
 }
@@ -850,15 +873,18 @@ func (t *NodeTester) newConnectivityOutbound(node ManagedNode) (connectivityOutb
 	return connectivityOutbound{outbound: outbound, cleanup: func() { _ = common.Close(outbound) }}, nil
 }
 
-func newConnectivityHTTPClient(outbound adapter.Outbound, roots *x509.CertPool) (*http.Client, *http.Transport) {
+func newConnectivityHTTPClient(outbound adapter.Outbound, roots *x509.CertPool, timeout time.Duration) (*http.Client, *http.Transport) {
+	if timeout <= 0 {
+		timeout = connectivityProbeTimeout
+	}
 	jar, _ := cookiejar.New(nil)
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			return outbound.DialContext(ctx, network, M.ParseSocksaddr(address))
 		},
 		TLSClientConfig:       &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
-		TLSHandshakeTimeout:   connectivityProbeTimeout,
-		ResponseHeaderTimeout: connectivityProbeTimeout,
+		TLSHandshakeTimeout:   timeout,
+		ResponseHeaderTimeout: timeout,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          8,
 		MaxIdleConnsPerHost:   2,
@@ -880,24 +906,24 @@ func newConnectivityHTTPClient(outbound adapter.Outbound, roots *x509.CertPool) 
 	return client, transport
 }
 
-func probeConnectivityTarget(ctx context.Context, outbound adapter.Outbound, node ManagedNode, target ConnectivityTarget, attempt int, roots *x509.CertPool) ConnectivityResult {
-	client, transport := newConnectivityHTTPClient(outbound, roots)
+func probeConnectivityTarget(ctx context.Context, outbound adapter.Outbound, node ManagedNode, target ConnectivityTarget, attempt int, roots *x509.CertPool, timeout time.Duration) ConnectivityResult {
+	client, transport := newConnectivityHTTPClient(outbound, roots, timeout)
 	defer transport.CloseIdleConnections()
-	return probeConnectivityTargetWithClient(ctx, client, node, target, attempt)
+	return probeConnectivityTargetWithClient(ctx, client, node, target, attempt, timeout)
 }
 
-func probeConnectivityTargetWithClient(ctx context.Context, client *http.Client, node ManagedNode, target ConnectivityTarget, attempt int) ConnectivityResult {
-	return probeConnectivityTargetSpecWithClient(ctx, client, node, connectivityTargetSpecFor(target), attempt)
+func probeConnectivityTargetWithClient(ctx context.Context, client *http.Client, node ManagedNode, target ConnectivityTarget, attempt int, timeout time.Duration) ConnectivityResult {
+	return probeConnectivityTargetSpecWithClient(ctx, client, node, connectivityTargetSpecFor(target), attempt, timeout)
 }
 
-func probeConnectivityTargetSpecWithClient(ctx context.Context, client *http.Client, node ManagedNode, spec connectivityTargetSpec, attempt int) ConnectivityResult {
+func probeConnectivityTargetSpecWithClient(ctx context.Context, client *http.Client, node ManagedNode, spec connectivityTargetSpec, attempt int, timeout time.Duration) ConnectivityResult {
 	result := ConnectivityResult{
 		NodeID: node.ID, TargetID: spec.target.ID, Verdict: ConnectivityVerdictFailed,
 		Attempts: attempt, TestedAt: time.Now(),
 	}
 	start := time.Now()
 	for _, componentSpec := range spec.components {
-		component := probeConnectivityComponent(ctx, client, node, componentSpec, attempt)
+		component := probeConnectivityComponent(ctx, client, node, componentSpec, attempt, timeout)
 		result.Components = append(result.Components, component)
 	}
 	result.LatencyMs = time.Since(start).Milliseconds()
@@ -938,9 +964,12 @@ func probeConnectivityTargetSpecWithClient(ctx context.Context, client *http.Cli
 	return result
 }
 
-func probeConnectivityComponent(ctx context.Context, client *http.Client, node ManagedNode, spec connectivityComponentSpec, attempt int) ConnectivityComponentResult {
+func probeConnectivityComponent(ctx context.Context, client *http.Client, node ManagedNode, spec connectivityComponentSpec, attempt int, timeout time.Duration) ConnectivityComponentResult {
 	result := ConnectivityComponentResult{ID: spec.id, Name: spec.name, Verdict: ConnectivityVerdictFailed, Attempts: attempt}
-	attemptCtx, cancel := context.WithTimeout(ctx, connectivityProbeTimeout)
+	if timeout <= 0 {
+		timeout = connectivityProbeTimeout
+	}
+	attemptCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(attemptCtx, http.MethodGet, spec.url, nil)
 	if err != nil {

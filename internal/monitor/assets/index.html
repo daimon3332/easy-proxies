@@ -269,7 +269,17 @@ pre.log-view{height:100%;max-height:none}
 .tag-option:hover{border-color:#bcd0ff;background:#f3f7ff}
 .tag-option span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:750}
 .connectivity-scope-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;border-top:1px solid var(--line);padding-top:16px}
+.connectivity-test-controls{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;min-width:0}
 .site-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.connectivity-timeout-field{display:grid;grid-template-columns:auto 112px;align-items:center;gap:6px 10px;min-width:210px}
+.connectivity-timeout-field label{font-size:13px;font-weight:800;color:#40515d;white-space:nowrap}
+.number-suffix{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid var(--line-strong);border-radius:8px;background:#fff;overflow:hidden;transition:.16s ease}
+.number-suffix:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px rgba(47,159,216,.12)}
+.number-suffix:has(input[aria-invalid="true"]){border-color:#d64545;box-shadow:0 0 0 4px rgba(214,69,69,.1)}
+.number-suffix input{min-height:42px;border:0;border-radius:0;box-shadow:none!important;padding:9px 8px 9px 12px}
+.number-suffix span{padding:0 12px 0 4px;color:var(--muted);font-size:13px;font-weight:750}
+.number-suffix:has(input:disabled){background:#f3f6f8;opacity:.72}
+.field-error{grid-column:1/-1;min-height:16px;color:#b42323;font-size:12px;line-height:1.35}
 .site-indicator,.site-selector{border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px;display:grid;gap:3px;text-align:left}
 .site-indicator{display:flex;align-items:center;gap:7px;padding:7px 10px;background:#f7f9fb;min-width:0}
 .site-indicator strong,.site-selector strong{font-size:14px}
@@ -419,6 +429,18 @@ const ACTIVE_IMPORT_JOB_KEY='easy_proxies_active_import_job';
 const ACTIVE_BATCH_JOB_KEY='easy_proxies_active_batch_job';
 const ACTIVE_REFRESH_JOB_KEY='easy_proxies_active_refresh_job';
 const CONNECTIVITY_JOB_KEY='easy_proxies_connectivity_job';
+const CONNECTIVITY_TIMEOUT_KEY='easy_proxies_connectivity_timeout_seconds';
+const CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS=10;
+const CONNECTIVITY_MIN_TIMEOUT_SECONDS=1;
+const CONNECTIVITY_MAX_TIMEOUT_SECONDS=60;
+function parseConnectivityTimeout(value){
+  const raw=String(value??'').trim(),seconds=Number(raw);
+  if(!raw||!Number.isInteger(seconds))return {error:'请输入 1-60 秒的整数'};
+  if(seconds<CONNECTIVITY_MIN_TIMEOUT_SECONDS||seconds>CONNECTIVITY_MAX_TIMEOUT_SECONDS)return {error:'单次超时必须在 1-60 秒之间'};
+  return {seconds,error:''};
+}
+const initialConnectivityTimeout=parseConnectivityTimeout(localStorage.getItem(CONNECTIVITY_TIMEOUT_KEY));
+const initialConnectivityTimeoutSeconds=initialConnectivityTimeout.error?CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS:initialConnectivityTimeout.seconds;
 const S={
   token:localStorage.getItem('easy_proxies_token')||'',
   page:'import',
@@ -467,6 +489,9 @@ const S={
   connectivityTagsInitialized:false,
   connectivityTestTargets:new Set(['outlook']),
   connectivitySelectedTargets:new Set(['outlook']),
+  connectivityTimeoutInput:String(initialConnectivityTimeoutSeconds),
+  connectivityTimeoutSeconds:initialConnectivityTimeoutSeconds,
+  connectivityTimeoutValid:true,
   connectivityHistory:null,
   connectivityResultPage:null,
   connectivityResultFilters:{tag:'',target:'',status:'',page:1},
@@ -1696,6 +1721,20 @@ async function loadConnectivityScopes(request){
 }
 
 function connectivityTargetName(id){return {google:'Google',github:'GitHub',outlook:'Outlook',proxyspace:'ProxySpace'}[id]||id}
+function setConnectivityTimeout(value){
+  const parsed=parseConnectivityTimeout(value);
+  S.connectivityTimeoutInput=String(value??'');
+  S.connectivityTimeoutValid=!parsed.error;
+  if(!parsed.error){
+    S.connectivityTimeoutSeconds=parsed.seconds;
+    localStorage.setItem(CONNECTIVITY_TIMEOUT_KEY,String(parsed.seconds));
+  }
+  const input=qs('#connectivityTimeout');
+  if(input){input.setAttribute('aria-invalid',parsed.error?'true':'false');input.setCustomValidity(parsed.error)}
+  const error=qs('#connectivityTimeoutError');if(error)error.textContent=parsed.error;
+  const start=qs('#connectivityStartButton');if(start)start.disabled=!!parsed.error||!(S.connectivityScopes?.tags||[]).length;
+  return !parsed.error;
+}
 function connectivityPhaseText(job){
   return {first_pass:'首轮检测',retry_wait:'等待重试',retry:'失败项重试',saving_results:'正在保存结果',canceling:'正在终止',finished:'检测完成',failed:'检测失败',canceled:'已终止'}[job?.phase]||'等待检测';
 }
@@ -1704,9 +1743,10 @@ function renderConnectivity(){
   const scopes=S.connectivityScopes||{tags:[],targets:[]};
   const tagRows=(scopes.tags||[]).map((item,index)=>`<label class="tag-option"><input type="checkbox" ${S.connectivitySelectedTags.has(item.tag)?'checked':''} onchange="toggleConnectivityTagAt(${index},this.checked)"><span title="${esc(item.tag)}">${esc(item.tag)}</span><small class="muted">${esc(item.nodes)} 节点</small></label>`).join('');
   const running=S.connectivityJob?.status==='running';
+  const timeoutValue=running?(Number(S.connectivityJob?.timeout_seconds)||CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS):S.connectivityTimeoutInput;
   const sites=(scopes.targets||[]).map(target=>`<button class="site-selector ${S.connectivityTestTargets.has(target.id)?'selected':''}" ${running?'disabled':''} onclick="toggleConnectivityTestTarget('${esc(target.id)}')" title="${esc(target.url||'')}"><strong>${esc(target.name)}</strong><span>${S.connectivityTestTargets.has(target.id)?'本轮检测':'不检测'}</span></button>`).join('');
   qs('#view').innerHTML=`<div class="connectivity-layout">
-    <section class="settings-section"><div class="settings-section-head connectivity-scope-head"><div><h2>检测范围</h2><p>选择Tag和本轮需要实际访问的站点，默认仅检测Outlook。</p></div><div class="row"><button class="btn small secondary" onclick="setAllConnectivityTags(true)">全选</button><button class="btn small ghost" onclick="setAllConnectivityTags(false)">清空</button></div></div><div class="settings-section-body"><div class="connectivity-scope-summary"><span>已选 <strong id="connectivityTagCount">${S.connectivitySelectedTags.size}</strong> / ${esc((scopes.tags||[]).length)} 个 Tag</span><span>共 ${esc((scopes.tags||[]).reduce((sum,item)=>sum+(Number(item.nodes)||0),0))} 个节点</span></div><div class="tag-picker">${tagRows||'<div class="connectivity-idle" style="grid-column:1/-1"><span>暂无带 Tag 的节点</span></div>'}</div><div class="connectivity-scope-footer"><div class="site-strip">${sites}</div><div id="connectivityActions" class="row">${connectivityActionsHTML()}</div></div></div></section>
+    <section class="settings-section"><div class="settings-section-head connectivity-scope-head"><div><h2>检测范围</h2><p>选择Tag和本轮需要实际访问的站点，默认仅检测Outlook。</p></div><div class="row"><button class="btn small secondary" onclick="setAllConnectivityTags(true)">全选</button><button class="btn small ghost" onclick="setAllConnectivityTags(false)">清空</button></div></div><div class="settings-section-body"><div class="connectivity-scope-summary"><span>已选 <strong id="connectivityTagCount">${S.connectivitySelectedTags.size}</strong> / ${esc((scopes.tags||[]).length)} 个 Tag</span><span>共 ${esc((scopes.tags||[]).reduce((sum,item)=>sum+(Number(item.nodes)||0),0))} 个节点</span></div><div class="tag-picker">${tagRows||'<div class="connectivity-idle" style="grid-column:1/-1"><span>暂无带 Tag 的节点</span></div>'}</div><div class="connectivity-scope-footer"><div class="connectivity-test-controls"><div class="site-strip">${sites}</div><div class="connectivity-timeout-field" title="每个站点每次请求的最长等待时间；瞬时失败仍会重试一次"><label for="connectivityTimeout">单次超时</label><div class="number-suffix"><input id="connectivityTimeout" type="number" min="1" max="60" step="1" value="${esc(timeoutValue)}" ${running?'disabled':''} aria-describedby="connectivityTimeoutError" aria-invalid="${S.connectivityTimeoutValid?'false':'true'}" oninput="setConnectivityTimeout(this.value)"><span>秒</span></div><small id="connectivityTimeoutError" class="field-error" aria-live="polite">${S.connectivityTimeoutValid?'':'请输入 1-60 秒的整数'}</small></div></div><div id="connectivityActions" class="row">${connectivityActionsHTML()}</div></div></div></section>
     <section id="connectivityProgressHost"></section>
     <section id="connectivityCriteria"></section>
     <section id="connectivityMatrixHost"></section>
@@ -1719,8 +1759,8 @@ function renderConnectivity(){
 function connectivityActionsHTML(){
   const job=S.connectivityJob,running=job?.status==='running';
   if(running)return job.phase==='canceling'?'<button class="btn danger" disabled>正在终止</button>':'<button class="btn danger" onclick="cancelConnectivityJob()">终止检测</button>';
-  const disabled=!(S.connectivityScopes?.tags||[]).length?'disabled':'';
-  return `<button class="btn primary" ${disabled} onclick="startConnectivityJob()">开始检测</button>`;
+  const disabled=!(S.connectivityScopes?.tags||[]).length||!S.connectivityTimeoutValid?'disabled':'';
+  return `<button class="btn primary" id="connectivityStartButton" ${disabled} onclick="startConnectivityJob()">开始检测</button>`;
 }
 
 function toggleConnectivityTagAt(index,checked){
@@ -1747,9 +1787,12 @@ async function startConnectivityJob(){
   const targets=[...S.connectivityTestTargets];
   if(!tags.length){toast('请至少选择一个 Tag','err');return}
   if(!targets.length){toast('请至少选择一个检测站点','err');return}
+  const timeoutInput=qs('#connectivityTimeout');
+  if(!setConnectivityTimeout(timeoutInput?.value??S.connectivityTimeoutInput)){timeoutInput?.focus();return}
   try{
-    const started=await api('/api/connectivity/jobs/start',{method:'POST',body:JSON.stringify({tags,targets})});
-    S.connectivityJobID=started.job_id;S.connectivityJob={id:started.job_id,status:'running',phase:'first_pass',tags,targets,total_routes:0,total_checks:0,done_checks:0,retry_checks:0,retry_done:0,recovered:0};S.connectivityResultPage=null;S.connectivityHistory=null;S.connectivitySelectedTargets=new Set(targets);
+    const timeout_seconds=S.connectivityTimeoutSeconds;
+    const started=await api('/api/connectivity/jobs/start',{method:'POST',body:JSON.stringify({tags,targets,timeout_seconds})});
+    S.connectivityJobID=started.job_id;S.connectivityJob={id:started.job_id,status:'running',phase:'first_pass',tags,targets,timeout_seconds,total_routes:0,total_checks:0,done_checks:0,retry_checks:0,retry_done:0,recovered:0};S.connectivityResultPage=null;S.connectivityHistory=null;S.connectivitySelectedTargets=new Set(targets);
     localStorage.setItem(CONNECTIVITY_JOB_KEY,started.job_id);
     renderConnectivity();
     await pollConnectivityJob(started.job_id,false);
@@ -1762,7 +1805,12 @@ async function pollConnectivityJob(jobID,silent=false){
   let last=null,failures=0;
   try{
     last=await api('/api/connectivity/jobs/status?id='+encodeURIComponent(jobID));
-    if(last.targets?.length){S.connectivityTestTargets=new Set(last.targets);S.connectivitySelectedTargets=new Set(last.targets);S.connectivityJob=last;if(S.page==='connectivity')renderConnectivity()}
+    if(last.targets?.length){
+      S.connectivityTestTargets=new Set(last.targets);S.connectivitySelectedTargets=new Set(last.targets);
+      const timeout=Number(last.timeout_seconds)||CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS;
+      S.connectivityTimeoutInput=String(timeout);S.connectivityTimeoutSeconds=timeout;S.connectivityTimeoutValid=true;localStorage.setItem(CONNECTIVITY_TIMEOUT_KEY,String(timeout));
+      S.connectivityJob=last;if(S.page==='connectivity')renderConnectivity()
+    }
     while(true){
       S.connectivityJob=last;updateConnectivityJobView(last);
       if(last.status!=='running')break;
@@ -1798,11 +1846,12 @@ async function cancelConnectivityJob(){
 
 function connectivityProgressHTML(job){
   if(!job)return '<div class="connectivity-idle"><span>尚未执行站点检测</span></div>';
-  if(job.status!=='running')return `<div class="connectivity-progress"><div class="connectivity-progress-head"><div><strong>${esc(connectivityPhaseText(job))}</strong><div class="muted">已检测 ${esc(job.total_routes||0)} 条路由 · ${(job.targets||[]).map(connectivityTargetName).map(esc).join(' / ')}</div></div><span class="pill ${job.status==='finished'?'green':'red'}">${esc(connectivityStatusText(job.status))}</span></div>${job.error?`<div class="action-status err">${esc(job.error)}</div>`:''}${job.history_error?`<div class="action-status err">${esc(job.history_error)}</div>`:''}</div>`;
+  const timeout=Number(job.timeout_seconds)||CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS;
+  if(job.status!=='running')return `<div class="connectivity-progress"><div class="connectivity-progress-head"><div><strong>${esc(connectivityPhaseText(job))}</strong><div class="muted">已检测 ${esc(job.total_routes||0)} 条路由 · ${(job.targets||[]).map(connectivityTargetName).map(esc).join(' / ')} · 单次超时 ${esc(timeout)} 秒</div></div><span class="pill ${job.status==='finished'?'green':'red'}">${esc(connectivityStatusText(job.status))}</span></div>${job.error?`<div class="action-status err">${esc(job.error)}</div>`:''}${job.history_error?`<div class="action-status err">${esc(job.history_error)}</div>`:''}</div>`;
   const retry=job.phase==='retry'||job.phase==='retry_wait';
   const done=retry?(job.retry_done||0):(job.done_checks||0),total=retry?(job.retry_checks||0):(job.total_checks||0);
   const pct=total?Math.min(100,Math.round(done*100/total)):0;
-  return `<div class="connectivity-progress"><div class="connectivity-progress-head"><div><strong>${esc(connectivityPhaseText(job))}</strong><div class="muted">路由 ${esc(job.total_routes||0)} · 站点 ${(job.targets||[]).map(connectivityTargetName).map(esc).join(' / ')} · 首轮 ${esc(job.done_checks||0)}/${esc(job.total_checks||0)} · 重试 ${esc(job.retry_done||0)}/${esc(job.retry_checks||0)}</div></div><span class="pill amber">${esc(connectivityStatusText(job.status))}</span></div><div class="progress"><div style="width:${pct}%"></div></div>${job.error?`<div class="action-status err">${esc(job.error)}</div>`:''}</div>`;
+  return `<div class="connectivity-progress"><div class="connectivity-progress-head"><div><strong>${esc(connectivityPhaseText(job))}</strong><div class="muted">路由 ${esc(job.total_routes||0)} · 站点 ${(job.targets||[]).map(connectivityTargetName).map(esc).join(' / ')} · 单次超时 ${esc(timeout)} 秒 · 首轮 ${esc(job.done_checks||0)}/${esc(job.total_checks||0)} · 重试 ${esc(job.retry_done||0)}/${esc(job.retry_checks||0)}</div></div><span class="pill amber">${esc(connectivityStatusText(job.status))}</span></div><div class="progress"><div style="width:${pct}%"></div></div>${job.error?`<div class="action-status err">${esc(job.error)}</div>`:''}</div>`;
 }
 
 function connectivityMatrixHTML(job){
@@ -1828,6 +1877,7 @@ function updateConnectivityJobView(job){
   if(progress)progress.innerHTML=connectivityProgressHTML(job);
   if(matrix)matrix.innerHTML=connectivityMatrixHTML(job);
   if(actions)actions.innerHTML=connectivityActionsHTML();
+  const running=job?.status==='running';qsa('.site-selector').forEach(button=>button.disabled=running);const timeout=qs('#connectivityTimeout');if(timeout)timeout.disabled=running;
   renderConnectivityHistory();
   renderConnectivityCriteria();
   renderConnectivityResults();

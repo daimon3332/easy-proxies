@@ -182,8 +182,9 @@ type ConnectivityScopeResponse struct {
 }
 
 type ConnectivityStartRequest struct {
-	Tags    []string `json:"tags"`
-	Targets []string `json:"targets,omitempty"`
+	Tags           []string `json:"tags"`
+	Targets        []string `json:"targets,omitempty"`
+	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`
 }
 
 type ConnectivityJobStatus string
@@ -214,23 +215,24 @@ type ConnectivityTagSummary struct {
 }
 
 type ConnectivityJob struct {
-	ID           string                   `json:"id"`
-	Status       ConnectivityJobStatus    `json:"status"`
-	Phase        string                   `json:"phase"`
-	Tags         []string                 `json:"tags"`
-	Targets      []string                 `json:"targets"`
-	TotalRoutes  int                      `json:"total_routes"`
-	TotalChecks  int                      `json:"total_checks"`
-	DoneChecks   int                      `json:"done_checks"`
-	RetryChecks  int                      `json:"retry_checks"`
-	RetryDone    int                      `json:"retry_done"`
-	Recovered    int                      `json:"recovered"`
-	Concurrency  int                      `json:"concurrency"`
-	Summaries    []ConnectivityTagSummary `json:"summaries"`
-	Error        string                   `json:"error,omitempty"`
-	HistoryError string                   `json:"history_error,omitempty"`
-	StartedAt    time.Time                `json:"started_at"`
-	UpdatedAt    time.Time                `json:"updated_at"`
+	ID             string                   `json:"id"`
+	Status         ConnectivityJobStatus    `json:"status"`
+	Phase          string                   `json:"phase"`
+	Tags           []string                 `json:"tags"`
+	Targets        []string                 `json:"targets"`
+	TotalRoutes    int                      `json:"total_routes"`
+	TotalChecks    int                      `json:"total_checks"`
+	DoneChecks     int                      `json:"done_checks"`
+	RetryChecks    int                      `json:"retry_checks"`
+	RetryDone      int                      `json:"retry_done"`
+	Recovered      int                      `json:"recovered"`
+	Concurrency    int                      `json:"concurrency"`
+	TimeoutSeconds int                      `json:"timeout_seconds"`
+	Summaries      []ConnectivityTagSummary `json:"summaries"`
+	Error          string                   `json:"error,omitempty"`
+	HistoryError   string                   `json:"history_error,omitempty"`
+	StartedAt      time.Time                `json:"started_at"`
+	UpdatedAt      time.Time                `json:"updated_at"`
 }
 
 type ConnectivityResult struct {

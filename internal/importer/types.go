@@ -76,6 +76,7 @@ type ImportJob struct {
 	Format           string       `json:"format,omitempty"`
 	TagPrefix        string       `json:"tag_prefix,omitempty"`
 	Source           string       `json:"source,omitempty"`
+	SourceRevision   uint64       `json:"source_revision,omitempty"`
 	Total            int          `json:"total"`
 	Passed           int          `json:"passed"`
 	Failed           int          `json:"failed"`

@@ -30,8 +30,15 @@ type batchNodeManagerStub struct {
 	createErr      error
 	deleteErr      error
 	reloadErr      error
+	reloadErrs     []error
 	listErr        error
 	restoreErr     error
+	reloadStarted  chan struct{}
+	reloadRelease  chan struct{}
+	verifyStarted  chan struct{}
+	verifyRelease  chan struct{}
+	verifyErr      error
+	verifyCount    int
 }
 
 func (m *batchNodeManagerStub) CreateNode(ctx context.Context, node config.NodeConfig) (config.NodeConfig, error) {
@@ -132,6 +139,29 @@ func TestCancelRefreshUsesSingleParentSnapshotRestore(t *testing.T) {
 	t.Fatalf("refresh job did not cancel: %#v", job)
 }
 
+func TestListImportSourcesGroupsEveryFormatByTag(t *testing.T) {
+	svc, store := newBatchServiceForTest(t, &batchNodeManagerStub{})
+	nodes := []ManagedNode{
+		{ID: "url", URI: "trojan://url", TagPrefix: "shared", ImportID: "url-import", ImportMode: "url", ImportSource: "https://example.test/sub", ImportFormat: "uri_list", State: StateFailed},
+		{ID: "yaml", URI: "trojan://yaml", TagPrefix: "shared", ImportID: "yaml-import", ImportMode: "content", ImportSource: "content", ImportFormat: "clash_yaml", State: StatePassed},
+		{ID: "base64", URI: "trojan://base64", TagPrefix: "shared", ImportID: "base64-import", ImportMode: "content", ImportSource: "content", ImportFormat: "base64", State: StateInPool, InPool: true},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+
+	sources, err := svc.ListImportSources()
+	if err != nil {
+		t.Fatalf("ListImportSources() error = %v", err)
+	}
+	if len(sources) != 1 {
+		t.Fatalf("source count = %d, want one logical Tag source: %#v", len(sources), sources)
+	}
+	if sources[0].Key != "tag:shared" || sources[0].Total != 3 || sources[0].Pool != 1 || sources[0].Candidate != 1 || sources[0].Failed != 1 {
+		t.Fatalf("source summary = %#v", sources[0])
+	}
+}
+
 func (m *batchNodeManagerStub) DeleteNode(ctx context.Context, name string) error {
 	return m.DeleteNodes(ctx, []string{name})
 }
@@ -142,13 +172,59 @@ func (m *batchNodeManagerStub) DeleteNodes(ctx context.Context, names []string) 
 		return m.deleteErr
 	}
 	m.deletedBatches = append(m.deletedBatches, append([]string(nil), names...))
+	want := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		want[name] = struct{}{}
+	}
+	kept := m.configNodes[:0]
+	for _, node := range m.configNodes {
+		if _, remove := want[node.Name]; !remove {
+			kept = append(kept, node)
+		}
+	}
+	m.configNodes = kept
 	return nil
 }
 
 func (m *batchNodeManagerStub) TriggerReload(ctx context.Context) error {
-	_ = ctx
 	m.reloadCount++
+	if m.reloadStarted != nil {
+		select {
+		case m.reloadStarted <- struct{}{}:
+		default:
+		}
+	}
+	if m.reloadRelease != nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-m.reloadRelease:
+		}
+	}
+	if len(m.reloadErrs) > 0 {
+		err := m.reloadErrs[0]
+		m.reloadErrs = m.reloadErrs[1:]
+		return err
+	}
 	return m.reloadErr
+}
+
+func (m *batchNodeManagerStub) VerifyRuntime(ctx context.Context) error {
+	m.verifyCount++
+	if m.verifyStarted != nil {
+		select {
+		case m.verifyStarted <- struct{}{}:
+		default:
+		}
+	}
+	if m.verifyRelease != nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-m.verifyRelease:
+		}
+	}
+	return m.verifyErr
 }
 
 func newBatchServiceForTest(t *testing.T, mgr *batchNodeManagerStub) (*Service, *Store) {
@@ -173,6 +249,36 @@ func waitTestJobTerminal(t *testing.T, svc *Service, jobID string) TestJob {
 	job, _ := svc.GetTestJob(jobID)
 	t.Fatalf("test job did not finish: %#v", job)
 	return TestJob{}
+}
+
+func waitTestJobPhase(t *testing.T, svc *Service, jobID, phase string) TestJob {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		job, ok := svc.GetTestJob(jobID)
+		if ok && job.Phase == phase {
+			return job
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	job, _ := svc.GetTestJob(jobID)
+	t.Fatalf("test job did not reach phase %q: %#v", phase, job)
+	return TestJob{}
+}
+
+func waitImportJobTerminal(t *testing.T, store *Store, jobID string) ImportJob {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		job, ok := store.GetJob(jobID)
+		if ok && job.Status != ImportStatusRunning {
+			return job
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	job, _ := store.GetJob(jobID)
+	t.Fatalf("import job did not finish: %#v", job)
+	return ImportJob{}
 }
 
 func waitRefreshJobTerminal(t *testing.T, svc *Service, jobID string) SourceRefreshJob {
@@ -314,6 +420,74 @@ func TestPromoteManyUsesSingleConfigBatchAndReload(t *testing.T) {
 		if !ok || !node.InPool || node.State != StateInPool || node.Port == 0 {
 			t.Fatalf("node %s not marked in pool correctly: %#v found=%v", id, node, ok)
 		}
+	}
+}
+
+func TestBatchTestReportsApplyAndVerifyBeforeCompletion(t *testing.T) {
+	mgr := &batchNodeManagerStub{
+		nextPort:      25000,
+		reloadStarted: make(chan struct{}, 1),
+		reloadRelease: make(chan struct{}),
+		verifyStarted: make(chan struct{}, 1),
+		verifyRelease: make(chan struct{}),
+	}
+	svc, store := newBatchServiceForTest(t, mgr)
+	svc.tester = NewNodeTester(nil, WithTesterConcurrency(1))
+	svc.tester.probeOverride = func(context.Context, ManagedNode, string, time.Duration) TestResult { return TestResult{LatencyMs: 1} }
+	node := ManagedNode{ID: "passed", Name: "tag-passed", URI: "trojan://passed", TagPrefix: "tag", State: StatePassed, Enabled: true, CountryCode: "US"}
+	if err := store.UpsertNode(node); err != nil {
+		t.Fatal(err)
+	}
+	jobID, err := svc.StartBatchTest(BatchTestRequest{NodeIDs: []string{node.ID}, Retest: true, PromotePassed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-mgr.reloadStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("reload did not start")
+	}
+	if job := waitTestJobPhase(t, svc, jobID, "apply"); job.Applied {
+		t.Fatalf("job applied before reload completed: %#v", job)
+	}
+	close(mgr.reloadRelease)
+	select {
+	case <-mgr.verifyStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("runtime verification did not start")
+	}
+	if job := waitTestJobPhase(t, svc, jobID, "verify"); job.Applied {
+		t.Fatalf("job applied before verification completed: %#v", job)
+	}
+	close(mgr.verifyRelease)
+	job := waitTestJobTerminal(t, svc, jobID)
+	if job.Status != TestJobFinished || job.Phase != "done" || !job.Applied || job.Protected {
+		t.Fatalf("job = %#v", job)
+	}
+}
+
+func TestBatchTestVerifyFailureRestoresPreviousPool(t *testing.T) {
+	mgr := &batchNodeManagerStub{nextPort: 25000, verifyErr: errors.New("listener missing")}
+	svc, store := newBatchServiceForTest(t, mgr)
+	svc.tester = NewNodeTester(nil, WithTesterConcurrency(1))
+	svc.tester.probeOverride = func(context.Context, ManagedNode, string, time.Duration) TestResult { return TestResult{LatencyMs: 1} }
+	old := ManagedNode{ID: "old", Name: "tag-old", URI: "trojan://old", TagPrefix: "tag", State: StateInPool, InPool: true, Enabled: true, Port: 24000, CountryCode: "US"}
+	candidate := ManagedNode{ID: "candidate", Name: "tag-candidate", URI: "trojan://candidate", TagPrefix: "tag", State: StatePassed, Enabled: true, CountryCode: "US"}
+	mgr.configNodes = []config.NodeConfig{old.ToConfigNode()}
+	if err := store.UpsertNodes([]ManagedNode{old, candidate}); err != nil {
+		t.Fatal(err)
+	}
+	jobID, err := svc.StartBatchTest(BatchTestRequest{NodeIDs: []string{candidate.ID}, Retest: true, PromotePassed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := waitTestJobTerminal(t, svc, jobID)
+	if job.Phase != "protected" || !job.Protected || job.Applied || !strings.Contains(job.Error, "listener missing") {
+		t.Fatalf("job = %#v", job)
+	}
+	pool := store.ListPoolNodes()
+	if len(pool) != 1 || pool[0].ID != old.ID || len(mgr.configNodes) != 1 || mgr.configNodes[0].Name != old.Name {
+		t.Fatalf("pool=%#v config=%#v", pool, mgr.configNodes)
 	}
 }
 
@@ -662,6 +836,66 @@ func TestStartRefreshSourcesReusesRunningJob(t *testing.T) {
 	}
 	if jobID != "active" {
 		t.Fatalf("jobID = %q, want active", jobID)
+	}
+}
+
+func TestStartRefreshSourcesConcurrentCallsReuseSingleJob(t *testing.T) {
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	tester := NewNodeTester(nil, WithTesterConcurrency(1))
+	tester.probeOverride = func(ctx context.Context, _ ManagedNode, _ string, _ time.Duration) TestResult {
+		<-ctx.Done()
+		return TestResult{Error: ctx.Err()}
+	}
+	if err := store.UpsertNode(ManagedNode{
+		ID:           "local",
+		URI:          "trojan://local",
+		State:        StateFailed,
+		ImportMode:   "content",
+		ImportSource: "content",
+		TagPrefix:    "local",
+	}); err != nil {
+		t.Fatalf("UpsertNode() error = %v", err)
+	}
+	svc := NewService(store, tester, &batchNodeManagerStub{})
+
+	svc.refreshStartMu.Lock()
+	started := make(chan struct{}, 2)
+	type result struct {
+		jobID string
+		err   error
+	}
+	results := make(chan result, 2)
+	for range 2 {
+		go func() {
+			started <- struct{}{}
+			jobID, err := svc.StartRefreshSources("tag:local")
+			results <- result{jobID: jobID, err: err}
+		}()
+	}
+	<-started
+	<-started
+	svc.refreshStartMu.Unlock()
+
+	first := <-results
+	second := <-results
+	if first.err != nil || second.err != nil {
+		t.Fatalf("StartRefreshSources() errors = %v, %v", first.err, second.err)
+	}
+	if first.jobID == "" || first.jobID != second.jobID {
+		t.Fatalf("concurrent job IDs = %q, %q, want one shared job", first.jobID, second.jobID)
+	}
+	svc.sourceRevisionsMu.Lock()
+	revision := svc.sourceRevisions["local"]
+	seed := svc.sourceRevisionSeed
+	svc.sourceRevisionsMu.Unlock()
+	if revision != seed+1 {
+		t.Fatalf("source revision = %d, want %d", revision, seed+1)
+	}
+	if _, err := svc.CancelRefreshJob(first.jobID); err != nil {
+		t.Fatalf("CancelRefreshJob() error = %v", err)
 	}
 }
 
@@ -1061,7 +1295,7 @@ func TestRefreshStageKeepsOldPoolUntilResultsAreApplied(t *testing.T) {
 	if err := store.UpsertNode(staged); err != nil {
 		t.Fatalf("UpsertNode(staged) error = %v", err)
 	}
-	promoted, err := svc.applyStagedRefreshNodes(ts.URL, []string{staged.ID})
+	promoted, err := svc.applyStagedRefreshNodes(context.Background(), ts.URL, []string{staged.ID}, nil)
 	if err != nil {
 		t.Fatalf("applyStagedRefreshNodes() error = %v", err)
 	}
@@ -1074,6 +1308,79 @@ func TestRefreshStageKeepsOldPoolUntilResultsAreApplied(t *testing.T) {
 	newNode, ok := store.GetNode(nodeID(newURI))
 	if !ok || newNode.State != StateInPool || !newNode.InPool || newNode.Port == 0 {
 		t.Fatalf("new node = %#v found=%v", newNode, ok)
+	}
+	refs := nodeSourceRefs(newNode)
+	if len(refs) != 1 || refs[0].Mode != "url" || refs[0].Source != ts.URL {
+		t.Fatalf("new node source refs = %#v, want one canonical URL source", refs)
+	}
+}
+
+func TestRefreshStageKeepsUnchangedHealthyNodePort(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	svc, store := newBatchServiceForTest(t, mgr)
+	const uri = "trojan://same@example.com:443#Same"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(uri + "\n"))
+	}))
+	defer server.Close()
+	old := ManagedNode{ID: nodeID(uri), Name: "tag-Same", URI: uri, State: StateInPool, InPool: true, Enabled: true, Port: 24000, ImportMode: "url", ImportSource: server.URL, TagPrefix: "tag"}
+	mgr.configNodes = []config.NodeConfig{old.ToConfigNode()}
+	if err := store.UpsertNode(old); err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := svc.parseRefreshSubscriptionURLContext(context.Background(), "tag", server.URL, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged, _ := store.GetNode(parsed.Nodes[0].ID)
+	staged.State = StatePassed
+	staged.LatencyMs = 12
+	if err := store.UpsertNode(staged); err != nil {
+		t.Fatal(err)
+	}
+	promoted, err := svc.applyStagedRefreshNodes(context.Background(), server.URL, []string{staged.ID}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, ok := store.GetNode(old.ID)
+	if !ok || promoted != 0 || kept.Port != old.Port || !kept.InPool || kept.State != StateInPool {
+		t.Fatalf("kept=%#v found=%v promoted=%d", kept, ok, promoted)
+	}
+	if len(mgr.createdBatches) != 0 || len(mgr.deletedBatches) != 0 {
+		t.Fatalf("unchanged runtime was rebuilt: created=%#v deleted=%#v", mgr.createdBatches, mgr.deletedBatches)
+	}
+}
+
+func TestStaleRefreshAttemptCannotOverwriteNewerTagRevision(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	svc, store := newBatchServiceForTest(t, mgr)
+	const uri = "trojan://new@example.com:443#New"
+	old := ManagedNode{ID: "old", URI: "trojan://old@example.com:443#Old", Name: "tag-Old", TagPrefix: "tag", ImportMode: "url", ImportSource: "https://example.test/sub", State: StateInPool, InPool: true, Enabled: true, Port: 24000}
+	mgr.configNodes = []config.NodeConfig{old.ToConfigNode()}
+	if err := store.UpsertNode(old); err != nil {
+		t.Fatal(err)
+	}
+	revision := svc.nextSourceRevision("tag")
+	stage := ManagedNode{
+		ID:           nodeID(uri) + "-refresh-attempt",
+		URI:          uri,
+		Name:         "tag-New",
+		TagPrefix:    "tag",
+		ImportMode:   "refresh_stage",
+		ImportSource: "https://example.test/sub",
+		State:        StatePassed,
+		Enabled:      true,
+	}
+	if err := store.UpsertNode(stage); err != nil {
+		t.Fatal(err)
+	}
+	svc.nextSourceRevision("tag")
+	if _, err := svc.applyStagedRefreshNodesRevision(context.Background(), "tag", revision, stage.ImportSource, []string{stage.ID}, nil); err == nil || !strings.Contains(err.Error(), "旧结果未应用") {
+		t.Fatalf("apply stale refresh error = %v", err)
+	}
+	kept, ok := store.GetNode(old.ID)
+	if !ok || !kept.InPool || kept.Port != old.Port || len(mgr.configNodes) != 1 || len(mgr.createdBatches) != 0 || len(mgr.deletedBatches) != 0 {
+		t.Fatalf("stale attempt changed state: node=%#v found=%v config=%#v", kept, ok, mgr.configNodes)
 	}
 }
 
@@ -1143,7 +1450,7 @@ func TestParseDuplicateURLReplacesPrefixSnapshot(t *testing.T) {
 	}
 }
 
-func TestParseContentReplacesFailedPrefixSnapshot(t *testing.T) {
+func TestParseContentStagesReplacementWithoutDeletingPublishedTag(t *testing.T) {
 	mgr := &batchNodeManagerStub{}
 	svc, store := newBatchServiceForTest(t, mgr)
 	const uri = "trojan://pass@example.com:443#Alpha"
@@ -1161,12 +1468,100 @@ func TestParseContentReplacesFailedPrefixSnapshot(t *testing.T) {
 	if len(parsed.Nodes) != 1 || parsed.Nodes[0].State != StateParsed {
 		t.Fatalf("parsed nodes = %#v, want one fresh parsed node", parsed.Nodes)
 	}
-	if _, ok := store.GetNode("stale"); ok {
-		t.Fatal("stale node from the replaced tag should be deleted")
+	if _, ok := store.GetNode("stale"); !ok {
+		t.Fatal("published tag node was deleted before probing completed")
+	}
+	if parsed.Nodes[0].ImportMode != "import_stage" || parsed.Nodes[0].ID == nodeID(uri) {
+		t.Fatalf("parsed node = %#v, want isolated import stage", parsed.Nodes[0])
 	}
 	job, ok := store.GetJob(parsed.ImportID)
 	if !ok || job.Total != 1 || job.Mode != "content" || job.TagPrefix != "Glados" {
 		t.Fatalf("import job = %#v found=%v, want content snapshot metadata", job, ok)
+	}
+}
+
+func TestImportReplacementKeepsPublishedTagWhenEveryProbeFails(t *testing.T) {
+	mgr := &batchNodeManagerStub{}
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := ManagedNode{ID: "old", URI: "trojan://old@example.com:443#Old", Name: "tag-Old", TagPrefix: "tag", ImportMode: "content", ImportSource: "content", State: StateInPool, InPool: true, Enabled: true, Port: 24000}
+	mgr.configNodes = []config.NodeConfig{old.ToConfigNode()}
+	if err := store.UpsertNode(old); err != nil {
+		t.Fatal(err)
+	}
+	tester := NewNodeTester(nil, WithTesterConcurrency(2))
+	tester.retryDelay = time.Millisecond
+	tester.probeOverride = func(context.Context, ManagedNode, string, time.Duration) TestResult {
+		return TestResult{Error: errors.New("temporary probe failure")}
+	}
+	svc := NewService(store, tester, mgr)
+	parsed, err := svc.Parse(ParseRequest{Mode: "content", Content: "trojan://new@example.com:443#New\n", TagPrefix: "tag"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit, err := svc.Commit(parsed.ImportID, CommitRequest{PromotePassed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := waitImportJobTerminal(t, store, commit.JobID)
+	if job.Status != ImportStatusFailed || job.Passed != 0 || job.Failed != 1 {
+		t.Fatalf("job = %#v", job)
+	}
+	kept, ok := store.GetNode(old.ID)
+	if !ok || !kept.InPool || kept.Port != old.Port || len(mgr.configNodes) != 1 || mgr.configNodes[0].Name != old.Name {
+		t.Fatalf("published node changed: node=%#v found=%v config=%#v", kept, ok, mgr.configNodes)
+	}
+	for _, node := range store.ListNodes() {
+		if node.ImportMode == "import_stage" {
+			t.Fatalf("staged node remained: %#v", node)
+		}
+	}
+}
+
+func TestImportReplacementPublishesOnlyAfterSuccessfulProbe(t *testing.T) {
+	mgr := &batchNodeManagerStub{nextPort: 25000}
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := ManagedNode{ID: "old", URI: "trojan://old@example.com:443#Old", Name: "tag-Old", TagPrefix: "tag", ImportMode: "content", ImportSource: "content", State: StateInPool, InPool: true, Enabled: true, Port: 24000}
+	mgr.configNodes = []config.NodeConfig{old.ToConfigNode()}
+	if err := store.UpsertNode(old); err != nil {
+		t.Fatal(err)
+	}
+	tester := NewNodeTester(nil, WithTesterConcurrency(2))
+	tester.retryDelay = time.Millisecond
+	tester.probeOverride = func(context.Context, ManagedNode, string, time.Duration) TestResult {
+		return TestResult{LatencyMs: 5}
+	}
+	svc := NewService(store, tester, mgr)
+	const newURI = "trojan://new@example.com:443#New"
+	parsed, err := svc.Parse(ParseRequest{Mode: "content", Content: newURI + "\n", TagPrefix: "tag"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := store.GetNode(old.ID); !ok {
+		t.Fatal("published node was removed during parse")
+	}
+	commit, err := svc.Commit(parsed.ImportID, CommitRequest{PromotePassed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := waitImportJobTerminal(t, store, commit.JobID)
+	if job.Status != ImportStatusCompleted || job.Passed != 1 || job.Promoted != 1 {
+		t.Fatalf("job = %#v", job)
+	}
+	if _, ok := store.GetNode(old.ID); ok {
+		t.Fatal("old node remained after successful apply")
+	}
+	published, ok := store.GetNode(nodeID(newURI))
+	if !ok || !published.InPool || published.State != StateInPool || published.Port == 0 {
+		t.Fatalf("published node = %#v found=%v", published, ok)
+	}
+	if len(mgr.deletedBatches) != 1 || len(mgr.createdBatches) != 1 || mgr.reloadCount != 1 {
+		t.Fatalf("runtime changes: deleted=%#v created=%#v reloads=%d", mgr.deletedBatches, mgr.createdBatches, mgr.reloadCount)
 	}
 }
 
@@ -1190,6 +1585,15 @@ func TestParseRejectsEmptyTagPrefix(t *testing.T) {
 	svc, _ := newBatchServiceForTest(t, &batchNodeManagerStub{})
 	if _, err := svc.Parse(ParseRequest{Mode: "content", Content: "ss://example"}); err == nil {
 		t.Fatal("Parse() should reject an empty tag prefix")
+	}
+}
+
+func TestParseRejectsSourceMutationWhileRefreshIsRunning(t *testing.T) {
+	svc, _ := newBatchServiceForTest(t, &batchNodeManagerStub{})
+	svc.refreshJobs["running"] = &SourceRefreshJob{ID: "running", Status: SourceRefreshJobRunning}
+	_, err := svc.Parse(ParseRequest{Mode: "content", Content: "trojan://node", TagPrefix: "tag"})
+	if err == nil || !strings.Contains(err.Error(), "正在重新检测") {
+		t.Fatalf("Parse() error = %v", err)
 	}
 }
 
@@ -1220,12 +1624,12 @@ func TestListAndDeleteImportSources(t *testing.T) {
 	if !urlGroup.Refreshable || urlGroup.Total != 2 || urlGroup.Pool != 1 || urlGroup.Failed != 1 || urlGroup.TagPrefix != "sub" {
 		t.Fatalf("url group = %#v", urlGroup)
 	}
-	contentGroup := byKey["import:imp-1"]
+	contentGroup := byKey["tag:local"]
 	if !contentGroup.Refreshable || contentGroup.Format != "base64" || contentGroup.Candidate != 1 || contentGroup.TagPrefix != "local" {
 		t.Fatalf("content group = %#v", contentGroup)
 	}
 
-	deleted, err := svc.DeleteImportSource("import:imp-1")
+	deleted, err := svc.DeleteImportSource("tag:local")
 	if err != nil {
 		t.Fatalf("DeleteImportSource() error = %v", err)
 	}
@@ -1377,6 +1781,80 @@ func TestFinalizeRefreshJobReportsPartialCompletion(t *testing.T) {
 	}
 }
 
+func TestEnsurePoolRuntimeConsistencyRemovesConfigDrift(t *testing.T) {
+	poolNode := ManagedNode{ID: "pool", Name: "pool", URI: "trojan://pool", State: StateInPool, InPool: true, Enabled: true, Port: 24000}
+	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{
+		poolNode.ToConfigNode(),
+		{Name: "extra", URI: "trojan://extra", Port: 24001},
+	}}
+	svc, store := newBatchServiceForTest(t, mgr)
+	if err := store.UpsertNode(poolNode); err != nil {
+		t.Fatalf("UpsertNode() error = %v", err)
+	}
+
+	if err := svc.ensurePoolRuntimeConsistency(context.Background()); err != nil {
+		t.Fatalf("ensurePoolRuntimeConsistency() error = %v", err)
+	}
+	if mgr.restoreCount != 1 || len(mgr.configNodes) != 1 || mgr.configNodes[0].URI != poolNode.URI {
+		t.Fatalf("restoreCount=%d configNodes=%#v", mgr.restoreCount, mgr.configNodes)
+	}
+}
+
+func TestRefreshFinalCountUsesPostCleanupPool(t *testing.T) {
+	stable := ManagedNode{ID: "stable", Name: "stable", URI: "trojan://stable", State: StateInPool, InPool: true, Enabled: true, Port: 24000}
+	staged := ManagedNode{ID: "stage", Name: "stage", URI: "trojan://stage", State: StateInPool, InPool: true, Enabled: true, Port: 24001, ImportMode: "refresh_stage"}
+	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{stable.ToConfigNode(), staged.ToConfigNode()}}
+	svc, store := newBatchServiceForTest(t, mgr)
+	if err := store.UpsertNodes([]ManagedNode{stable, staged}); err != nil {
+		t.Fatalf("UpsertNodes() error = %v", err)
+	}
+	now := time.Now()
+	jobID := "post-cleanup-count"
+	svc.refreshJobs[jobID] = &SourceRefreshJob{ID: jobID, Status: SourceRefreshJobRunning, StartedAt: now, UpdatedAt: now}
+	snapshot, err := svc.captureSourceRefreshSnapshot()
+	if err != nil {
+		t.Fatalf("captureSourceRefreshSnapshot() error = %v", err)
+	}
+	svc.runRefreshJob(context.Background(), jobID, nil, snapshot)
+
+	job, _ := svc.GetRefreshJob(jobID)
+	if job.Status != SourceRefreshJobFinished || !job.Applied || job.Passed != 1 || job.PoolCount != 1 {
+		t.Fatalf("job = %#v, want one post-cleanup pool node", job)
+	}
+	if len(store.ListPoolNodes()) != 1 || len(mgr.configNodes) != 1 || mgr.configNodes[0].URI != stable.URI {
+		t.Fatalf("pool=%#v config=%#v", store.ListPoolNodes(), mgr.configNodes)
+	}
+}
+
+func TestRefreshProtectedSourceStillReportsAppliedPartialResults(t *testing.T) {
+	poolNode := ManagedNode{ID: "pool", Name: "pool", URI: "trojan://pool", State: StateInPool, InPool: true, Enabled: true, Port: 24000}
+	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{poolNode.ToConfigNode()}}
+	svc, store := newBatchServiceForTest(t, mgr)
+	if err := store.UpsertNode(poolNode); err != nil {
+		t.Fatalf("UpsertNode() error = %v", err)
+	}
+	now := time.Now()
+	jobID := "partial-protected"
+	svc.refreshJobs[jobID] = &SourceRefreshJob{
+		ID: jobID, Status: SourceRefreshJobRunning, StartedAt: now, UpdatedAt: now,
+		Groups: []SourceRefreshGroup{{URLs: []SourceRefreshURL{
+			{Status: "completed", Total: 1, Done: 1, Passed: 1, Promoted: 1},
+			{Status: "failed", Total: 1, Done: 1, Failed: 1, Protected: true, Warning: "source rollback completed"},
+		}}},
+	}
+	svc.updateRefreshJob(jobID, func(*SourceRefreshJob) {})
+	snapshot, err := svc.captureSourceRefreshSnapshot()
+	if err != nil {
+		t.Fatalf("captureSourceRefreshSnapshot() error = %v", err)
+	}
+	svc.runRefreshJob(context.Background(), jobID, nil, snapshot)
+
+	job, _ := svc.GetRefreshJob(jobID)
+	if job.Status != SourceRefreshJobFinished || job.Phase != "partial" || !job.Applied || !job.Protected {
+		t.Fatalf("job = %#v, want applied partial protected result", job)
+	}
+}
+
 func TestRefreshMixedSourcesReportsPartialAndCleansTransientState(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "fixture unavailable", http.StatusServiceUnavailable)
@@ -1450,17 +1928,18 @@ func TestRefreshApplyFailureRestoresParentSnapshot(t *testing.T) {
 	defer server.Close()
 
 	for _, tc := range []struct {
-		name      string
-		createErr error
-		deleteErr error
-		reloadErr error
+		name       string
+		createErr  error
+		deleteErr  error
+		reloadErr  error
+		reloadErrs []error
 	}{
 		{name: "create", createErr: errors.New("create failed")},
 		{name: "delete", deleteErr: errors.New("delete failed")},
-		{name: "reload", reloadErr: errors.New("reload failed")},
+		{name: "reload", reloadErrs: []error{errors.New("reload failed"), nil}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			mgr := &batchNodeManagerStub{nextPort: 25000, createErr: tc.createErr, deleteErr: tc.deleteErr, reloadErr: tc.reloadErr}
+			mgr := &batchNodeManagerStub{nextPort: 25000, createErr: tc.createErr, deleteErr: tc.deleteErr, reloadErr: tc.reloadErr, reloadErrs: tc.reloadErrs}
 			store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
 			if err != nil {
 				t.Fatalf("NewStore() error = %v", err)
@@ -1601,7 +2080,7 @@ func TestRefreshProtectionRestoreFailureIsReportedAsFailure(t *testing.T) {
 		t.Fatalf("StartRefreshSources() error = %v", err)
 	}
 	job := waitRefreshJobTerminal(t, svc, jobID)
-	if job.Status != SourceRefreshJobFailed || job.Phase != "failed" || job.Applied || !strings.Contains(job.Error, "恢复检测前节点池失败") {
+	if job.Status != SourceRefreshJobFailed || job.Phase != "failed" || job.Applied || !strings.Contains(job.Error, "回滚失败") {
 		t.Fatalf("job = %#v, want rollback failure", job)
 	}
 	if mgr.restoreCount != 1 {

@@ -2,16 +2,96 @@ package boxmgr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"easy_proxies/internal/config"
 	"easy_proxies/internal/monitor"
 )
+
+func TestVerifyRuntimeChecksEveryConfiguredPort(t *testing.T) {
+	first, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstPort := uint16(first.Addr().(*net.TCPAddr).Port)
+	secondPort := uint16(second.Addr().(*net.TCPAddr).Port)
+	manager := &Manager{cfg: &config.Config{
+		Mode:      "multi-port",
+		MultiPort: config.MultiPortConfig{Address: "0.0.0.0"},
+		Nodes: []config.NodeConfig{
+			{Name: "first", Port: firstPort},
+			{Name: "second", Port: secondPort},
+		},
+	}}
+	if err := manager.VerifyRuntime(context.Background()); err != nil {
+		t.Fatalf("VerifyRuntime() with all ports open: %v", err)
+	}
+	if err := second.Close(); err != nil {
+		t.Fatal(err)
+	}
+	err = manager.VerifyRuntime(context.Background())
+	if err == nil || !strings.Contains(err.Error(), fmt.Sprint(secondPort)) {
+		t.Fatalf("VerifyRuntime() error = %v, want missing port %d", err, secondPort)
+	}
+}
+
+func TestVerifyRuntimeHonorsCanceledContext(t *testing.T) {
+	manager := &Manager{cfg: &config.Config{
+		Mode:      "multi-port",
+		MultiPort: config.MultiPortConfig{Address: "192.0.2.1"},
+		Nodes:     []config.NodeConfig{{Name: "canceled", Port: 443}},
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	started := time.Now()
+	err := manager.VerifyRuntime(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("VerifyRuntime() error = %v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(started); elapsed > 250*time.Millisecond {
+		t.Fatalf("VerifyRuntime() cancellation took %v", elapsed)
+	}
+}
+
+func TestVerifyRuntimeRetriesPortsThatBecomeReady(t *testing.T) {
+	port := freePort(t)
+	manager := &Manager{cfg: &config.Config{
+		Mode:      "multi-port",
+		MultiPort: config.MultiPortConfig{Address: "127.0.0.1"},
+		Nodes:     []config.NodeConfig{{Name: "delayed", Port: port}},
+	}}
+
+	listenerReady := make(chan net.Listener, 1)
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", fmt.Sprint(port)))
+		if err == nil {
+			listenerReady <- listener
+		}
+		close(listenerReady)
+	}()
+
+	err := manager.VerifyRuntime(context.Background())
+	listener := <-listenerReady
+	if listener != nil {
+		defer listener.Close()
+	}
+	if err != nil {
+		t.Fatalf("VerifyRuntime() rejected a port that became ready: %v", err)
+	}
+}
 
 func TestIncrementalMultiPortReconcileKeepsBoxRunning(t *testing.T) {
 	if os.Getenv("EASY_PROXIES_RUNTIME_TEST") != "1" {

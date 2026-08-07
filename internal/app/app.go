@@ -131,7 +131,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	tester := importer.NewNodeTester(builder.BuildSingleNodeOutbound, testerOptions...)
 	defer tester.Close()
 
-	importSvc := importer.NewService(nodeStore, tester, boxMgr)
+	importSvc := importer.NewService(nodeStore, tester, boxMgr,
+		importer.WithRefreshSourceTimeout(cfg.SubscriptionRefresh.Timeout),
+	)
 	subMgr.SetSourceRefresher(importSvc)
 	defer func() {
 		closeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -17,6 +17,7 @@
   <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-green.svg">
   <img alt="Powered by sing-box" src="https://img.shields.io/badge/Powered%20by-sing--box-4B5563">
   <img alt="Platforms" src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue">
+  <a href="https://github.com/daimon3332/easy-proxies/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/daimon3332/easy-proxies?display_name=tag&sort=semver"></a>
 </p>
 
 > Easy Proxies is a community-maintained fork of [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies). This fork focuses on a redesigned WebUI, subscription importing, reliable node testing, node lifecycle management, and an easier multi-port workflow.

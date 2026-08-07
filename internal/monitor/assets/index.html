@@ -1918,10 +1918,10 @@ function refreshPhaseText(job){
   if(job?.protected||phase==='protected')return '检测异常，已恢复原节点池';
   if(phase==='partial')return '重新检测部分完成';
   if(job?.status==='finished'||phase==='finished')return '重新检测完成';
-  return {pulling:'正在拉取订阅',retrying:'正在重试失败来源',testing:'正在分轮测试节点',promoting:'正在加入节点池',canceling:'正在取消',waiting:'等待开始'}[phase]||'正在刷新';
+  return {pulling:'正在拉取订阅',retrying:'正在重试失败来源',testing:'正在分轮测试节点',promoting:'正在加入节点池',applying:'正在应用节点和端口',verifying:'正在验证端口监听',canceling:'正在取消',waiting:'等待开始'}[phase]||'正在刷新';
 }
 function refreshRowStatusText(status){
-  return {pulling:'拉取节点',retrying:'最终重试',retry_waiting:'等待重试',testing:'测试节点',promoting:'加入节点池',completed:'完成',failed:'失败',canceled:'已取消',waiting:'等待'}[String(status||'waiting')]||'等待';
+  return {pulling:'拉取节点',retrying:'最终重试',retry_waiting:'等待重试',testing:'测试节点',promoting:'加入节点池',applying:'应用端口',verifying:'验证端口',completed:'完成',failed:'失败',canceled:'已取消',waiting:'等待'}[String(status||'waiting')]||'等待';
 }
 function refreshElapsed(job){
   const start=new Date(job?.started_at||0).getTime();

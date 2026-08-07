@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -69,6 +70,100 @@ func (m *Manager) Diagnostics() map[string]any {
 			timings[stage] = milliseconds
 		}
 		result["startup_ms"] = timings
+	}
+	return result
+}
+
+func (m *Manager) VerifyRuntime(ctx context.Context) error {
+	m.mu.RLock()
+	cfg := cloneConfig(m.cfg)
+	m.mu.RUnlock()
+	if cfg == nil {
+		return errConfigUnavailable
+	}
+	if cfg.Mode != "multi-port" && cfg.Mode != "hybrid" || len(cfg.Nodes) == 0 {
+		return nil
+	}
+	host := strings.TrimSpace(cfg.MultiPort.Address)
+	if host == "" || host == "0.0.0.0" {
+		host = "127.0.0.1"
+	} else if host == "::" || host == "[::]" {
+		host = "::1"
+	}
+	pending := make([]uint16, 0, len(cfg.Nodes))
+	for _, node := range cfg.Nodes {
+		pending = append(pending, node.Port)
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		pending = unavailableRuntimePorts(ctx, host, pending)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if len(pending) == 0 {
+			return nil
+		}
+		if attempt < 2 {
+			timer := time.NewTimer(time.Duration(attempt+1) * 100 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	samples := make([]string, 0, min(8, len(pending)))
+	for _, port := range pending[:min(8, len(pending))] {
+		if port == 0 {
+			samples = append(samples, "未分配")
+		} else {
+			samples = append(samples, strconv.Itoa(int(port)))
+		}
+	}
+	return fmt.Errorf("%d 个运行端口不可用（示例: %s）", len(pending), strings.Join(samples, ", "))
+}
+
+func unavailableRuntimePorts(ctx context.Context, host string, ports []uint16) []uint16 {
+	if len(ports) == 0 {
+		return nil
+	}
+	jobs := make(chan uint16)
+	failures := make(chan uint16, len(ports))
+	var workers sync.WaitGroup
+	for range min(32, len(ports)) {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			dialer := net.Dialer{Timeout: time.Second}
+			for port := range jobs {
+				if port == 0 {
+					failures <- port
+					continue
+				}
+				conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(int(port))))
+				if err != nil {
+					failures <- port
+					continue
+				}
+				_ = conn.Close()
+			}
+		}()
+	}
+	go func() {
+		defer close(jobs)
+		for _, port := range ports {
+			select {
+			case <-ctx.Done():
+				return
+			case jobs <- port:
+			}
+		}
+	}()
+	workers.Wait()
+	close(failures)
+	result := make([]uint16, 0, len(failures))
+	for port := range failures {
+		result = append(result, port)
 	}
 	return result
 }

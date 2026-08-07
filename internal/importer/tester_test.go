@@ -155,6 +155,78 @@ func TestProbeBatchReusesOneSessionAcrossRetryRounds(t *testing.T) {
 	}
 }
 
+func TestProbeBatchDoesNotRetryPermanentOutboundBuildError(t *testing.T) {
+	builds := 0
+	tester := NewNodeTester(func(string, string, bool) (option.Outbound, error) {
+		builds++
+		return option.Outbound{}, errors.New("unsupported fixture protocol")
+	})
+	tester.retryDelay = time.Millisecond
+
+	var result TestResult
+	for event := range tester.ProbeBatch(context.Background(), []ManagedNode{{ID: "invalid", URI: "invalid://fixture"}}) {
+		result = event.Result
+	}
+	if result.Error == nil {
+		t.Fatal("expected permanent build failure")
+	}
+	if builds != 1 {
+		t.Fatalf("outbound builds = %d, want 1", builds)
+	}
+}
+
+type contextProbeSession struct {
+	ctx    context.Context
+	closed chan struct{}
+	once   sync.Once
+}
+
+func (s *contextProbeSession) Probe(context.Context, string) TestResult {
+	select {
+	case <-s.ctx.Done():
+		return TestResult{Error: s.ctx.Err()}
+	case <-time.After(500 * time.Millisecond):
+		return TestResult{Error: errors.New("session context was not canceled")}
+	}
+}
+
+func (s *contextProbeSession) Close() {
+	s.once.Do(func() { close(s.closed) })
+}
+
+func TestProbeBatchCancellationReachesSessionAndClosesIt(t *testing.T) {
+	tester := NewNodeTester(nil)
+	created := make(chan *contextProbeSession, 1)
+	tester.sessionFactory = func(ctx context.Context, _ ManagedNode, _ time.Duration) (probeSession, error) {
+		session := &contextProbeSession{ctx: ctx, closed: make(chan struct{})}
+		created <- session
+		return session, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		for range tester.ProbeBatch(ctx, []ManagedNode{{ID: "cancel", URI: "ss://fixture"}}) {
+		}
+		close(done)
+	}()
+	session := <-created
+	started := time.Now()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("probe batch did not stop promptly after cancellation")
+	}
+	if elapsed := time.Since(started); elapsed >= 250*time.Millisecond {
+		t.Fatalf("cancellation took %s", elapsed)
+	}
+	select {
+	case <-session.closed:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("probe session was not closed")
+	}
+}
+
 func TestProbeBatchDoesNotShareSessionAcrossDifferentURIs(t *testing.T) {
 	tester := NewNodeTester(nil, WithTesterConcurrency(1))
 	created := 0

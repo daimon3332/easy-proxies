@@ -17,6 +17,7 @@
   <img alt="MIT License" src="https://img.shields.io/badge/License-MIT-green.svg">
   <img alt="Powered by sing-box" src="https://img.shields.io/badge/Powered%20by-sing--box-4B5563">
   <img alt="Platforms" src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-blue">
+  <a href="https://github.com/daimon3332/easy-proxies/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/daimon3332/easy-proxies?display_name=tag&sort=semver"></a>
 </p>
 
 > 本專案基於 [jasonwong1991/easy_proxies](https://github.com/jasonwong1991/easy_proxies) 二次開發，重點改善 WebUI、訂閱匯入、節點測速、節點生命週期管理與多連接埠使用體驗。

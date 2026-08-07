@@ -47,6 +47,28 @@ type probeSession interface {
 
 type probeSessionFactory func(ctx context.Context, node ManagedNode, timeout time.Duration) (probeSession, error)
 
+type permanentProbeError struct {
+	cause error
+}
+
+func (e *permanentProbeError) Error() string { return e.cause.Error() }
+func (e *permanentProbeError) Unwrap() error { return e.cause }
+
+func permanentProbeFailure(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &permanentProbeError{cause: err}
+}
+
+func retryableProbeFailure(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) {
+		return false
+	}
+	var permanent *permanentProbeError
+	return !errors.As(err, &permanent)
+}
+
 type NodeTester struct {
 	probeTarget          string
 	ipinfoURL            string
@@ -314,12 +336,12 @@ func (t *NodeTester) sharedRuntime() (*sharedProbeRuntime, error) {
 
 func (t *NodeTester) newProbeSession(ctx context.Context, node ManagedNode, timeout time.Duration) (probeSession, error) {
 	if t.buildOutbound == nil {
-		return nil, fmt.Errorf("outbound builder is not configured")
+		return nil, permanentProbeFailure(fmt.Errorf("outbound builder is not configured"))
 	}
 	tag := "test-" + safeTagPart(node.ID)
 	config, err := t.buildOutbound(tag, node.URI, t.skipCertVerify)
 	if err != nil {
-		return nil, fmt.Errorf("build outbound: %w", err)
+		return nil, permanentProbeFailure(fmt.Errorf("build outbound: %w", err))
 	}
 	runtime, runtimeErr := t.sharedRuntime()
 	if runtimeErr == nil {
@@ -381,6 +403,15 @@ func (t *NodeTester) probeBatchWithProgress(ctx context.Context, nodes []Managed
 				session.Close()
 			}
 		}()
+		closeSession := func(key string) {
+			sessionsMu.Lock()
+			session := sessions[key]
+			delete(sessions, key)
+			sessionsMu.Unlock()
+			if session != nil {
+				session.Close()
+			}
+		}
 		probe := t.probeOverride
 		if probe == nil {
 			probe = func(nodeCtx context.Context, node ManagedNode, target string, timeout time.Duration) TestResult {
@@ -389,7 +420,7 @@ func (t *NodeTester) probeBatchWithProgress(ctx context.Context, nodes []Managed
 				session := sessions[key]
 				sessionsMu.Unlock()
 				if session == nil {
-					created, err := t.sessionFactory(context.WithoutCancel(ctx), node, timeout)
+					created, err := t.sessionFactory(ctx, node, timeout)
 					if err != nil {
 						return TestResult{Error: err}
 					}
@@ -407,6 +438,9 @@ func (t *NodeTester) probeBatchWithProgress(ctx context.Context, nodes []Managed
 				result := session.Probe(nodeCtx, target)
 				if result.Error == nil {
 					result = t.probeRuntimeListener(nodeCtx, node, target, timeout, result)
+				}
+				if result.Error == nil || !retryableProbeFailure(result.Error) {
+					closeSession(key)
 				}
 				return result
 			}
@@ -467,11 +501,14 @@ func (t *NodeTester) probeBatchWithProgress(ctx context.Context, nodes []Managed
 						alternatePassed++
 					}
 				}
-				if event.Result.Error != nil && round < probeRounds {
+				if event.Result.Error != nil && round < probeRounds && retryableProbeFailure(event.Result.Error) {
 					if node, ok := byID[event.NodeID]; ok {
 						next = append(next, node)
 					}
 					continue
+				}
+				if node, ok := byID[event.NodeID]; ok {
+					closeSession(node.ID + "\x00" + node.URI)
 				}
 				select {
 				case events <- event:

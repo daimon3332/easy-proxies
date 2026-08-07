@@ -64,6 +64,10 @@ type NodeSnapshotRestorer interface {
 	RestoreConfigNodes(ctx context.Context, nodes []config.NodeConfig) error
 }
 
+type NodeRuntimeVerifier interface {
+	VerifyRuntime(ctx context.Context) error
+}
+
 type Service struct {
 	store      *Store
 	tester     *NodeTester
@@ -78,6 +82,7 @@ type Service struct {
 	testCancels       map[string]context.CancelFunc
 	refreshJobsMu     sync.RWMutex
 	refreshJobs       map[string]*SourceRefreshJob
+	refreshStartMu    sync.Mutex
 	refreshCancelsMu  sync.Mutex
 	refreshCancels    map[string]context.CancelFunc
 	jobEventsMu       sync.Mutex
@@ -96,6 +101,9 @@ type Service struct {
 	refreshProxyCandidates int
 	refreshJobMaxWait      time.Duration
 	applyMu                sync.Mutex
+	sourceRevisionsMu      sync.Mutex
+	sourceRevisions        map[string]uint64
+	sourceRevisionSeed     uint64
 }
 
 type Option func(*Service)
@@ -112,10 +120,11 @@ const (
 	defaultRefreshRetryDelay      = time.Second
 	defaultRefreshSourceTimeout   = 60 * time.Second
 	defaultRefreshProxyTimeout    = 8 * time.Second
-	defaultRefreshProxyCandidates = 5
+	defaultRefreshProxyCandidates = 2
 	refreshJobPollInterval        = 500 * time.Millisecond
 	refreshJobMaxWait             = 2 * time.Hour
 	poolFailureDemoteThreshold    = 3
+	runtimeApplyTimeout           = 2 * time.Minute
 )
 
 func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...Option) *Service {
@@ -140,6 +149,8 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 		refreshProxyTimeout:    defaultRefreshProxyTimeout,
 		refreshProxyCandidates: defaultRefreshProxyCandidates,
 		refreshJobMaxWait:      refreshJobMaxWait,
+		sourceRevisions:        make(map[string]uint64),
+		sourceRevisionSeed:     uint64(time.Now().UnixNano()),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -227,12 +238,21 @@ func WithHTTPClient(c *http.Client) Option {
 	}
 }
 
+func WithRefreshSourceTimeout(timeout time.Duration) Option {
+	return func(s *Service) {
+		if timeout > 0 {
+			s.refreshSourceTimeout = timeout
+		}
+	}
+}
+
 type sourceRefreshTarget struct {
 	Key          string
 	TagPrefix    string
 	URLs         []string
 	LocalNodeIDs []string
 	LocalFormats []string
+	Revision     uint64
 }
 
 type sourceRefreshSnapshot struct {
@@ -241,7 +261,30 @@ type sourceRefreshSnapshot struct {
 	hasConfig   bool
 }
 
+func (s *Service) nextSourceRevision(tagPrefix string) uint64 {
+	tagPrefix = strings.TrimSpace(tagPrefix)
+	s.sourceRevisionsMu.Lock()
+	defer s.sourceRevisionsMu.Unlock()
+	if s.sourceRevisions[tagPrefix] == 0 {
+		s.sourceRevisions[tagPrefix] = s.sourceRevisionSeed
+	}
+	s.sourceRevisions[tagPrefix]++
+	return s.sourceRevisions[tagPrefix]
+}
+
+func (s *Service) sourceRevisionCurrent(tagPrefix string, revision uint64) bool {
+	if revision == 0 {
+		return true
+	}
+	tagPrefix = strings.TrimSpace(tagPrefix)
+	s.sourceRevisionsMu.Lock()
+	defer s.sourceRevisionsMu.Unlock()
+	return s.sourceRevisions[tagPrefix] == revision
+}
+
 func (s *Service) StartRefreshSources(key string) (string, error) {
+	s.refreshStartMu.Lock()
+	defer s.refreshStartMu.Unlock()
 	if jobID := s.activeRefreshJobID(); jobID != "" {
 		return jobID, nil
 	}
@@ -252,6 +295,9 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 	snapshot, err := s.captureSourceRefreshSnapshot()
 	if err != nil {
 		return "", fmt.Errorf("创建刷新回滚点: %w", err)
+	}
+	for i := range targets {
+		targets[i].Revision = s.nextSourceRevision(targets[i].TagPrefix)
 	}
 	jobID := randomHex(12)
 	job := &SourceRefreshJob{
@@ -380,9 +426,8 @@ func (s *Service) sourceRefreshTargets(key string) ([]sourceRefreshTarget, error
 	if key != "" {
 		for _, node := range nodes {
 			for _, ref := range nodeSourceRefs(node) {
-				view := nodeWithSource(node, ref)
 				tagPrefix := strings.TrimSpace(ref.TagPrefix)
-				if tagPrefix != "" && importSourceKey(view) == key {
+				if tagPrefix != "" && sourceRefMatchesKey(ref, key) {
 					selectedTags[tagPrefix] = struct{}{}
 				}
 			}
@@ -479,7 +524,7 @@ type sourceRefreshWork struct {
 
 func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sourceRefreshTarget, snapshot sourceRefreshSnapshot) {
 	defer s.unregisterRefreshCancel(jobID)
-	defer cleanupRefreshStageNodes(s.store)
+	defer func() { _ = cleanupRefreshStageNodes(s.store) }()
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			restoreErr := s.restoreSourceRefreshSnapshot(snapshot)
@@ -505,13 +550,47 @@ func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sou
 	}
 
 	s.runRefreshWorkQueue(ctx, jobID, works)
-	job, _ := s.GetRefreshJob(jobID)
-	if ctx.Err() != nil || job.Protected {
+	if ctx.Err() != nil {
 		if err := s.restoreSourceRefreshSnapshot(snapshot); err != nil {
 			s.updateRefreshJob(jobID, func(active *SourceRefreshJob) {
 				active.Status = SourceRefreshJobFailed
 				active.Phase = "failed"
 				active.Error = "恢复检测前节点池失败: " + err.Error()
+			})
+			return
+		}
+	}
+	current, _ := s.GetRefreshJob(jobID)
+	rollbackFailed := current.Protected && strings.Contains(current.ProtectionReason, "回滚失败")
+	if ctx.Err() == nil && !rollbackFailed {
+		if err := cleanupRefreshStageNodes(s.store); err != nil {
+			restoreErr := s.restoreSourceRefreshSnapshot(snapshot)
+			s.updateRefreshJob(jobID, func(active *SourceRefreshJob) {
+				active.Status = SourceRefreshJobFailed
+				active.Phase = "failed"
+				active.Applied = false
+				active.Error = "清理临时节点失败: " + compactRefreshError(err)
+				if restoreErr != nil {
+					active.Error += "; 恢复检测前节点池失败: " + compactRefreshError(restoreErr)
+				}
+			})
+			return
+		}
+	}
+	if ctx.Err() == nil && !rollbackFailed {
+		verifyCtx, cancel := context.WithTimeout(context.Background(), runtimeApplyTimeout)
+		err := s.ensurePoolRuntimeConsistency(verifyCtx)
+		cancel()
+		if err != nil {
+			restoreErr := s.restoreSourceRefreshSnapshot(snapshot)
+			s.updateRefreshJob(jobID, func(active *SourceRefreshJob) {
+				active.Status = SourceRefreshJobFailed
+				active.Phase = "failed"
+				active.Applied = false
+				active.Error = "最终节点池与运行端口校验失败: " + compactRefreshError(err)
+				if restoreErr != nil {
+					active.Error += "; 恢复检测前节点池失败: " + compactRefreshError(restoreErr)
+				}
 			})
 			return
 		}
@@ -523,6 +602,19 @@ func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sou
 			return
 		}
 		if active.Protected {
+			if strings.Contains(active.ProtectionReason, "回滚失败") {
+				active.Status = SourceRefreshJobFailed
+				active.Phase = "failed"
+				active.Applied = false
+				active.Error = active.ProtectionReason
+				return
+			}
+			if active.Successful > 0 {
+				s.finalizeRefreshJob(active)
+				active.Phase = "partial"
+				active.Applied = true
+				return
+			}
 			active.Status = SourceRefreshJobFinished
 			active.Phase = "protected"
 			active.Protected = true
@@ -590,12 +682,16 @@ func (s *Service) runRefreshWorkQueue(ctx context.Context, jobID string, works [
 	if retryDelay <= 0 {
 		retryDelay = defaultRefreshRetryDelay
 	}
-	runSourceRefreshQueue(ctx, works, limit, retryDelay, func(ctx context.Context, work sourceRefreshWork, finalAttempt bool) error {
+	runSourceRefreshQueueWithRetry(ctx, works, limit, retryDelay, func(error) bool { return false }, func(ctx context.Context, work sourceRefreshWork, finalAttempt bool) error {
 		return s.runRefreshWork(ctx, jobID, work, finalAttempt)
 	})
 }
 
 func runSourceRefreshQueue(ctx context.Context, works []sourceRefreshWork, limit int, retryDelay time.Duration, run func(context.Context, sourceRefreshWork, bool) error) {
+	runSourceRefreshQueueWithRetry(ctx, works, limit, retryDelay, func(error) bool { return true }, run)
+}
+
+func runSourceRefreshQueueWithRetry(ctx context.Context, works []sourceRefreshWork, limit int, retryDelay time.Duration, shouldRetry func(error) bool, run func(context.Context, sourceRefreshWork, bool) error) {
 	if len(works) == 0 || run == nil {
 		return
 	}
@@ -686,7 +782,7 @@ func runSourceRefreshQueue(ctx context.Context, works []sourceRefreshWork, limit
 				timer.Stop()
 			}
 			active--
-			if result.err != nil && result.attempt.work.rawURL != "" && !result.attempt.finalAttempt && ctx.Err() == nil {
+			if result.err != nil && result.attempt.work.rawURL != "" && !result.attempt.finalAttempt && ctx.Err() == nil && shouldRetry != nil && shouldRetry(result.err) {
 				retries = append(retries, sourceRefreshAttempt{
 					work:         result.attempt.work,
 					finalAttempt: true,
@@ -713,22 +809,15 @@ func (s *Service) runRefreshWork(ctx context.Context, jobID string, work sourceR
 }
 
 func (s *Service) refreshURLSource(ctx context.Context, jobID string, work sourceRefreshWork, finalAttempt bool) error {
-	attempt := 1
-	proxyStart := 0
-	status := "pulling"
-	if finalAttempt {
-		attempt = 2
-		proxyStart = s.refreshProxyCandidates
-		status = "retrying"
-	}
+	_ = finalAttempt
 	s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
-		row.Status = status
+		row.Status = "pulling"
 		row.Stage = "direct"
-		row.Detail = map[bool]string{true: "正在进行最终重试", false: "正在直连并准备网络兜底"}[finalAttempt]
+		row.Detail = "正在直连获取订阅；仅网络瞬时错误会尝试健康代理"
 		row.Error = ""
 		row.Warning = ""
-		row.Attempt = attempt
-		row.Attempts = 2
+		row.Attempt = 1
+		row.Attempts = 1
 		row.Cached = false
 		row.Nodes = 0
 		row.Done = 0
@@ -742,8 +831,12 @@ func (s *Service) refreshURLSource(ctx context.Context, jobID string, work sourc
 	if timeout <= 0 {
 		timeout = defaultRefreshSourceTimeout
 	}
-	fetchCtx, cancel := context.WithTimeout(ctx, timeout)
-	parsed, err := s.parseRefreshSubscriptionURLContext(fetchCtx, work.target.TagPrefix, work.rawURL, proxyStart, func(current, total int) {
+	proxyTimeout := s.refreshProxyTimeout
+	if proxyTimeout <= 0 {
+		proxyTimeout = defaultRefreshProxyTimeout
+	}
+	fetchCtx, cancel := context.WithTimeout(ctx, timeout+time.Duration(s.refreshProxyCandidates)*proxyTimeout)
+	parsed, err := s.parseRefreshSubscriptionURLContext(fetchCtx, work.target.TagPrefix, work.rawURL, 0, func(current, total int) {
 		s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
 			row.Stage = "proxy"
 			row.Detail = fmt.Sprintf("正在尝试节点池代理 %d/%d", current, total)
@@ -758,15 +851,6 @@ func (s *Service) refreshURLSource(ctx context.Context, jobID string, work sourc
 				row.Error = "任务已取消"
 			})
 			return ctx.Err()
-		}
-		if !finalAttempt {
-			s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
-				row.Status = "retry_waiting"
-				row.Stage = "waiting"
-				row.Detail = "已进入重试队列，将在空闲并发槽位中自动重试"
-				row.Warning = msg
-			})
-			return err
 		}
 		ids := s.existingURLRefreshNodeIDs(work.target.TagPrefix, work.rawURL)
 		warning := "订阅拉取失败，已改为检测保存节点：" + msg
@@ -837,7 +921,18 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 		})
 		return nil
 	}
-	promoted, err := s.applyStagedRefreshNodes(work.rawURL, nodeIDs)
+	s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
+		row.Status = "applying"
+		row.Stage = "apply"
+		row.Detail = "测速完成，正在应用节点和端口"
+	})
+	promoted, err := s.applyStagedRefreshNodesRevision(ctx, work.target.TagPrefix, work.target.Revision, work.rawURL, nodeIDs, func() {
+		s.updateRefreshRow(jobID, work, func(row *SourceRefreshURL) {
+			row.Status = "verifying"
+			row.Stage = "verify"
+			row.Detail = "端口已应用，正在验证监听状态"
+		})
+	})
 	if err != nil {
 		_ = s.cleanupStagedNodes(nodeIDs)
 		s.protectRefreshRow(jobID, work, len(parsed.Nodes), "应用订阅检测结果失败: "+compactRefreshError(err))
@@ -857,7 +952,7 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 func (s *Service) cleanupStagedNodes(nodeIDs []string) error {
 	ids := make([]string, 0, len(nodeIDs))
 	for _, id := range nodeIDs {
-		if node, ok := s.store.GetNode(id); ok && node.ImportMode == "refresh_stage" {
+		if node, ok := s.store.GetNode(id); ok && (node.ImportMode == "refresh_stage" || node.ImportMode == "import_stage") {
 			ids = append(ids, id)
 		}
 	}
@@ -867,46 +962,303 @@ func (s *Service) cleanupStagedNodes(nodeIDs []string) error {
 	return nil
 }
 
-func (s *Service) applyStagedRefreshNodes(sourceURL string, nodeIDs []string) (int, error) {
+func (s *Service) applyStagedRefreshNodes(ctx context.Context, sourceURL string, nodeIDs []string, onVerify func()) (int, error) {
+	return s.applyStagedRefreshNodesRevision(ctx, "", 0, sourceURL, nodeIDs, onVerify)
+}
+
+func (s *Service) applyStagedRefreshNodesRevision(ctx context.Context, tagPrefix string, revision uint64, sourceURL string, nodeIDs []string, onVerify func()) (int, error) {
+	return s.applyStagedNodes(ctx, tagPrefix, revision, nodeIDs, "refresh_stage", "url", func(ref NodeSourceRef) bool {
+		return isURLSourceRef(ref) && strings.TrimSpace(ref.Source) == strings.TrimSpace(sourceURL)
+	}, true, onVerify)
+}
+
+func (s *Service) applyStagedTagNodes(ctx context.Context, tagPrefix string, revision uint64, nodeIDs []string, promote bool, onVerify func()) (int, error) {
+	tagPrefix = strings.TrimSpace(tagPrefix)
+	return s.applyStagedNodes(ctx, tagPrefix, revision, nodeIDs, "import_stage", "", func(ref NodeSourceRef) bool {
+		return strings.TrimSpace(ref.TagPrefix) == tagPrefix
+	}, promote, onVerify)
+}
+
+func (s *Service) applyStagedNodes(ctx context.Context, tagPrefix string, revision uint64, nodeIDs []string, stageMode, fallbackMode string, match func(NodeSourceRef) bool, promote bool, onVerify func()) (int, error) {
 	s.applyMu.Lock()
 	defer s.applyMu.Unlock()
-	staged := make([]ManagedNode, 0, len(nodeIDs))
-	passedIDs := make([]string, 0, len(nodeIDs))
+	if !s.sourceRevisionCurrent(tagPrefix, revision) {
+		return 0, fmt.Errorf("该 Tag 已有更新的导入操作，本次旧结果未应用")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	applyCtx, cancelApply := context.WithTimeout(ctx, runtimeApplyTimeout)
+	defer cancelApply()
+	ctx = applyCtx
+	configLister, ok := s.nodeMgr.(NodeLister)
+	if !ok {
+		return 0, fmt.Errorf("节点管理器不支持配置快照")
+	}
+	configRestorer, ok := s.nodeMgr.(NodeSnapshotRestorer)
+	if !ok {
+		return 0, fmt.Errorf("节点管理器不支持配置恢复")
+	}
+	configBefore, err := configLister.ListConfigNodes(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("读取运行配置: %w", err)
+	}
+
+	stagedByID := make(map[string]ManagedNode, len(nodeIDs))
+	stageIDs := make([]string, 0, len(nodeIDs))
 	for _, id := range nodeIDs {
 		node, ok := s.store.GetNode(id)
-		if !ok || node.ImportMode != "refresh_stage" || node.State != StatePassed && node.State != StateFailed {
+		if !ok || node.ImportMode != stageMode || node.State != StatePassed && node.State != StateFailed {
 			continue
 		}
+		stageIDs = append(stageIDs, node.ID)
 		node.ID = nodeID(node.URI)
-		node.ImportMode = "url"
+		refs := make([]NodeSourceRef, 0, len(node.SourceRefs))
+		for _, ref := range node.SourceRefs {
+			if ref.Mode != "refresh_stage" && ref.Mode != "import_stage" {
+				refs = append(refs, ref)
+			}
+		}
+		if len(refs) == 0 {
+			ref := sourceRefFromNode(node)
+			ref.Mode = fallbackMode
+			refs = append(refs, ref)
+		}
+		node.SourceRefs = deduplicateSourceRefs(refs)
+		applyPrimarySource(&node, node.SourceRefs[0])
 		node.InPool = false
 		node.Port = 0
-		staged = append(staged, node)
-		if node.State == StatePassed {
+		stagedByID[node.ID] = node
+	}
+	if len(stageIDs) != len(nodeIDs) {
+		return 0, fmt.Errorf("临时节点状态不完整：期望 %d，实际 %d", len(nodeIDs), len(stageIDs))
+	}
+
+	allNodes := s.store.ListNodes()
+	beforeNodes := make(map[string]ManagedNode, len(stageIDs)+len(stagedByID))
+	touchedIDs := make(map[string]struct{}, len(stageIDs)+len(stagedByID))
+	for _, id := range stageIDs {
+		touchedIDs[id] = struct{}{}
+	}
+	for id := range stagedByID {
+		touchedIDs[id] = struct{}{}
+	}
+	updates := make(map[string]ManagedNode, len(stagedByID))
+	deleted := make([]string, 0, len(stageIDs))
+	poolNamesToDelete := make([]string, 0)
+	for _, current := range allNodes {
+		if _, touched := touchedIDs[current.ID]; touched {
+			beforeNodes[current.ID] = current
+		}
+		if current.ImportMode == "refresh_stage" || current.ImportMode == "import_stage" {
+			continue
+		}
+		refs := nodeSourceRefs(current)
+		keptRefs := make([]NodeSourceRef, 0, len(refs))
+		matched := false
+		for _, ref := range refs {
+			if match(ref) {
+				matched = true
+				continue
+			}
+			keptRefs = append(keptRefs, ref)
+		}
+		if !matched {
+			continue
+		}
+		touchedIDs[current.ID] = struct{}{}
+		beforeNodes[current.ID] = current
+
+		incoming, exists := stagedByID[current.ID]
+		if exists {
+			incoming.SourceRefs = deduplicateSourceRefs(append(keptRefs, incoming.SourceRefs...))
+			incoming.CreatedAt = current.CreatedAt
+			if incoming.State == StatePassed && (current.InPool || current.State == StateInPool) {
+				incoming.Name = current.Name
+				incoming.Port = current.Port
+				incoming.InPool = true
+				incoming.State = StateInPool
+				incoming.Enabled = current.Enabled
+				if incoming.CountryCode == "" {
+					incoming.CountryCode = current.CountryCode
+					incoming.CountryName = current.CountryName
+				}
+			} else if incoming.State == StateFailed && (current.InPool || current.State == StateInPool) {
+				poolNamesToDelete = append(poolNamesToDelete, current.Name)
+			}
+			updates[current.ID] = incoming
+			delete(stagedByID, current.ID)
+			continue
+		}
+
+		if len(keptRefs) == 0 {
+			deleted = append(deleted, current.ID)
+			if current.InPool || current.State == StateInPool {
+				poolNamesToDelete = append(poolNamesToDelete, current.Name)
+			}
+			continue
+		}
+		current.SourceRefs = keptRefs
+		if match(sourceRefFromNode(current)) {
+			applyPrimarySource(&current, keptRefs[0])
+		}
+		updates[current.ID] = current
+	}
+	for id, node := range stagedByID {
+		updates[id] = node
+	}
+	rollback := func(cause error) error {
+		upserts := make([]ManagedNode, 0, len(beforeNodes))
+		deletes := make([]string, 0, len(touchedIDs)-len(beforeNodes))
+		for _, node := range beforeNodes {
+			upserts = append(upserts, node)
+		}
+		for id := range touchedIDs {
+			if _, existed := beforeNodes[id]; !existed {
+				deletes = append(deletes, id)
+			}
+		}
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), runtimeApplyTimeout)
+		defer cancel()
+		var rollbackErrors []string
+		if restoreErr := s.store.ApplyNodeChanges(upserts, deletes); restoreErr != nil {
+			rollbackErrors = append(rollbackErrors, "恢复节点数据: "+restoreErr.Error())
+		}
+		if restoreErr := configRestorer.RestoreConfigNodes(rollbackCtx, configBefore); restoreErr != nil {
+			rollbackErrors = append(rollbackErrors, "恢复运行配置: "+restoreErr.Error())
+		}
+		if len(rollbackErrors) > 0 {
+			return fmt.Errorf("%w; 回滚失败: %s", cause, strings.Join(rollbackErrors, "; "))
+		}
+		return cause
+	}
+
+	if len(poolNamesToDelete) > 0 {
+		if err := s.deleteConfigNodesStrictContext(ctx, poolNamesToDelete); err != nil {
+			return 0, rollback(err)
+		}
+	}
+	updateList := make([]ManagedNode, 0, len(updates))
+	passedIDs := make([]string, 0, len(updates))
+	for _, node := range updates {
+		updateList = append(updateList, node)
+		if node.State == StatePassed && !node.InPool {
 			passedIDs = append(passedIDs, node.ID)
 		}
 	}
-	if len(staged) != len(nodeIDs) {
-		return 0, fmt.Errorf("临时节点状态不完整：期望 %d，实际 %d", len(nodeIDs), len(staged))
+	deleted = append(deleted, stageIDs...)
+	if err := s.store.ApplyNodeChanges(updateList, deleted); err != nil {
+		return 0, rollback(err)
 	}
-	if _, err := s.deleteBySubscription(sourceURL, false); err != nil {
-		return 0, err
-	}
-	promoted := 0
-	if len(staged) > 0 {
-		if err := s.store.UpsertNodes(staged); err != nil {
-			return 0, err
-		}
-		created, err := s.PromoteMany(passedIDs, false)
+	var created []ManagedNode
+	if promote && len(passedIDs) > 0 {
+		var err error
+		created, err = s.promoteManyContext(ctx, passedIDs, false)
 		if err != nil {
-			return 0, err
+			return 0, rollback(err)
 		}
-		promoted = len(created)
 	}
-	if err := s.cleanupStagedNodes(nodeIDs); err != nil {
-		return 0, fmt.Errorf("清理临时节点: %w", err)
+	if len(poolNamesToDelete) > 0 || len(created) > 0 {
+		if err := s.reloadAndVerify(ctx, onVerify); err != nil {
+			return 0, rollback(err)
+		}
+	} else {
+		if onVerify != nil {
+			onVerify()
+		}
+		if err := s.verifyAppliedRuntime(ctx); err != nil {
+			return 0, rollback(err)
+		}
 	}
-	return promoted, s.nodeMgr.TriggerReload(context.Background())
+	return len(created), nil
+}
+
+func (s *Service) reloadAndVerify(ctx context.Context, onVerify func()) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	applyCtx, cancel := context.WithTimeout(ctx, runtimeApplyTimeout)
+	defer cancel()
+	if err := s.nodeMgr.TriggerReload(applyCtx); err != nil {
+		return err
+	}
+	if onVerify != nil {
+		onVerify()
+	}
+	if err := s.verifyAppliedRuntime(applyCtx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) verifyAppliedRuntime(ctx context.Context) error {
+	if verifier, ok := s.nodeMgr.(NodeRuntimeVerifier); ok {
+		if err := verifier.VerifyRuntime(ctx); err != nil {
+			return fmt.Errorf("验证运行端口: %w", err)
+		}
+	}
+	lister, ok := s.nodeMgr.(NodeLister)
+	if !ok {
+		return nil
+	}
+	configured, err := lister.ListConfigNodes(ctx)
+	if err != nil {
+		return fmt.Errorf("读取运行节点: %w", err)
+	}
+	poolCount := len(s.store.ListPoolNodes())
+	if len(configured) != poolCount {
+		return fmt.Errorf("节点池与运行端口数量不一致: 节点池 %d，运行配置 %d", poolCount, len(configured))
+	}
+	return nil
+}
+
+func (s *Service) ensurePoolRuntimeConsistency(ctx context.Context) error {
+	if err := s.verifyAppliedRuntime(ctx); err == nil {
+		return nil
+	}
+	restorer, ok := s.nodeMgr.(NodeSnapshotRestorer)
+	if !ok {
+		return fmt.Errorf("节点管理器不支持运行配置收敛")
+	}
+	lister, ok := s.nodeMgr.(NodeLister)
+	if !ok {
+		return fmt.Errorf("节点管理器不支持运行配置读取")
+	}
+	pool := s.store.ListPoolNodes()
+	desired := make([]config.NodeConfig, 0, len(pool))
+	for _, node := range pool {
+		desired = append(desired, node.ToConfigNode())
+	}
+	if err := restorer.RestoreConfigNodes(ctx, desired); err != nil {
+		return fmt.Errorf("按节点池恢复运行配置: %w", err)
+	}
+	configured, err := lister.ListConfigNodes(ctx)
+	if err != nil {
+		return fmt.Errorf("读取收敛后的运行配置: %w", err)
+	}
+	if len(configured) != len(pool) {
+		return fmt.Errorf("节点池与运行配置数量仍不一致: 节点池 %d，运行配置 %d", len(pool), len(configured))
+	}
+	byID := make(map[string]config.NodeConfig, len(configured))
+	for _, node := range configured {
+		byID[nodeID(node.URI)] = node
+	}
+	updates := make([]ManagedNode, 0, len(pool))
+	for _, node := range pool {
+		configuredNode, exists := byID[nodeID(node.URI)]
+		if !exists {
+			return fmt.Errorf("运行配置缺少节点池成员")
+		}
+		node.Name = configuredNode.Name
+		node.Port = configuredNode.Port
+		updates = append(updates, node)
+	}
+	if len(updates) > 0 {
+		if err := s.store.UpsertNodes(updates); err != nil {
+			return fmt.Errorf("同步运行端口到节点池: %w", err)
+		}
+	}
+	return s.verifyAppliedRuntime(ctx)
 }
 
 func (s *Service) refreshExistingNodes(ctx context.Context, jobID string, work sourceRefreshWork, nodeIDs []string, cached bool, warning string) error {
@@ -1098,7 +1450,10 @@ func (s *Service) parseRefreshSubscriptionURLWithContextMode(ctx context.Context
 	}
 	timeout := s.refreshSourceTimeout
 	if deadline, ok := ctx.Deadline(); ok {
-		timeout = time.Until(deadline)
+		remaining := time.Until(deadline)
+		if timeout <= 0 || remaining < timeout {
+			timeout = remaining
+		}
 	}
 	if timeout <= 0 {
 		return ParseResponse{}, context.DeadlineExceeded
@@ -1194,7 +1549,7 @@ func (s *Service) parseRefreshSubscriptionURLWithContextMode(ctx context.Context
 func cleanupRefreshStageNodes(store *Store) error {
 	ids := make([]string, 0)
 	for _, node := range store.ListNodes() {
-		if node.ImportMode == "refresh_stage" {
+		if node.ImportMode == "refresh_stage" || node.ImportMode == "import_stage" {
 			ids = append(ids, node.ID)
 		}
 	}
@@ -1366,6 +1721,10 @@ func applyTestJobProgress(row *SourceRefreshURL, job TestJob) {
 	}
 	if job.Phase == "promote" {
 		row.Status = "promoting"
+	} else if job.Phase == "apply" {
+		row.Status = "applying"
+	} else if job.Phase == "verify" {
+		row.Status = "verifying"
 	}
 	row.UpdatedAt = time.Now()
 }
@@ -1376,6 +1735,7 @@ func (s *Service) recalculateRefreshJob(job *SourceRefreshJob) {
 	}
 	protected := job.Protected
 	protectionReason := job.ProtectionReason
+	partial := job.Phase == "partial"
 	job.TotalURLs = 0
 	job.DoneURLs = 0
 	job.Successful = 0
@@ -1391,9 +1751,11 @@ func (s *Service) recalculateRefreshJob(job *SourceRefreshJob) {
 	canceling := job.Phase == "canceling"
 	switch job.Status {
 	case SourceRefreshJobFinished:
-		if job.Protected {
+		if job.Protected && !job.Applied {
 			job.Phase = "protected"
-		} else if job.Phase != "partial" {
+		} else if partial {
+			job.Phase = "partial"
+		} else {
 			job.Phase = "finished"
 		}
 	case SourceRefreshJobFailed:
@@ -1430,8 +1792,14 @@ func (s *Service) recalculateRefreshJob(job *SourceRefreshJob) {
 				switch row.Status {
 				case "promoting":
 					job.Phase = "promoting"
+				case "verifying":
+					job.Phase = "verifying"
+				case "applying":
+					if job.Phase != "verifying" {
+						job.Phase = "applying"
+					}
 				case "testing":
-					if job.Phase != "promoting" {
+					if job.Phase != "promoting" && job.Phase != "applying" && job.Phase != "verifying" {
 						job.Phase = "testing"
 					}
 				case "retrying", "retry_waiting":
@@ -1502,6 +1870,9 @@ func (s *Service) finalizeRefreshJob(job *SourceRefreshJob) {
 }
 
 func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
+	if s.activeRefreshJobID() != "" {
+		return ParseResponse{}, fmt.Errorf("导入来源正在重新检测，请等待任务完成或先取消任务")
+	}
 	req.TagPrefix = strings.TrimSpace(req.TagPrefix)
 	req.URL = strings.TrimSpace(req.URL)
 	if req.Mode != "url" && req.Mode != "content" {
@@ -1517,7 +1888,7 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 		format string
 	}
 	var parsedNodes []parsedNode
-	replaceTag := req.Mode == "content"
+	var sourceRevision uint64
 	if req.Mode == "url" {
 		urls := splitSubscriptionURLs(req.URL)
 		if len(urls) == 0 {
@@ -1535,9 +1906,10 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 		} else if existingPrefix := s.sharedTagPrefixForImportSources(urls); existingPrefix != "" {
 			req.TagPrefix = existingPrefix
 		}
-		timeout := 30 * time.Second
-		if s.httpClient != nil && s.httpClient.Timeout > 0 {
-			timeout = s.httpClient.Timeout
+		sourceRevision = s.nextSourceRevision(req.TagPrefix)
+		timeout := s.refreshSourceTimeout
+		if timeout <= 0 {
+			timeout = defaultRefreshSourceTimeout
 		}
 		for _, subURL := range urls {
 			fetchCtx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -1549,20 +1921,20 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 			})
 			cancel()
 			if err != nil {
-				return ParseResponse{}, fmt.Errorf("获取订阅 %s: %w", subURL, err)
+				return ParseResponse{}, fmt.Errorf("获取订阅失败: %w", err)
 			}
 			content := string(body)
 			configNodes, err := config.ParseSubscriptionContent(content)
 			if err != nil {
-				return ParseResponse{}, fmt.Errorf("解析订阅 %s: %w", subURL, err)
+				return ParseResponse{}, fmt.Errorf("解析订阅失败: %w", err)
 			}
 			format := detectFormat(content)
 			for _, cn := range configNodes {
 				parsedNodes = append(parsedNodes, parsedNode{node: cn, source: subURL, format: format})
 			}
 		}
-		replaceTag = true
 	} else {
+		sourceRevision = s.nextSourceRevision(req.TagPrefix)
 		content := req.Content
 		configNodes, err := config.ParseSubscriptionContent(content)
 		if err != nil {
@@ -1586,7 +1958,8 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 
 	for _, item := range parsedNodes {
 		cn := item.node
-		id := nodeID(cn.URI)
+		canonicalID := nodeID(cn.URI)
+		id := canonicalID + "-import-" + importID
 		name := cn.Name
 		if name == "" {
 			name = extractNameFromURI(cn.URI)
@@ -1599,29 +1972,31 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 			Name:         req.TagPrefix + "-" + name,
 			TagPrefix:    req.TagPrefix,
 			ImportID:     importID,
-			ImportMode:   req.Mode,
+			ImportMode:   "import_stage",
 			ImportSource: item.source,
 			ImportFormat: item.format,
-			State:        StateParsed,
-			Enabled:      true,
-			CreatedAt:    now,
-			UpdatedAt:    now,
+			SourceRefs: []NodeSourceRef{{
+				TagPrefix: req.TagPrefix,
+				ImportID:  importID,
+				Mode:      req.Mode,
+				Source:    item.source,
+				Format:    item.format,
+			}},
+			State:     StateParsed,
+			Enabled:   true,
+			CreatedAt: now,
+			UpdatedAt: now,
 		}
-		if idx, ok := seen[id]; ok {
+		if idx, ok := seen[canonicalID]; ok {
+			mn.SourceRefs = deduplicateSourceRefs(append(nodes[idx].SourceRefs, mn.SourceRefs...))
 			nodes[idx] = mn
 			continue
 		}
-		seen[id] = len(nodes)
+		seen[canonicalID] = len(nodes)
 		nodes = append(nodes, mn)
 	}
 	for _, n := range nodes {
 		nodeIDs = append(nodeIDs, n.ID)
-	}
-
-	if replaceTag {
-		if _, err := s.deleteByTagPrefix(req.TagPrefix); err != nil {
-			return ParseResponse{}, fmt.Errorf("替换旧节点: %w", err)
-		}
 	}
 
 	if err := s.store.UpsertNodes(nodes); err != nil {
@@ -1629,16 +2004,17 @@ func (s *Service) Parse(req ParseRequest) (ParseResponse, error) {
 	}
 
 	job := ImportJob{
-		ID:        importID,
-		Status:    ImportStatusParsed,
-		Mode:      req.Mode,
-		Format:    format,
-		TagPrefix: req.TagPrefix,
-		Source:    importSourceForParse(req),
-		Total:     len(nodes),
-		NodeIDs:   nodeIDs,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:             importID,
+		Status:         ImportStatusParsed,
+		Mode:           req.Mode,
+		Format:         format,
+		TagPrefix:      req.TagPrefix,
+		Source:         importSourceForParse(req),
+		SourceRevision: sourceRevision,
+		Total:          len(nodes),
+		NodeIDs:        nodeIDs,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 	if err := s.store.UpsertJob(job); err != nil {
 		return ParseResponse{}, fmt.Errorf("保存导入任务: %w", err)
@@ -1730,12 +2106,16 @@ func (s *Service) fetchSubscriptionViaPool(ctx context.Context, rawURL string, h
 			cancel()
 			continue
 		}
-		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
+		const maxSubscriptionBody = 10 << 20
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxSubscriptionBody+1))
 		resp.Body.Close()
 		closeClient()
 		cancel()
 		if readErr != nil {
 			continue
+		}
+		if len(body) > maxSubscriptionBody {
+			return nil, fmt.Errorf("订阅响应超过 10MB 限制")
 		}
 		return body, nil
 	}
@@ -1849,16 +2229,17 @@ func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, er
 
 	jobID := randomHex(12)
 	job = ImportJob{
-		ID:        jobID,
-		Status:    ImportStatusRunning,
-		Mode:      job.Mode,
-		Format:    job.Format,
-		TagPrefix: job.TagPrefix,
-		Source:    job.Source,
-		Total:     len(nodes),
-		NodeIDs:   selectedIDs,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:             jobID,
+		Status:         ImportStatusRunning,
+		Mode:           job.Mode,
+		Format:         job.Format,
+		TagPrefix:      job.TagPrefix,
+		Source:         job.Source,
+		SourceRevision: job.SourceRevision,
+		Total:          len(nodes),
+		NodeIDs:        selectedIDs,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 	if err := s.store.UpsertJob(job); err != nil {
 		if restoreErr := s.store.RestoreNodeStatesIfCurrent(originalStates, StateTesting); restoreErr != nil {
@@ -1930,6 +2311,18 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 	defer s.unregisterImportCancel(jobID)
 
 	total := len(nodes)
+	tagPrefix := ""
+	sourceRevision := uint64(0)
+	if job, ok := s.store.GetJob(jobID); ok {
+		sourceRevision = job.SourceRevision
+	}
+	nodeIDs := make([]string, 0, len(nodes))
+	if total > 0 {
+		tagPrefix = nodes[0].TagPrefix
+	}
+	for _, node := range nodes {
+		nodeIDs = append(nodeIDs, node.ID)
+	}
 	passed := 0
 	failed := 0
 	promoted := 0
@@ -1994,7 +2387,56 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 		}
 		_ = s.store.RestoreNodeStatesIfCurrent(pendingStates, StateTesting)
 	}
-	if promotePassed && len(passedIDs) > 0 && !canceled {
+	stagedImport := len(nodes) > 0
+	for _, node := range nodes {
+		if node.ImportMode != "import_stage" {
+			stagedImport = false
+			break
+		}
+	}
+	if stagedImport && canceled {
+		_ = s.cleanupStagedNodes(nodeIDs)
+	}
+	if stagedImport && !canceled {
+		hasPublishedSource := false
+		for _, node := range s.store.ListNodes() {
+			if node.ImportMode == "refresh_stage" || node.ImportMode == "import_stage" {
+				continue
+			}
+			if nodeHasSource(node, func(ref NodeSourceRef) bool {
+				return strings.TrimSpace(ref.TagPrefix) == strings.TrimSpace(tagPrefix)
+			}) {
+				hasPublishedSource = true
+				break
+			}
+		}
+		if passed == 0 && hasPublishedSource {
+			_ = s.cleanupStagedNodes(nodeIDs)
+		} else {
+			_ = s.store.UpdateJobProgress(jobID, func(j *ImportJob) {
+				j.Detail = "正在应用节点和端口"
+				j.UpdatedAt = time.Now()
+			})
+			applied, err := s.applyStagedTagNodes(ctx, tagPrefix, sourceRevision, nodeIDs, promotePassed, func() {
+				_ = s.store.UpdateJobProgress(jobID, func(j *ImportJob) {
+					j.Detail = "正在验证运行端口"
+					j.UpdatedAt = time.Now()
+				})
+			})
+			if err != nil {
+				_ = s.cleanupStagedNodes(nodeIDs)
+				_ = s.store.UpdateJob(jobID, func(j *ImportJob) {
+					j.Status = ImportStatusFailed
+					j.Error = "应用导入结果失败: " + err.Error()
+					j.ProbePending = 0
+					j.UpdatedAt = time.Now()
+				})
+				return
+			}
+			promoted = applied
+			s.updateImportProgress(jobID, passed, failed, promoted)
+		}
+	} else if promotePassed && len(passedIDs) > 0 && !canceled {
 		if promotedNodes, err := s.PromoteMany(passedIDs, true); err == nil {
 			promoted = len(promotedNodes)
 			s.updateImportProgress(jobID, passed, failed, promoted)
@@ -2410,7 +2852,10 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 			}
 		}
 		if !rollback && (needReload || changed && (req.AutoReload || req.PromotePassed)) {
-			if err := s.nodeMgr.TriggerReload(context.Background()); err != nil {
+			s.updateJob(jobID, func(j *TestJob) { j.Phase = "apply" })
+			if err := s.reloadAndVerify(ctx, func() {
+				s.updateJob(jobID, func(j *TestJob) { j.Phase = "verify" })
+			}); err != nil {
 				var restoreErr error
 				if hasSnapshot {
 					restoreErr = s.restoreSourceRefreshSnapshot(snapshot)
@@ -2736,6 +3181,13 @@ func (s *Service) Promote(nodeID string, autoReload bool) (ManagedNode, error) {
 }
 
 func (s *Service) PromoteMany(nodeIDs []string, autoReload bool) ([]ManagedNode, error) {
+	return s.promoteManyContext(context.Background(), nodeIDs, autoReload)
+}
+
+func (s *Service) promoteManyContext(ctx context.Context, nodeIDs []string, autoReload bool) ([]ManagedNode, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if len(nodeIDs) == 0 {
 		return nil, fmt.Errorf("请选择要加入节点池的节点")
 	}
@@ -2790,12 +3242,12 @@ func (s *Service) PromoteMany(nodeIDs []string, autoReload bool) ([]ManagedNode,
 	createdIDs := make([]string, 0, len(configNodes))
 	if creator, ok := s.nodeMgr.(NodeBatchCreator); ok {
 		var err error
-		created, err = creator.CreateNodes(context.Background(), configNodes)
+		created, err = creator.CreateNodes(ctx, configNodes)
 		if err != nil {
 			created = created[:0]
 			createdIDs = createdIDs[:0]
 			for i, cn := range configNodes {
-				createdNode, createErr := s.nodeMgr.CreateNode(context.Background(), cn)
+				createdNode, createErr := s.nodeMgr.CreateNode(ctx, cn)
 				if createErr != nil {
 					if isNodeConflict(createErr) {
 						_ = s.store.DeleteNode(nodes[i].ID)
@@ -2809,7 +3261,7 @@ func (s *Service) PromoteMany(nodeIDs []string, autoReload bool) ([]ManagedNode,
 		}
 	} else {
 		for i, cn := range configNodes {
-			createdNode, err := s.nodeMgr.CreateNode(context.Background(), cn)
+			createdNode, err := s.nodeMgr.CreateNode(ctx, cn)
 			if err != nil {
 				if isNodeConflict(err) {
 					_ = s.store.DeleteNode(nodes[i].ID)
@@ -2842,7 +3294,7 @@ func (s *Service) PromoteMany(nodeIDs []string, autoReload bool) ([]ManagedNode,
 		return nil, fmt.Errorf("mark in pool: %w", err)
 	}
 	if autoReload && len(updated) > 0 {
-		_ = s.nodeMgr.TriggerReload(context.Background())
+		_ = s.nodeMgr.TriggerReload(ctx)
 	}
 	return updated, nil
 }
@@ -3091,7 +3543,7 @@ func (s *Service) DeleteImportSource(key string) (int, error) {
 		return s.deleteByTagPrefix(tagPrefix)
 	}
 	return s.detachSources(func(ref NodeSourceRef) bool {
-		return importSourceKey(nodeWithSource(ManagedNode{}, ref)) == key
+		return sourceRefMatchesKey(ref, key)
 	}, true)
 }
 
@@ -3132,6 +3584,7 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 	nodes := s.store.ListNodes()
 	groups := make(map[string]*ImportSourceSummary)
 	for _, node := range nodes {
+		counted := make(map[string]struct{})
 		for _, ref := range nodeSourceRefs(node) {
 			view := nodeWithSource(node, ref)
 			key := importSourceKey(view)
@@ -3170,6 +3623,10 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 			} else if isURLSourceRef(ref) && strings.TrimSpace(view.ImportSource) != "" && !sourceListContains(group.Source, view.ImportSource) {
 				group.Source += "\n" + strings.TrimSpace(view.ImportSource)
 			}
+			if _, exists := counted[key]; exists {
+				continue
+			}
+			counted[key] = struct{}{}
 			if group.CreatedAt.IsZero() || (!node.CreatedAt.IsZero() && node.CreatedAt.Before(group.CreatedAt)) {
 				group.CreatedAt = node.CreatedAt
 			}
@@ -3202,10 +3659,10 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 
 func importSourceKey(node ManagedNode) string {
 	source := strings.TrimSpace(node.ImportSource)
+	if tag := strings.TrimSpace(node.TagPrefix); tag != "" {
+		return "tag:" + tag
+	}
 	if isURLSourceRef(sourceRefFromNode(node)) && source != "" {
-		if tag := strings.TrimSpace(node.TagPrefix); tag != "" {
-			return "tag:" + tag
-		}
 		return "url:" + source
 	}
 	if strings.TrimSpace(node.ImportID) != "" {
@@ -3215,6 +3672,20 @@ func importSourceKey(node ManagedNode) string {
 		return "source:" + strings.TrimSpace(node.ImportMode) + ":" + strings.TrimSpace(node.ImportFormat) + ":" + strings.TrimSpace(node.TagPrefix) + ":" + source
 	}
 	return ""
+}
+
+func sourceRefMatchesKey(ref NodeSourceRef, key string) bool {
+	ref = normalizeSourceRef(ref)
+	if importSourceKey(nodeWithSource(ManagedNode{}, ref)) == key {
+		return true
+	}
+	if importID, ok := strings.CutPrefix(key, "import:"); ok {
+		return strings.TrimSpace(ref.ImportID) == strings.TrimSpace(importID)
+	}
+	if source, ok := strings.CutPrefix(key, "url:"); ok {
+		return isURLSourceRef(ref) && strings.TrimSpace(ref.Source) == strings.TrimSpace(source)
+	}
+	return false
 }
 
 func sourceListContains(list, source string) bool {
@@ -3232,6 +3703,13 @@ func (s *Service) deleteConfigNodes(names []string) {
 }
 
 func (s *Service) deleteConfigNodesStrict(names []string) error {
+	return s.deleteConfigNodesStrictContext(context.Background(), names)
+}
+
+func (s *Service) deleteConfigNodesStrictContext(ctx context.Context, names []string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	clean := make([]string, 0, len(names))
 	seen := make(map[string]struct{}, len(names))
 	for _, name := range names {
@@ -3249,11 +3727,11 @@ func (s *Service) deleteConfigNodesStrict(names []string) error {
 		return nil
 	}
 	if remover, ok := s.nodeMgr.(NodeBatchRemover); ok {
-		return remover.DeleteNodes(context.Background(), clean)
+		return remover.DeleteNodes(ctx, clean)
 	}
 	if remover, ok := s.nodeMgr.(NodeRemover); ok {
 		for _, name := range clean {
-			if err := remover.DeleteNode(context.Background(), name); err != nil {
+			if err := remover.DeleteNode(ctx, name); err != nil {
 				return err
 			}
 		}

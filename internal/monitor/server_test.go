@@ -43,7 +43,7 @@ func TestHandleIndexIncludesRefreshProgressUI(t *testing.T) {
 		t.Fatalf("unexpected status: %d", recorder.Code)
 	}
 	body := recorder.Body.String()
-	for _, marker := range []string{"easy_proxies_active_refresh_job", "failed_nodes", "refresh-modal", "probe_round_done", "重新检测部分完成", "恢复检测前节点池", "测速已终止，检测前节点池已恢复", "return await retestNodes([id])", "dialog.dataset.refreshShell", "const scrollTop=listHost.scrollTop", "listHost.scrollTop=scrollTop"} {
+	for _, marker := range []string{"easy_proxies_active_refresh_job", "failed_nodes", "refresh-modal", "probe_round_done", "重新检测部分完成", "正在应用节点和端口", "正在验证端口监听", "恢复检测前节点池", "测速已终止，检测前节点池已恢复", "return await retestNodes([id])", "dialog.dataset.refreshShell", "const scrollTop=listHost.scrollTop", "listHost.scrollTop=scrollTop"} {
 		if !strings.Contains(body, marker) {
 			t.Fatalf("index is missing refresh UI marker %q", marker)
 		}

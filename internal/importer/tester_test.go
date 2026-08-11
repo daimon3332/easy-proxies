@@ -90,7 +90,7 @@ func TestProbeBatchDefersFailuresAcrossThreeRounds(t *testing.T) {
 	if len(starts) != 3 || starts[0].Pending != 3 || starts[1].Pending != 2 || starts[2].Pending != 1 {
 		t.Fatalf("progress starts = %#v", starts)
 	}
-	if starts[0].Target != DefaultProbeTarget || starts[1].Target != AlternateProbeTarget || starts[2].Target != AlternateProbeTarget {
+	if starts[0].Target != DefaultProbeTarget || starts[1].Target != DefaultProbeTarget || starts[2].Target != DefaultProbeTarget {
 		t.Fatalf("targets = %#v", starts)
 	}
 	if starts[0].Concurrency != 8 || starts[1].Concurrency != 4 || starts[2].Concurrency != 2 {
@@ -105,6 +105,24 @@ func TestProbeBatchDefersFailuresAcrossThreeRounds(t *testing.T) {
 	failedTimes := times["failed"]
 	if len(failedTimes) != 3 || failedTimes[1].Sub(failedTimes[0]) < tester.retryDelay || failedTimes[2].Sub(failedTimes[1]) < tester.retryDelay {
 		t.Fatalf("retry times = %#v", failedTimes)
+	}
+}
+
+func TestProbeBatchKeepsConfiguredTargetAcrossRetries(t *testing.T) {
+	tester := NewNodeTester(nil, WithProbeTarget(AlternateProbeTarget))
+	tester.retryDelay = time.Millisecond
+	targets := make([]string, 0, probeRounds)
+	tester.probeOverride = func(_ context.Context, _ ManagedNode, target string, _ time.Duration) TestResult {
+		targets = append(targets, target)
+		return TestResult{Error: errors.New("fixture failure")}
+	}
+
+	for range tester.ProbeBatch(context.Background(), []ManagedNode{{ID: "node-1"}}) {
+	}
+
+	want := []string{AlternateProbeTarget, AlternateProbeTarget, AlternateProbeTarget}
+	if !reflect.DeepEqual(targets, want) {
+		t.Fatalf("targets = %#v, want %#v", targets, want)
 	}
 }
 

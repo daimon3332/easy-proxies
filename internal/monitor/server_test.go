@@ -49,3 +49,35 @@ func TestHandleIndexIncludesRefreshProgressUI(t *testing.T) {
 		}
 	}
 }
+
+func TestWebUIKeepsDecisionDataAndRemovesRedundantCopy(t *testing.T) {
+	data, err := embeddedFS.ReadFile("assets/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(data)
+	for _, required := range []string{
+		`id="pageTitle" class="sr-only"`,
+		`所选项目必须全部成功`,
+		`export-tag-row`,
+		`备份文件夹`,
+		`默认 /easy_proxies`,
+	} {
+		if !strings.Contains(page, required) {
+			t.Fatalf("WebUI missing required decision data %q", required)
+		}
+	}
+	for _, removed := range []string{
+		`粘贴订阅 URL，自动测速并生成本地端口`,
+		`按 Tag 导出原始来源类型；多个 Tag 会自动打包为 ZIP。`,
+		`完整保存设置、订阅、导入节点和节点池状态。`,
+		`备份文件保存在当前设备；恢复前会校验文件，运行中的任务结束后才能恢复。`,
+		`地址、账号和密码明文显示并保存，远程文件只写入指定目录。`,
+		`默认检测 Google 204，失败时使用 Cloudflare 204 兜底。`,
+		`只处理当前页面的节点；节点池/候选失败会进入失败节点，失败节点成功后按上方开关处理。`,
+	} {
+		if strings.Contains(page, removed) {
+			t.Fatalf("WebUI still contains redundant copy %q", removed)
+		}
+	}
+}

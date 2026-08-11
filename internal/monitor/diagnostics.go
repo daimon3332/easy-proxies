@@ -39,5 +39,10 @@ func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 	}); ok {
 		result["job_events"] = svc.JobEventStats()
 	}
+	if svc, ok := s.importSvc.(interface {
+		JobRetentionStats() importer.JobRetentionStats
+	}); ok {
+		result["retained_jobs"] = svc.JobRetentionStats()
+	}
 	writeJSON(w, result)
 }

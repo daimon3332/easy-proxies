@@ -3,6 +3,7 @@ package subscription
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,11 +16,22 @@ type fakeSourceRefresher struct {
 	job      importer.SourceRefreshJob
 	startErr error
 	starts   atomic.Int32
+	mu       sync.Mutex
+	test204  bool
+	sites    []string
 }
 
 func (f *fakeSourceRefresher) StartRefreshSources(string) (string, error) {
 	f.starts.Add(1)
 	return f.job.ID, f.startErr
+}
+
+func (f *fakeSourceRefresher) StartRefreshSourcesWithPolicy(key string, test204 *bool, sites []string) (string, error) {
+	f.mu.Lock()
+	f.test204 = test204 == nil || *test204
+	f.sites = append([]string(nil), sites...)
+	f.mu.Unlock()
+	return f.StartRefreshSources(key)
 }
 
 func (f *fakeSourceRefresher) GetRefreshJob(string) (importer.SourceRefreshJob, bool) {
@@ -109,5 +121,23 @@ func TestManagerReportsManagedRefreshFailure(t *testing.T) {
 	status := manager.Status()
 	if status.LastError == "" {
 		t.Fatal("managed refresh failure was not reported")
+	}
+}
+
+func TestManagerPassesConfiguredVerificationPolicy(t *testing.T) {
+	disabled := false
+	manager := New(&config.Config{SubscriptionRefresh: config.SubscriptionRefreshConfig{
+		Test204: &disabled, SiteTargets: []string{"github", "outlook"},
+	}}, nil)
+	defer manager.Stop()
+	refresher := &fakeSourceRefresher{job: importer.SourceRefreshJob{ID: "refresh-job", Status: importer.SourceRefreshJobFinished}}
+	manager.SetSourceRefresher(refresher)
+
+	manager.doRefresh()
+
+	refresher.mu.Lock()
+	defer refresher.mu.Unlock()
+	if refresher.test204 || len(refresher.sites) != 2 || refresher.sites[0] != "github" || refresher.sites[1] != "outlook" {
+		t.Fatalf("policy test204=%v sites=%v", refresher.test204, refresher.sites)
 	}
 }

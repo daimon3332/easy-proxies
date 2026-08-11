@@ -50,6 +50,15 @@ func TestExampleConfig(t *testing.T) {
 	if len(cfg.Subscriptions) != 0 || len(cfg.Nodes) != 0 {
 		t.Fatalf("example config must not contain subscriptions or nodes")
 	}
+	if !cfg.SubscriptionRefresh.Test204Enabled() || len(cfg.SubscriptionRefresh.SiteTargets) != 0 {
+		t.Fatalf("example verification policy = test204:%v sites:%v", cfg.SubscriptionRefresh.Test204Enabled(), cfg.SubscriptionRefresh.SiteTargets)
+	}
+}
+
+func TestSubscriptionRefreshLegacyDefaultsTo204(t *testing.T) {
+	if !(SubscriptionRefreshConfig{}).Test204Enabled() {
+		t.Fatal("legacy config must default to 204 testing")
+	}
 }
 
 func TestLoadDoesNotFetchSubscriptionsDuringStartup(t *testing.T) {

@@ -26,6 +26,8 @@ management:
   pprof_enabled: false
 
 subscription_refresh:
+  test_204: true
+  site_targets: []
   enabled: false
   interval: 24h
   timeout: 30s

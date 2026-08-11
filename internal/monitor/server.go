@@ -1185,12 +1185,16 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 		var urls []string
 		enabled := true
 		interval := (24 * time.Hour).String()
+		test204 := true
+		var siteTargets []string
 		if s.cfgSrc != nil {
 			urls = s.cfgSrc.Subscriptions
 			enabled = s.cfgSrc.SubscriptionRefresh.Enabled
 			if s.cfgSrc.SubscriptionRefresh.Interval > 0 {
 				interval = s.cfgSrc.SubscriptionRefresh.Interval.String()
 			}
+			test204 = s.cfgSrc.SubscriptionRefresh.Test204Enabled()
+			siteTargets = append([]string(nil), s.cfgSrc.SubscriptionRefresh.SiteTargets...)
 		}
 		s.cfgMu.RUnlock()
 		// Resolve a display name per URL: prefer the TagPrefix of any
@@ -1222,6 +1226,8 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 			"names":         names,
 			"enabled":       enabled,
 			"interval":      interval,
+			"test_204":      test204,
+			"site_targets":  siteTargets,
 		})
 
 	case http.MethodPut:
@@ -1230,6 +1236,8 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 			Enabled       bool     `json:"enabled"`
 			Interval      string   `json:"interval"` // e.g. "1h", "30m"
 			Refresh       *bool    `json:"refresh,omitempty"`
+			Test204       *bool    `json:"test_204,omitempty"`
+			SiteTargets   []string `json:"site_targets,omitempty"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -1252,12 +1260,36 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 			}
 		}
 
+		s.cfgMu.RLock()
+		currentTest204 := true
+		var currentSiteTargets []string
+		if s.cfgSrc != nil {
+			currentTest204 = s.cfgSrc.SubscriptionRefresh.Test204Enabled()
+			currentSiteTargets = append([]string(nil), s.cfgSrc.SubscriptionRefresh.SiteTargets...)
+		}
+		s.cfgMu.RUnlock()
+		if req.Test204 == nil {
+			req.Test204 = &currentTest204
+		}
+		if req.SiteTargets == nil {
+			req.SiteTargets = currentSiteTargets
+		}
+		policy, err := importer.NormalizeVerificationPolicy(req.Test204, req.SiteTargets)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]any{"error": err.Error()})
+			return
+		}
+		test204Value := policy.Test204
+
 		// Update in-memory config and persist to disk
 		s.cfgMu.Lock()
 		if s.cfgSrc != nil {
 			s.cfgSrc.Subscriptions = cleanURLs
 			s.cfgSrc.SubscriptionRefresh.Enabled = req.Enabled
 			s.cfgSrc.SubscriptionRefresh.Interval = interval
+			s.cfgSrc.SubscriptionRefresh.Test204 = &test204Value
+			s.cfgSrc.SubscriptionRefresh.SiteTargets = append([]string(nil), policy.SiteTargets...)
 			// Always persist to disk regardless of subscription manager state
 			if err := s.cfgSrc.SaveSettings(); err != nil {
 				s.cfgMu.Unlock()
@@ -1282,6 +1314,8 @@ func (s *Server) handleSubscriptionConfig(w http.ResponseWriter, r *http.Request
 			"interval":      interval.String(),
 			"node_count":    0,
 			"refresh":       refreshNow,
+			"test_204":      policy.Test204,
+			"site_targets":  policy.SiteTargets,
 		}
 		if s.subRefresher != nil {
 			status := s.subRefresher.Status()

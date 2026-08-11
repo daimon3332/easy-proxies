@@ -104,6 +104,7 @@ type Service struct {
 	jobEventCoalesced     atomic.Uint64
 	lifecycleMu           sync.Mutex
 	jobsWG                sync.WaitGroup
+	jobCleanupCancel      context.CancelFunc
 	closing               bool
 
 	refreshConcurrency     int
@@ -190,6 +191,9 @@ const (
 	defaultRefreshProxyCandidates = 2
 	refreshJobPollInterval        = 500 * time.Millisecond
 	refreshJobMaxWait             = 2 * time.Hour
+	testJobTTL                    = 10 * time.Minute
+	refreshJobTTL                 = 10 * time.Minute
+	jobCleanupInterval            = time.Minute
 	poolFailureDemoteThreshold    = 3
 	runtimeApplyTimeout           = 2 * time.Minute
 )
@@ -224,6 +228,9 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 	for _, opt := range opts {
 		opt(s)
 	}
+	s.launchBackground(func(cancel context.CancelFunc) {
+		s.jobCleanupCancel = cancel
+	}, s.runJobCleanup)
 	return s
 }
 
@@ -249,6 +256,9 @@ func (s *Service) Close(ctx context.Context) error {
 	s.lifecycleMu.Lock()
 	if !s.closing {
 		s.closing = true
+		if s.jobCleanupCancel != nil {
+			s.jobCleanupCancel()
+		}
 		s.importCancelsMu.Lock()
 		for _, cancel := range s.importCancels {
 			cancel()
@@ -358,6 +368,14 @@ func (s *Service) sourceRevisionCurrent(tagPrefix string, revision uint64) bool 
 }
 
 func (s *Service) StartRefreshSources(key string) (string, error) {
+	return s.StartRefreshSourcesWithPolicy(key, nil, nil)
+}
+
+func (s *Service) StartRefreshSourcesWithPolicy(key string, test204 *bool, siteTargets []string) (string, error) {
+	policy, err := NormalizeVerificationPolicy(test204, siteTargets)
+	if err != nil {
+		return "", err
+	}
 	s.refreshStartMu.Lock()
 	defer s.refreshStartMu.Unlock()
 	if jobID := s.activeRefreshJobID(); jobID != "" {
@@ -381,6 +399,8 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 		StartedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 		InitialPoolCount: len(s.store.ListPoolNodes()),
+		Test204:          policy.Test204,
+		SiteTargets:      append([]string(nil), policy.SiteTargets...),
 		Groups:           make([]SourceRefreshGroup, 0, len(targets)),
 	}
 	for _, target := range targets {
@@ -420,7 +440,7 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 	}
 	s.refreshJobs[jobID] = job
 	for id, existing := range s.refreshJobs {
-		if existing.Status != SourceRefreshJobRunning && time.Since(existing.UpdatedAt) > 10*time.Minute {
+		if existing != nil && existing.Status != SourceRefreshJobRunning && time.Since(existing.UpdatedAt) > refreshJobTTL {
 			delete(s.refreshJobs, id)
 		}
 	}
@@ -432,7 +452,7 @@ func (s *Service) StartRefreshSources(key string) (string, error) {
 		s.refreshCancels[jobID] = cancel
 		s.refreshCancelsMu.Unlock()
 	}, func(ctx context.Context) {
-		s.runRefreshJob(ctx, jobID, targets, snapshot)
+		s.runRefreshJobWithPolicy(ctx, jobID, targets, snapshot, policy)
 	})
 	if !started {
 		s.updateRefreshJob(jobID, func(active *SourceRefreshJob) {
@@ -600,9 +620,14 @@ type sourceRefreshWork struct {
 	target   sourceRefreshTarget
 	rawURL   string
 	ref      NodeSourceRef
+	policy   VerificationPolicy
 }
 
 func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sourceRefreshTarget, snapshot sourceRefreshSnapshot) {
+	s.runRefreshJobWithPolicy(ctx, jobID, targets, snapshot, VerificationPolicy{Test204: true})
+}
+
+func (s *Service) runRefreshJobWithPolicy(ctx context.Context, jobID string, targets []sourceRefreshTarget, snapshot sourceRefreshSnapshot, policy VerificationPolicy) {
 	defer s.unregisterRefreshCancel(jobID)
 	defer func() { _ = cleanupRefreshStageNodes(s.store) }()
 	defer func() {
@@ -622,10 +647,10 @@ func (s *Service) runRefreshJob(ctx context.Context, jobID string, targets []sou
 	works := make([]sourceRefreshWork, 0)
 	for groupIdx, target := range targets {
 		for rowIdx, rawURL := range target.URLs {
-			works = append(works, sourceRefreshWork{groupIdx: groupIdx, rowIdx: rowIdx, target: target, rawURL: rawURL, ref: target.URLRefs[rawURL]})
+			works = append(works, sourceRefreshWork{groupIdx: groupIdx, rowIdx: rowIdx, target: target, rawURL: rawURL, ref: target.URLRefs[rawURL], policy: policy})
 		}
 		if len(target.LocalNodeIDs) > 0 {
-			works = append(works, sourceRefreshWork{groupIdx: groupIdx, rowIdx: len(target.URLs), target: target})
+			works = append(works, sourceRefreshWork{groupIdx: groupIdx, rowIdx: len(target.URLs), target: target, policy: policy})
 		}
 	}
 
@@ -960,7 +985,8 @@ func (s *Service) refreshParsedNodes(ctx context.Context, jobID string, work sou
 		row.Nodes = len(parsed.Nodes)
 		row.Total = len(parsed.Nodes)
 	})
-	commit, err := s.Commit(parsed.ImportID, CommitRequest{NodeIDs: nodeIDs, AutoReload: false, PromotePassed: false})
+	test204, siteTargets := VerificationPolicyPointers(work.policy)
+	commit, err := s.Commit(parsed.ImportID, CommitRequest{NodeIDs: nodeIDs, AutoReload: false, PromotePassed: false, Test204: test204, SiteTargets: siteTargets})
 	if err != nil {
 		s.protectRefreshRow(jobID, work, len(parsed.Nodes), "启动节点测试失败: "+compactRefreshError(err))
 		return err
@@ -1370,7 +1396,8 @@ func (s *Service) refreshExistingNodes(ctx context.Context, jobID string, work s
 		s.failRefreshRow(jobID, work, 0, "该 Tag 下没有可重新检测的节点")
 		return fmt.Errorf("该 Tag 下没有可重新检测的节点")
 	}
-	testJobID, err := s.StartBatchTest(BatchTestRequest{NodeIDs: nodeIDs, Retest: true, PromotePassed: true, AutoReload: true, ParentRefresh: true})
+	test204, siteTargets := VerificationPolicyPointers(work.policy)
+	testJobID, err := s.StartBatchTest(BatchTestRequest{NodeIDs: nodeIDs, Retest: true, PromotePassed: true, AutoReload: true, ParentRefresh: true, Test204: test204, SiteTargets: siteTargets})
 	if err != nil {
 		s.failRefreshRow(jobID, work, len(nodeIDs), compactRefreshError(err))
 		return err
@@ -1776,8 +1803,11 @@ func applyImportJobProgress(row *SourceRefreshURL, job ImportJob) {
 	row.ProbePending = job.ProbePending
 	row.ProbeTarget = job.ProbeTarget
 	row.ProbeConcurrency = job.ProbeConcurrency
+	row.SiteProgress = append([]SiteTestProgress(nil), job.SiteProgress...)
 	row.ChainProbe = cloneChainProbe(job.ChainProbe)
-	if job.ProbeRound > 0 {
+	if len(job.SiteProgress) > 0 {
+		row.Detail = "正在检测所选站点，全部成功才视为可用"
+	} else if job.ProbeRound > 0 {
 		row.Detail = fmt.Sprintf("第 %d/%d 轮，本轮 %d/%d，剩余 %d 个节点", job.ProbeRound, job.ProbeRounds, job.ProbeRoundDone, job.ProbeRoundTotal, job.ProbePending)
 	}
 	row.Status = "testing"
@@ -1805,6 +1835,7 @@ func applyTestJobProgress(row *SourceRefreshURL, job TestJob) {
 	row.ProbePending = job.ProbePending
 	row.ProbeTarget = job.ProbeTarget
 	row.ProbeConcurrency = job.ProbeConcurrency
+	row.SiteProgress = append([]SiteTestProgress(nil), job.SiteProgress...)
 	if len(job.ChainProbes) > 0 {
 		probe := job.ChainProbes[0]
 		row.ChainProbe = &probe
@@ -1813,7 +1844,9 @@ func applyTestJobProgress(row *SourceRefreshURL, job TestJob) {
 	if job.Protected && job.ProtectionReason != "" {
 		row.Warning = job.ProtectionReason
 	}
-	if job.ProbeRound > 0 {
+	if job.Phase == "sites" {
+		row.Detail = "正在检测所选站点，全部成功才视为可用"
+	} else if job.ProbeRound > 0 {
 		row.Detail = fmt.Sprintf("第 %d/%d 轮，本轮 %d/%d，剩余 %d 个节点", job.ProbeRound, job.ProbeRounds, job.ProbeRoundDone, job.ProbeRoundTotal, job.ProbePending)
 	}
 	row.Status = "testing"
@@ -2342,6 +2375,10 @@ func (s *Service) sharedTagPrefixForImportSources(sources []string) string {
 }
 
 func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, error) {
+	policy, err := NormalizeVerificationPolicy(req.Test204, req.SiteTargets)
+	if err != nil {
+		return CommitResponse{}, err
+	}
 	job, ok := s.store.GetJob(importID)
 	if !ok {
 		return CommitResponse{}, fmt.Errorf("导入任务 %s 不存在", importID)
@@ -2388,6 +2425,8 @@ func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, er
 		SourceRevision: job.SourceRevision,
 		ChainProfileID: job.ChainProfileID,
 		FetchPolicy:    job.FetchPolicy,
+		Test204:        policy.Test204,
+		SiteTargets:    append([]string(nil), policy.SiteTargets...),
 		Total:          len(nodes),
 		NodeIDs:        selectedIDs,
 		CreatedAt:      time.Now(),
@@ -2403,7 +2442,7 @@ func (s *Service) Commit(importID string, req CommitRequest) (CommitResponse, er
 	started := s.launchBackground(func(cancel context.CancelFunc) {
 		s.registerImportCancel(jobID, cancel)
 	}, func(ctx context.Context) {
-		s.runPipeline(ctx, jobID, nodes, originalStates, req.PromotePassed)
+		s.runPipelineWithPolicy(ctx, jobID, nodes, originalStates, req.PromotePassed, policy)
 	})
 	if !started {
 		_ = s.store.RestoreNodeStatesIfCurrent(originalStates, StateTesting)
@@ -2460,6 +2499,10 @@ func (s *Service) CancelImportJob(jobID string) (ImportJob, error) {
 }
 
 func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []ManagedNode, originalStates map[string]ManagedNodeState, promotePassed bool) {
+	s.runPipelineWithPolicy(ctx, jobID, nodes, originalStates, promotePassed, VerificationPolicy{Test204: true})
+}
+
+func (s *Service) runPipelineWithPolicy(ctx context.Context, jobID string, nodes []ManagedNode, originalStates map[string]ManagedNodeState, promotePassed bool, policy VerificationPolicy) {
 	defer s.unregisterImportCancel(jobID)
 
 	total := len(nodes)
@@ -2478,8 +2521,6 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 	passed := 0
 	failed := 0
 	promoted := 0
-	processed := 0
-	flushEvery := importProgressBatchSize(total)
 	updates := make([]ManagedNode, 0, len(nodes))
 	passedIDs := make([]string, 0, len(nodes))
 	processedIDs := make(map[string]struct{}, len(nodes))
@@ -2533,7 +2574,7 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 	}
 
 	if ctx.Err() == nil {
-		for event := range s.tester.ProbeBatchWithProgress(ctx, nodes, func(progress ProbeRoundProgress) {
+		results := s.verifyNodes(ctx, nodes, policy, func(progress ProbeRoundProgress) {
 			_ = s.store.UpdateJobProgress(jobID, func(job *ImportJob) {
 				job.ProbeRound = progress.Round
 				job.ProbeRounds = progress.Rounds
@@ -2542,26 +2583,38 @@ func (s *Service) runPipeline(ctx context.Context, jobID string, nodes []Managed
 				job.ProbePending = progress.Pending
 				job.ProbeTarget = progress.Target
 				job.ProbeConcurrency = progress.Concurrency
-				job.Detail = fmt.Sprintf("第 %d/%d 轮，本轮 %d/%d，剩余 %d 个节点", progress.Round, progress.Rounds, progress.Completed, progress.Total, progress.Pending)
+				job.Detail = fmt.Sprintf("204 测速第 %d/%d 轮，本轮 %d/%d，剩余 %d 个节点", progress.Round, progress.Rounds, progress.Completed, progress.Total, progress.Pending)
 				job.UpdatedAt = time.Now()
 			})
-		}) {
-			processedIDs[event.NodeID] = struct{}{}
-			node, ok := s.store.GetNode(event.NodeID)
-			if !ok {
-				continue
+		}, func(progress []SiteTestProgress) {
+			_ = s.store.UpdateJobProgress(jobID, func(job *ImportJob) {
+				job.SiteProgress = append([]SiteTestProgress(nil), progress...)
+				job.Detail = "正在检测所选站点，全部成功才视为可用"
+				job.UpdatedAt = time.Now()
+			})
+		})
+		if ctx.Err() == nil {
+			for _, original := range nodes {
+				result, exists := results[original.ID]
+				if !exists {
+					result.Error = fmt.Errorf("检测结果不完整")
+				}
+				processedIDs[original.ID] = struct{}{}
+				node, ok := s.store.GetNode(original.ID)
+				if !ok {
+					continue
+				}
+				if result.Error != nil {
+					updated, _ := finalFailedNodeUpdate(node, result.Error.Error())
+					updates = append(updates, updated)
+					failed++
+				} else {
+					updates = append(updates, probePassedNodeUpdate(node, result))
+					passedIDs = append(passedIDs, node.ID)
+					passed++
+				}
 			}
-			if event.Result.Error != nil {
-				updated, _ := finalFailedNodeUpdate(node, event.Result.Error.Error())
-				updates = append(updates, updated)
-				failed++
-			} else {
-				updates = append(updates, probePassedNodeUpdate(node, event.Result))
-				passedIDs = append(passedIDs, node.ID)
-				passed++
-			}
-			processed++
-			if processed%flushEvery == 0 || processed == total {
+			if total > 0 {
 				s.updateImportProgress(jobID, passed, failed, promoted)
 			}
 		}
@@ -2889,21 +2942,30 @@ func (s *Service) StartBatchTest(req BatchTestRequest) (string, error) {
 	if !req.Retest && !req.Country {
 		return "", fmt.Errorf("至少选择一种操作（测速或测试国家）")
 	}
+	var policy VerificationPolicy
+	if req.Retest {
+		policy, err = NormalizeVerificationPolicy(req.Test204, req.SiteTargets)
+		if err != nil {
+			return "", err
+		}
+		req.Test204, req.SiteTargets = VerificationPolicyPointers(policy)
+	}
 	jobID := randomHex(12)
 	now := time.Now()
 	job := &TestJob{
-		ID:        jobID,
-		Status:    TestJobRunning,
-		Total:     len(req.NodeIDs),
-		Phase:     "queued",
-		StartedAt: now,
-		UpdatedAt: now,
+		ID:          jobID,
+		Status:      TestJobRunning,
+		Total:       len(req.NodeIDs),
+		Test204:     policy.Test204,
+		SiteTargets: append([]string(nil), policy.SiteTargets...),
+		Phase:       "queued",
+		StartedAt:   now,
+		UpdatedAt:   now,
 	}
 	s.testJobsMu.Lock()
 	s.testJobs[jobID] = job
-	// Best-effort GC: keep the map small by dropping finished jobs older than 10 min.
 	for id, j := range s.testJobs {
-		if j.Status != TestJobRunning && now.Sub(j.UpdatedAt) > 10*time.Minute {
+		if j != nil && j.Status != TestJobRunning && now.Sub(j.UpdatedAt) > testJobTTL {
 			delete(s.testJobs, id)
 		}
 	}
@@ -3085,6 +3147,7 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 
 	// --- Phase: probe ---
 	if req.Retest {
+		policy, _ := NormalizeVerificationPolicy(req.Test204, req.SiteTargets)
 		s.updateJob(jobID, func(j *TestJob) { j.Phase = "probe"; j.Done = 0 })
 		updates := make([]ManagedNode, 0, len(nodes))
 		poolNamesToDelete := make([]string, 0)
@@ -3141,7 +3204,7 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 				}
 			}
 		}
-		for event := range s.tester.ProbeBatchWithProgress(ctx, probeNodes, func(progress ProbeRoundProgress) {
+		results := s.verifyNodes(ctx, probeNodes, policy, func(progress ProbeRoundProgress) {
 			s.updateJob(jobID, func(job *TestJob) {
 				job.ProbeRound = progress.Round
 				job.ProbeRounds = progress.Rounds
@@ -3151,14 +3214,24 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 				job.ProbeTarget = progress.Target
 				job.ProbeConcurrency = progress.Concurrency
 			})
-		}) {
-			node, ok := s.store.GetNode(event.NodeID)
+		}, func(progress []SiteTestProgress) {
+			s.updateJob(jobID, func(job *TestJob) {
+				job.Phase = "sites"
+				job.SiteProgress = append([]SiteTestProgress(nil), progress...)
+			})
+		})
+		for _, original := range probeNodes {
+			result, exists := results[original.ID]
+			if !exists {
+				result.Error = fmt.Errorf("检测结果不完整")
+			}
+			node, ok := s.store.GetNode(original.ID)
 			if !ok {
 				s.updateJob(jobID, func(j *TestJob) { j.Done++ })
 				continue
 			}
-			if event.Result.Error != nil {
-				updated, poolName := finalFailedNodeUpdate(node, event.Result.Error.Error())
+			if result.Error != nil {
+				updated, poolName := finalFailedNodeUpdate(node, result.Error.Error())
 				updates = append(updates, updated)
 				if poolName != "" {
 					poolNamesToDelete = append(poolNamesToDelete, poolName)
@@ -3168,9 +3241,14 @@ func (s *Service) runBatchTestJob(ctx context.Context, jobID string, req BatchTe
 				s.updateJob(jobID, func(j *TestJob) { j.Done++; j.Failed++ })
 				continue
 			}
-			updates = append(updates, probePassedNodeUpdate(node, event.Result))
+			updates = append(updates, probePassedNodeUpdate(node, result))
 			s.updateJob(jobID, func(j *TestJob) { j.Done++; j.Passed++ })
 		}
+		if ctx.Err() != nil {
+			finish(TestJobCanceled, "canceled", "已终止")
+			return
+		}
+		changed = changed || len(updates) > 0
 		s.applyMu.Lock()
 		defer s.applyMu.Unlock()
 		if len(poolNamesToDelete) > 0 {

@@ -339,7 +339,7 @@ func (s *Service) StartConnectivityJob(req ConnectivityStartRequest) (string, er
 	}
 	s.connectivityJobsMu.Lock()
 	for id, old := range s.connectivityJobs {
-		if old.job.Status != ConnectivityJobRunning && now.Sub(old.job.UpdatedAt) > connectivityJobTTL {
+		if old != nil && old.job.Status != ConnectivityJobRunning && now.Sub(old.job.UpdatedAt) > connectivityJobTTL {
 			delete(s.connectivityJobs, id)
 		}
 	}

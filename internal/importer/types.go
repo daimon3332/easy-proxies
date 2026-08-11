@@ -76,32 +76,35 @@ const (
 )
 
 type ImportJob struct {
-	ID               string            `json:"id"`
-	Status           ImportStatus      `json:"status"`
-	Mode             string            `json:"mode,omitempty"`
-	Format           string            `json:"format,omitempty"`
-	TagPrefix        string            `json:"tag_prefix,omitempty"`
-	Source           string            `json:"source,omitempty"`
-	SourceRevision   uint64            `json:"source_revision,omitempty"`
-	ChainProfileID   string            `json:"chain_profile_id,omitempty"`
-	FetchPolicy      string            `json:"fetch_policy,omitempty"`
-	Total            int               `json:"total"`
-	Passed           int               `json:"passed"`
-	Failed           int               `json:"failed"`
-	Promoted         int               `json:"promoted"`
-	ProbeRound       int               `json:"probe_round,omitempty"`
-	ProbeRounds      int               `json:"probe_rounds,omitempty"`
-	ProbeRoundDone   int               `json:"probe_round_done,omitempty"`
-	ProbeRoundTotal  int               `json:"probe_round_total,omitempty"`
-	ProbePending     int               `json:"probe_pending,omitempty"`
-	ProbeTarget      string            `json:"probe_target,omitempty"`
-	ProbeConcurrency int               `json:"probe_concurrency,omitempty"`
-	Detail           string            `json:"detail,omitempty"`
-	Error            string            `json:"error,omitempty"`
-	ChainProbe       *ChainProbeResult `json:"chain_probe,omitempty"`
-	NodeIDs          []string          `json:"node_ids"`
-	CreatedAt        time.Time         `json:"created_at"`
-	UpdatedAt        time.Time         `json:"updated_at"`
+	ID               string             `json:"id"`
+	Status           ImportStatus       `json:"status"`
+	Mode             string             `json:"mode,omitempty"`
+	Format           string             `json:"format,omitempty"`
+	TagPrefix        string             `json:"tag_prefix,omitempty"`
+	Source           string             `json:"source,omitempty"`
+	SourceRevision   uint64             `json:"source_revision,omitempty"`
+	ChainProfileID   string             `json:"chain_profile_id,omitempty"`
+	FetchPolicy      string             `json:"fetch_policy,omitempty"`
+	Total            int                `json:"total"`
+	Passed           int                `json:"passed"`
+	Failed           int                `json:"failed"`
+	Promoted         int                `json:"promoted"`
+	ProbeRound       int                `json:"probe_round,omitempty"`
+	ProbeRounds      int                `json:"probe_rounds,omitempty"`
+	ProbeRoundDone   int                `json:"probe_round_done,omitempty"`
+	ProbeRoundTotal  int                `json:"probe_round_total,omitempty"`
+	ProbePending     int                `json:"probe_pending,omitempty"`
+	ProbeTarget      string             `json:"probe_target,omitempty"`
+	ProbeConcurrency int                `json:"probe_concurrency,omitempty"`
+	Test204          bool               `json:"test_204"`
+	SiteTargets      []string           `json:"site_targets,omitempty"`
+	SiteProgress     []SiteTestProgress `json:"site_progress,omitempty"`
+	Detail           string             `json:"detail,omitempty"`
+	Error            string             `json:"error,omitempty"`
+	ChainProbe       *ChainProbeResult  `json:"chain_probe,omitempty"`
+	NodeIDs          []string           `json:"node_ids"`
+	CreatedAt        time.Time          `json:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 type ParseRequest struct {
@@ -444,6 +447,8 @@ type CommitRequest struct {
 	NodeIDs       []string `json:"node_ids,omitempty"`
 	AutoReload    bool     `json:"auto_reload"`
 	PromotePassed bool     `json:"promote_passed"`
+	Test204       *bool    `json:"test_204,omitempty"`
+	SiteTargets   []string `json:"site_targets,omitempty"`
 }
 
 type CommitResponse struct {
@@ -458,6 +463,8 @@ type BatchTestRequest struct {
 	PromotePassed bool     `json:"promote_passed"`
 	AutoReload    bool     `json:"auto_reload"`
 	ParentRefresh bool     `json:"-"`
+	Test204       *bool    `json:"test_204,omitempty"`
+	SiteTargets   []string `json:"site_targets,omitempty"`
 }
 
 type BatchTestResponse struct {
@@ -493,6 +500,22 @@ type ProbeRoundProgress struct {
 	Concurrency int
 }
 
+type VerificationPolicy struct {
+	Test204     bool     `json:"test_204"`
+	SiteTargets []string `json:"site_targets,omitempty"`
+}
+
+type SiteTestProgress struct {
+	TargetID  string `json:"target_id"`
+	Name      string `json:"name"`
+	Total     int    `json:"total"`
+	Done      int    `json:"done"`
+	Passed    int    `json:"passed"`
+	Failed    int    `json:"failed"`
+	Retried   int    `json:"retried,omitempty"`
+	Recovered int    `json:"recovered,omitempty"`
+}
+
 // TestJobStatus reflects the lifecycle of an async batch test.
 type TestJobStatus string
 
@@ -522,6 +545,9 @@ type TestJob struct {
 	ProbePending     int                `json:"probe_pending,omitempty"`
 	ProbeTarget      string             `json:"probe_target,omitempty"`
 	ProbeConcurrency int                `json:"probe_concurrency,omitempty"`
+	Test204          bool               `json:"test_204"`
+	SiteTargets      []string           `json:"site_targets,omitempty"`
+	SiteProgress     []SiteTestProgress `json:"site_progress,omitempty"`
 	Applied          bool               `json:"applied"`
 	Protected        bool               `json:"protected,omitempty"`
 	ProtectionReason string             `json:"protection_reason,omitempty"`
@@ -542,33 +568,34 @@ const (
 )
 
 type SourceRefreshURL struct {
-	URL              string            `json:"url"`
-	Kind             string            `json:"kind,omitempty"`
-	Label            string            `json:"label,omitempty"`
-	Status           string            `json:"status"`
-	Nodes            int               `json:"nodes"`
-	Done             int               `json:"done"`
-	Total            int               `json:"total"`
-	Passed           int               `json:"passed"`
-	Failed           int               `json:"failed"`
-	Promoted         int               `json:"promoted"`
-	Stage            string            `json:"stage,omitempty"`
-	Detail           string            `json:"detail,omitempty"`
-	Warning          string            `json:"warning,omitempty"`
-	Attempt          int               `json:"attempt,omitempty"`
-	Attempts         int               `json:"attempts,omitempty"`
-	Cached           bool              `json:"cached,omitempty"`
-	ProbeRound       int               `json:"probe_round,omitempty"`
-	ProbeRounds      int               `json:"probe_rounds,omitempty"`
-	ProbeRoundDone   int               `json:"probe_round_done,omitempty"`
-	ProbeRoundTotal  int               `json:"probe_round_total,omitempty"`
-	ProbePending     int               `json:"probe_pending,omitempty"`
-	ProbeTarget      string            `json:"probe_target,omitempty"`
-	ProbeConcurrency int               `json:"probe_concurrency,omitempty"`
-	ChainProbe       *ChainProbeResult `json:"chain_probe,omitempty"`
-	Protected        bool              `json:"protected,omitempty"`
-	Error            string            `json:"error,omitempty"`
-	UpdatedAt        time.Time         `json:"updated_at"`
+	URL              string             `json:"url"`
+	Kind             string             `json:"kind,omitempty"`
+	Label            string             `json:"label,omitempty"`
+	Status           string             `json:"status"`
+	Nodes            int                `json:"nodes"`
+	Done             int                `json:"done"`
+	Total            int                `json:"total"`
+	Passed           int                `json:"passed"`
+	Failed           int                `json:"failed"`
+	Promoted         int                `json:"promoted"`
+	Stage            string             `json:"stage,omitempty"`
+	Detail           string             `json:"detail,omitempty"`
+	Warning          string             `json:"warning,omitempty"`
+	Attempt          int                `json:"attempt,omitempty"`
+	Attempts         int                `json:"attempts,omitempty"`
+	Cached           bool               `json:"cached,omitempty"`
+	ProbeRound       int                `json:"probe_round,omitempty"`
+	ProbeRounds      int                `json:"probe_rounds,omitempty"`
+	ProbeRoundDone   int                `json:"probe_round_done,omitempty"`
+	ProbeRoundTotal  int                `json:"probe_round_total,omitempty"`
+	ProbePending     int                `json:"probe_pending,omitempty"`
+	ProbeTarget      string             `json:"probe_target,omitempty"`
+	ProbeConcurrency int                `json:"probe_concurrency,omitempty"`
+	SiteProgress     []SiteTestProgress `json:"site_progress,omitempty"`
+	ChainProbe       *ChainProbeResult  `json:"chain_probe,omitempty"`
+	Protected        bool               `json:"protected,omitempty"`
+	Error            string             `json:"error,omitempty"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 type SourceRefreshGroup struct {
@@ -600,6 +627,8 @@ type SourceRefreshJob struct {
 	Applied          bool                   `json:"applied"`
 	Protected        bool                   `json:"protected,omitempty"`
 	ProtectionReason string                 `json:"protection_reason,omitempty"`
+	Test204          bool                   `json:"test_204"`
+	SiteTargets      []string               `json:"site_targets,omitempty"`
 	Groups           []SourceRefreshGroup   `json:"groups"`
 	Error            string                 `json:"error,omitempty"`
 	StartedAt        time.Time              `json:"started_at"`

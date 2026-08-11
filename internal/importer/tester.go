@@ -622,10 +622,7 @@ func (t *NodeTester) probeBatchWithProgress(ctx context.Context, nodes []Managed
 			}
 		}
 		pending := append([]ManagedNode(nil), nodes...)
-		primary := t.probeTarget
-		alternate := alternateProbeTarget(primary)
-		primaryTested, primaryPassed := 0, 0
-		alternateTested, alternatePassed := 0, 0
+		target := t.probeTarget
 		for round := 1; round <= probeRounds && len(pending) > 0; round++ {
 			if round > 1 {
 				select {
@@ -633,12 +630,6 @@ func (t *NodeTester) probeBatchWithProgress(ctx context.Context, nodes []Managed
 					return
 				case <-time.After(t.retryDelay):
 				}
-			}
-			target := primary
-			if round == 2 {
-				target = alternate
-			} else if round == 3 && betterProbeTarget(alternateTested, alternatePassed, primaryTested, primaryPassed) {
-				target = alternate
 			}
 			concurrency := probeRoundConcurrency(t.concurrency, round, len(pending))
 			timeout := probeRoundTimeout(t.timeout, round)
@@ -665,17 +656,6 @@ func (t *NodeTester) probeBatchWithProgress(ctx context.Context, nodes []Managed
 				roundCompleted++
 				if roundCompleted == roundTotal || roundCompleted%progressStep == 0 {
 					reportProgress()
-				}
-				if target == primary {
-					primaryTested++
-					if event.Result.Error == nil {
-						primaryPassed++
-					}
-				} else {
-					alternateTested++
-					if event.Result.Error == nil {
-						alternatePassed++
-					}
 				}
 				if event.Result.Error != nil && round < probeRounds && retryableProbeFailure(event.Result.Error) {
 					if node, ok := byID[event.NodeID]; ok {
@@ -893,23 +873,6 @@ func (t *NodeTester) probeOnce(ctx context.Context, node ManagedNode, target str
 		return TestResult{Error: err}
 	}
 	return TestResult{LatencyMs: time.Since(start).Milliseconds()}
-}
-
-func alternateProbeTarget(primary string) string {
-	if strings.EqualFold(strings.TrimSpace(primary), AlternateProbeTarget) {
-		return DefaultProbeTarget
-	}
-	return AlternateProbeTarget
-}
-
-func betterProbeTarget(candidateTested, candidatePassed, currentTested, currentPassed int) bool {
-	if candidateTested == 0 {
-		return false
-	}
-	if currentTested == 0 {
-		return true
-	}
-	return candidatePassed*currentTested > currentPassed*candidateTested
 }
 
 func probeRoundConcurrency(base, round, pending int) int {

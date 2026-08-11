@@ -9,6 +9,8 @@
 config.yaml
 nodes.txt
 proxyscrape_premium_http_proxies_*.txt
+/ProxySpace/*.txt
+/ProxySpace/proxy_audit_report*.json
 managed_nodes.json
 managed_nodes.db
 managed_nodes.db-wal
@@ -43,6 +45,8 @@ vendor/
 coverage.out
 coverage.html
 *.test
+__pycache__/
+*.py[cod]
 
 # Temporary and local backup files
 *.lock

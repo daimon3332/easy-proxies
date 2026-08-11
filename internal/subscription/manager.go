@@ -60,6 +60,7 @@ type Manager struct {
 
 type SourceRefresher interface {
 	StartRefreshSources(key string) (string, error)
+	StartRefreshSourcesWithPolicy(key string, test204 *bool, siteTargets []string) (string, error)
 	GetRefreshJob(jobID string) (importer.SourceRefreshJob, bool)
 }
 
@@ -420,11 +421,13 @@ func (m *Manager) refreshManagedSources() (bool, error) {
 	m.mu.RLock()
 	refresher := m.sourceRefresher
 	ctx := m.ctx
+	test204Enabled := m.baseCfg.SubscriptionRefresh.Test204Enabled()
+	siteTargets := append([]string(nil), m.baseCfg.SubscriptionRefresh.SiteTargets...)
 	m.mu.RUnlock()
 	if refresher == nil {
 		return false, nil
 	}
-	jobID, err := refresher.StartRefreshSources("")
+	jobID, err := refresher.StartRefreshSourcesWithPolicy("", &test204Enabled, siteTargets)
 	if errors.Is(err, importer.ErrNoRefreshSources) {
 		return false, nil
 	}

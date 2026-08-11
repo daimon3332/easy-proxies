@@ -148,6 +148,12 @@ type SubscriptionRefreshConfig struct {
 	HealthCheckTimeout time.Duration `yaml:"health_check_timeout"` // 新节点健康检查超时
 	DrainTimeout       time.Duration `yaml:"drain_timeout"`        // 旧实例排空超时时间
 	MinAvailableNodes  int           `yaml:"min_available_nodes"`  // 最少可用节点数，低于此值不切换
+	Test204            *bool         `yaml:"test_204,omitempty" json:"test_204,omitempty"`
+	SiteTargets        []string      `yaml:"site_targets,omitempty" json:"site_targets,omitempty"`
+}
+
+func (c SubscriptionRefreshConfig) Test204Enabled() bool {
+	return c.Test204 == nil || *c.Test204
 }
 
 // NodeSource indicates where a node configuration originated from.

@@ -1,6 +1,10 @@
 package importer
 
-import "sync"
+import (
+	"context"
+	"sync"
+	"time"
+)
 
 type JobEvent struct {
 	Kind         string            `json:"kind"`
@@ -15,11 +19,90 @@ type JobEventStats struct {
 	Coalesced   uint64 `json:"coalesced"`
 }
 
+type JobRetentionStats struct {
+	TestRetained         int `json:"test_retained"`
+	TestRunning          int `json:"test_running"`
+	RefreshRetained      int `json:"refresh_retained"`
+	RefreshRunning       int `json:"refresh_running"`
+	ConnectivityRetained int `json:"connectivity_retained"`
+	ConnectivityRunning  int `json:"connectivity_running"`
+}
+
 func (s *Service) JobEventStats() JobEventStats {
 	s.jobEventsMu.Lock()
 	subscribers := len(s.jobEventSubs)
 	s.jobEventsMu.Unlock()
 	return JobEventStats{Subscribers: subscribers, Coalesced: s.jobEventCoalesced.Load()}
+}
+
+func (s *Service) JobRetentionStats() JobRetentionStats {
+	var stats JobRetentionStats
+	s.testJobsMu.RLock()
+	stats.TestRetained = len(s.testJobs)
+	for _, job := range s.testJobs {
+		if job != nil && job.Status == TestJobRunning {
+			stats.TestRunning++
+		}
+	}
+	s.testJobsMu.RUnlock()
+
+	s.refreshJobsMu.RLock()
+	stats.RefreshRetained = len(s.refreshJobs)
+	for _, job := range s.refreshJobs {
+		if job != nil && job.Status == SourceRefreshJobRunning {
+			stats.RefreshRunning++
+		}
+	}
+	s.refreshJobsMu.RUnlock()
+
+	s.connectivityJobsMu.RLock()
+	stats.ConnectivityRetained = len(s.connectivityJobs)
+	for _, state := range s.connectivityJobs {
+		if state != nil && state.job.Status == ConnectivityJobRunning {
+			stats.ConnectivityRunning++
+		}
+	}
+	s.connectivityJobsMu.RUnlock()
+	return stats
+}
+
+func (s *Service) cleanupExpiredJobs(now time.Time) {
+	s.testJobsMu.Lock()
+	for id, job := range s.testJobs {
+		if job != nil && job.Status != TestJobRunning && now.Sub(job.UpdatedAt) > testJobTTL {
+			delete(s.testJobs, id)
+		}
+	}
+	s.testJobsMu.Unlock()
+
+	s.refreshJobsMu.Lock()
+	for id, job := range s.refreshJobs {
+		if job != nil && job.Status != SourceRefreshJobRunning && now.Sub(job.UpdatedAt) > refreshJobTTL {
+			delete(s.refreshJobs, id)
+		}
+	}
+	s.refreshJobsMu.Unlock()
+
+	s.connectivityJobsMu.Lock()
+	for id, state := range s.connectivityJobs {
+		if state != nil && state.job.Status != ConnectivityJobRunning && now.Sub(state.job.UpdatedAt) > connectivityJobTTL {
+			delete(s.connectivityJobs, id)
+		}
+	}
+	s.connectivityJobsMu.Unlock()
+}
+
+func (s *Service) runJobCleanup(ctx context.Context) {
+	ticker := time.NewTicker(jobCleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case now := <-ticker.C:
+			s.cleanupExpiredJobs(now)
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (s *Service) SubscribeJobEvents() (<-chan JobEvent, func()) {
@@ -110,8 +193,10 @@ func cloneRefreshJob(job *SourceRefreshJob) SourceRefreshJob {
 		copyJob.Groups[i].URLs = append([]SourceRefreshURL(nil), group.URLs...)
 		for j := range copyJob.Groups[i].URLs {
 			copyJob.Groups[i].URLs[j].ChainProbe = cloneChainProbe(group.URLs[j].ChainProbe)
+			copyJob.Groups[i].URLs[j].SiteProgress = append([]SiteTestProgress(nil), group.URLs[j].SiteProgress...)
 		}
 	}
+	copyJob.SiteTargets = append([]string(nil), job.SiteTargets...)
 	return copyJob
 }
 

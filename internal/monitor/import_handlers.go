@@ -33,6 +33,7 @@ type ImportService interface {
 	DeleteAllImportSources() (int, error)
 	ListImportSources() ([]importer.ImportSourceSummary, error)
 	StartRefreshSources(key string) (string, error)
+	StartRefreshSourcesWithPolicy(key string, test204 *bool, siteTargets []string) (string, error)
 	GetRefreshJob(jobID string) (importer.SourceRefreshJob, bool)
 	CancelRefreshJob(jobID string) (importer.SourceRefreshJob, error)
 	ListAll() ([]importer.ManagedNode, error)
@@ -519,14 +520,16 @@ func (s *Server) handleImportAction(w http.ResponseWriter, r *http.Request) {
 
 	if path == "refresh" && r.Method == http.MethodPost {
 		var req struct {
-			Key string `json:"key"`
+			Key         string   `json:"key"`
+			Test204     *bool    `json:"test_204,omitempty"`
+			SiteTargets []string `json:"site_targets,omitempty"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			writeJSON(w, map[string]string{"error": "请求格式错误"})
 			return
 		}
-		jobID, err := s.importSvc.StartRefreshSources(req.Key)
+		jobID, err := s.importSvc.StartRefreshSourcesWithPolicy(req.Key, req.Test204, req.SiteTargets)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			writeJSON(w, map[string]string{"error": err.Error()})

@@ -34,16 +34,16 @@ body{
   min-height:100vh;
   background:var(--bg);
   color:var(--text);
-  font:14px/1.55 var(--font);
+  font:15px/1.55 var(--font);
 }
 button,input,textarea,select{font:inherit}
 button{cursor:pointer}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
-.side{padding:22px 16px;border-right:1px solid var(--line);background:#fff;position:sticky;top:0;height:100vh}
+.side{padding:22px 16px;border-right:1px solid var(--line);background:#fff;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
 .brand{display:flex;align-items:center;gap:12px;margin:0 8px 28px}
 .logo{width:40px;height:40px;border-radius:8px;background:url('/logo.png') center/cover no-repeat;box-shadow:0 8px 20px rgba(20,30,40,.12)}
-.brand strong{display:block;font-size:19px}
-.brand span{display:block;color:var(--muted);font-size:12px}
+.brand strong{display:block;font-size:24px}
 .nav{display:grid;gap:8px}
 .nav button{
   border:0;background:transparent;color:var(--muted);border-radius:8px;padding:12px 13px;text-align:left;
@@ -53,18 +53,19 @@ button{cursor:pointer}
 .nav button.active{background:#eef4ff;color:var(--text);font-weight:700;box-shadow:inset 0 0 0 1px var(--line-strong)}
 .badge{font-size:12px;color:var(--blue-deep);background:#dff4ff;border-radius:999px;padding:1px 8px}
 .main{padding:28px;display:grid;gap:20px;align-content:start}
-.topbar{display:flex;gap:14px;align-items:center;justify-content:space-between}
-.title h1{margin:0;font-size:28px}
-.title p{margin:4px 0 0;color:var(--muted)}
-.topbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px}
-.github-link{width:44px;height:44px;display:inline-grid;place-items:center;flex:none;color:var(--text);background:#fff;border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 4px 12px rgba(20,30,40,.05);transition:.16s ease}
-.github-link:hover{color:var(--blue-deep);border-color:var(--blue);transform:translateY(-1px);box-shadow:0 8px 20px rgba(20,30,40,.09)}
+.side-footer{margin-top:auto;padding-top:18px}
+.github-link{min-height:44px;display:flex;align-items:center;gap:10px;padding:9px 12px;color:var(--muted);background:#fff;border:1px solid var(--line-strong);border-radius:8px;text-decoration:none;transition:.16s ease}
+.github-link:hover{color:var(--blue-deep);border-color:var(--blue);background:#eef4ff}
 .github-link svg{width:23px;height:23px}
+.github-link span{font-weight:700}
+.global-refresh-slot{display:flex;justify-content:flex-end}
+.global-refresh-slot:empty{display:none}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
 .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;align-items:start}
 .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
 .card-head{padding:20px 22px;border-bottom:1px solid var(--line);display:flex;gap:14px;justify-content:space-between;align-items:center}
-.card-head h2{margin:0;font-size:18px}
+.card-head h2{margin:0;font-size:20px}
+.section-count{color:var(--muted);font-size:15px;font-weight:600}
 .card-body{padding:22px}
 .stack{display:grid;gap:16px}
 .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
@@ -74,7 +75,7 @@ button{cursor:pointer}
 .filters.compact{display:flex;gap:10px;flex-wrap:wrap}
 .filters.compact select,.filters.compact input{width:220px;max-width:100%}
 .action-line{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
-.action-line strong{font-size:16px}
+.action-line strong{font-size:15px}
 .pool-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding:14px;border:1px solid var(--line);border-radius:8px;background:#f7f9fb}
 .list-tools{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px}
 .node-table{border:1px solid var(--line);border-radius:8px;overflow:auto;background:#fff}
@@ -88,7 +89,7 @@ button{cursor:pointer}
 .cell-muted{color:var(--muted);font-size:12px}
 .table-name{display:grid;gap:3px;min-width:0}
 .table-name strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.table-uri{font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.table-uri{font-family:var(--mono);font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .value-pill{display:inline-flex;align-items:center;justify-content:center;min-width:54px;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;background:#eaf7ff;color:#0f78aa;border:1px solid #bce2f3}
 .value-pill.green{background:#dcf7ec;color:#087a55;border-color:#a8e4cc}
 .value-pill.amber{background:#fff4d8;color:#9c6500;border-color:#f0d38e}
@@ -98,9 +99,9 @@ button{cursor:pointer}
 .time-grid{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
 .time-grid .field{width:120px}
 .import-format-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px;border:1px solid var(--line);border-radius:8px;background:#f7f9fb}
-.import-format-card strong{display:block;font-size:16px}
+.import-format-card strong{display:block;font-size:15px}
 .import-format-card span{display:block;color:var(--muted);font-size:12px;margin-top:3px}
-.format-main{padding:11px 16px;font-size:14px}
+.format-main{padding:11px 16px;font-size:15px}
 .format-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .format-choice{border:1px solid var(--line-strong);background:#fff;border-radius:8px;padding:16px;text-align:left}
 .format-choice strong{display:block;font-size:15px;color:var(--text)}
@@ -123,14 +124,14 @@ button{cursor:pointer}
 .btn.ghost{background:transparent;border-color:transparent;box-shadow:none;color:var(--muted)}
 .btn.danger{border-color:#f0b8b8;color:#b42323;background:#fff5f5}
 .btn.block{width:100%;display:flex}
-.btn.small{min-height:38px;padding:8px 12px;font-size:13px;border-radius:8px;font-weight:750;box-shadow:none}
+.btn.small{min-height:38px;padding:8px 12px;font-size:15px;border-radius:8px;font-weight:750;box-shadow:none}
 .field{display:grid;gap:8px}
-.field label{font-size:13px;font-weight:800;color:#40515d}
+.field label{font-size:15px;font-weight:800;color:#40515d}
 input,textarea,select{
   width:100%;min-height:44px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--text);
   padding:11px 13px;outline:none;transition:.16s ease;
 }
-textarea{resize:vertical;min-height:240px;font-family:var(--mono);font-size:13px;line-height:1.55}
+textarea{resize:vertical;min-height:240px;font-family:var(--mono);font-size:15px;line-height:1.55}
 input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(47,159,216,.12)}
 input[type="checkbox"]{
   appearance:none;width:24px!important;height:24px;min-width:24px;min-height:24px;padding:0;border:2px solid var(--line-strong);
@@ -150,8 +151,7 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .settings-column{display:grid;gap:20px;align-content:start;min-width:0}
 .settings-section{background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
 .settings-section-head{padding:18px 20px;border-bottom:1px solid var(--line);background:#fbfdff;display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
-.settings-section-head h2{margin:0;font-size:18px}
-.settings-section-head p{margin:4px 0 0;color:var(--muted)}
+.settings-section-head h2{margin:0;font-size:20px}
 .settings-section-body{padding:20px;display:grid;gap:18px}
 .settings-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .settings-form .wide{grid-column:1/-1}
@@ -168,11 +168,10 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .chain-dialog{width:min(560px,100%);padding:0;overflow:hidden}
 .chain-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px 22px 16px;border-bottom:1px solid var(--line)}
 .chain-dialog-head h2{margin:0;font-size:20px}
-.chain-dialog-head p{margin:4px 0 0;color:var(--muted);font-size:13px}
 .chain-dialog-body{padding:20px 22px;display:grid;gap:16px}
 .chain-dialog-body textarea{min-height:128px;max-height:220px}
 .chain-dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid var(--line);background:#fbfdff}
-.inline-status{min-height:20px;font-size:13px;color:var(--muted)}
+.inline-status{min-height:20px;font-size:15px;color:var(--muted)}
 .inline-status.good{color:#087a55;font-weight:700}
 .inline-status.bad{color:#bd352f;font-weight:700}
 .backup-file{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fbfdff}
@@ -180,18 +179,17 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .backup-file-main strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .subscription-export-list{display:grid;gap:8px;max-height:220px;overflow:auto}
 .subscription-export-item{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfdff;cursor:pointer}
-.subscription-export-item code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.subscription-export-item code{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 .export-tag-main{min-width:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .export-tag-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfdff}
 .backup-settings-grid{display:grid;grid-template-columns:minmax(260px,.7fr) minmax(0,1.3fr);gap:24px}
 .backup-pane{min-width:0;display:grid;align-content:start;gap:18px}
 .backup-pane+.backup-pane{border-left:1px solid var(--line);padding-left:24px}
-.backup-pane h3{margin:0;font-size:16px}
+.backup-pane h3{margin:0;font-size:15px}
 .field-help{color:var(--muted);font-size:12px;line-height:1.5}
-.metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .metric{border:1px solid var(--line);border-radius:10px;background:#fff;padding:12px}
 .metric span{display:block;color:var(--muted);font-size:12px}
-.metric strong{display:block;margin-top:2px;font-size:18px}
+.metric strong{display:block;margin-top:2px;font-size:20px}
 .tabs{display:flex;gap:8px;background:var(--panel-soft);border:1px solid var(--line);padding:5px;border-radius:14px;width:max-content}
 .tabs button{border:0;background:transparent;color:var(--muted);border-radius:10px;padding:8px 12px}
 .tabs button.active{background:#fff;color:var(--blue-deep);font-weight:700;box-shadow:0 6px 20px rgba(47,159,216,.12)}
@@ -201,9 +199,9 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 }
 .node-main{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
 .node-name{font-weight:800;word-break:break-word}
-.node-uri{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all}
+.node-uri{font-family:var(--mono);font-size:12px;color:var(--muted);word-break:break-all}
 .meta{display:flex;gap:7px;flex-wrap:wrap}
-.pill{display:inline-flex;align-items:center;gap:5px;min-height:28px;border-radius:999px;padding:4px 10px;font-size:13px;font-weight:800;background:#dff4ff;color:var(--blue-deep)}
+.pill{display:inline-flex;align-items:center;gap:5px;min-height:28px;border-radius:999px;padding:4px 10px;font-size:15px;font-weight:800;background:#dff4ff;color:var(--blue-deep)}
 .pill.green{background:#dcf7ec;color:#087a55}
 .pill.red{background:#ffe9e7;color:#bd352f}
 .pill.amber{background:#fff4d8;color:#9c6500}
@@ -239,7 +237,7 @@ input[type="checkbox"]:focus{box-shadow:0 0 0 4px rgba(37,99,235,.14)}
 .progress-bar{height:10px;background:#eef3f5;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
 .progress-fill{height:100%;background:var(--green)}
 .dialog h2{margin:0 0 14px}
-pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:13px;color:#315467;background:#f5fbff;border:1px solid var(--line);border-radius:8px;padding:14px;max-height:460px;overflow:auto}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:15px;color:#315467;background:#f5fbff;border:1px solid var(--line);border-radius:8px;padding:14px;max-height:460px;overflow:auto}
 pre.log-view{height:100%;max-height:none}
 .log-card{height:calc(100vh - 112px);display:flex;flex-direction:column}
 .log-card .card-body{flex:1;min-height:0}
@@ -253,7 +251,7 @@ pre.log-view{height:100%;max-height:none}
 .refresh-status.failed{border-color:#efb8b8;background:#fff7f7}
 .refresh-status-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .refresh-status-head strong{display:block}
-.refresh-stats{display:flex;gap:12px 18px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.refresh-stats{display:flex;gap:12px 18px;flex-wrap:wrap;color:var(--muted);font-size:15px}
 .refresh-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
 .refresh-top{display:flex;align-items:center;gap:10px;max-width:360px;border:1px solid #bcd0ff;background:#f7faff;border-radius:10px;padding:8px 12px;color:var(--blue-deep);cursor:pointer;text-align:left}
 .refresh-top .progress{width:74px;height:7px;flex:none}
@@ -272,22 +270,28 @@ pre.log-view{height:100%;max-height:none}
 .connectivity-test-controls{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;min-width:0}
 .site-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .connectivity-timeout-field{display:grid;grid-template-columns:auto 112px;align-items:center;gap:6px 10px;min-width:210px}
-.connectivity-timeout-field label{font-size:13px;font-weight:800;color:#40515d;white-space:nowrap}
+.connectivity-timeout-field label{font-size:15px;font-weight:800;color:#40515d;white-space:nowrap}
 .number-suffix{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;border:1px solid var(--line-strong);border-radius:8px;background:#fff;overflow:hidden;transition:.16s ease}
 .number-suffix:focus-within{border-color:var(--blue);box-shadow:0 0 0 4px rgba(47,159,216,.12)}
 .number-suffix:has(input[aria-invalid="true"]){border-color:#d64545;box-shadow:0 0 0 4px rgba(214,69,69,.1)}
 .number-suffix input{min-height:42px;border:0;border-radius:0;box-shadow:none!important;padding:9px 8px 9px 12px}
-.number-suffix span{padding:0 12px 0 4px;color:var(--muted);font-size:13px;font-weight:750}
+.number-suffix span{padding:0 12px 0 4px;color:var(--muted);font-size:15px;font-weight:750}
 .number-suffix:has(input:disabled){background:#f3f6f8;opacity:.72}
 .field-error{grid-column:1/-1;min-height:16px;color:#b42323;font-size:12px;line-height:1.35}
 .site-indicator,.site-selector{border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px;display:grid;gap:3px;text-align:left}
 .site-indicator{display:flex;align-items:center;gap:7px;padding:7px 10px;background:#f7f9fb;min-width:0}
-.site-indicator strong,.site-selector strong{font-size:14px}
+.site-indicator strong,.site-selector strong{font-size:15px}
 .site-indicator span,.site-selector span{font-size:12px;color:var(--muted)}
 .site-indicator span{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .site-selector{cursor:pointer;transition:.16s ease}
 .site-selector.selected{border-color:#70c7aa;background:var(--green-soft);box-shadow:inset 0 0 0 1px #70c7aa}
 .site-selector.selected strong{color:#087a55}
+.verification-policy{display:grid;gap:12px;border:1px solid var(--line);border-radius:8px;padding:14px;background:#f9fbfc}
+.verification-policy-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.verification-policy-head strong{display:block;font-size:15px}
+.verification-policy-head>div>span{display:block;margin-top:3px;color:var(--muted);font-size:12px}
+.verification-targets{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.verification-targets .site-selector{min-height:64px;align-content:center}
 .connectivity-progress{display:grid;gap:12px;border:1px solid #bcd0ff;background:#f7faff;border-radius:8px;padding:16px}
 .connectivity-idle{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--muted)}
 .connectivity-progress-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
@@ -298,7 +302,7 @@ pre.log-view{height:100%;max-height:none}
 .connectivity-matrix-row>div:last-child{border-right:0}
 .connectivity-matrix-head{background:#f7f9fb;font-weight:800}
 .connectivity-cell{display:grid;gap:4px}
-.connectivity-cell strong{font-size:16px}
+.connectivity-cell strong{font-size:15px}
 .connectivity-cell span{font-size:12px;color:var(--muted)}
 .connectivity-cell.good strong{color:#087a55}
 .connectivity-cell.partial strong{color:#9c6500}
@@ -321,7 +325,7 @@ pre.log-view{height:100%;max-height:none}
 .row-menu-panel .btn{width:100%;justify-content:flex-start}
 .section-summary{display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer;padding:18px 20px;background:#fbfdff;font-weight:800}
 .section-summary::marker{color:var(--muted)}
-.section-summary span{color:var(--muted);font-size:13px;font-weight:500}
+.section-summary span{color:var(--muted);font-size:15px;font-weight:500}
 .result-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
 .result-metrics .metric strong.good{color:#087a55}
 .result-metrics .metric strong.bad{color:#bd352f}
@@ -340,7 +344,6 @@ pre.log-view{height:100%;max-height:none}
   .settings-form{grid-template-columns:1fr}
   .backup-settings-grid{grid-template-columns:1fr}
   .backup-pane+.backup-pane{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:22px}
-  .metric-grid{grid-template-columns:1fr}
   .settings-actions{justify-content:stretch}
   .settings-actions .btn{width:100%}
   .table-head{display:none}
@@ -364,15 +367,14 @@ pre.log-view{height:100%;max-height:none}
   <aside class="side">
     <div class="brand">
       <div class="logo"></div>
-      <div><strong>Easy Proxies</strong><span>代理池管理</span></div>
+      <strong>Easy Proxies</strong>
     </div>
     <nav class="nav" id="nav"></nav>
+    <div class="side-footer"><a class="github-link" href="https://github.com/daimon3332/easy-proxies" target="_blank" rel="noopener noreferrer" title="打开 GitHub 仓库" aria-label="打开 Easy Proxies GitHub 仓库"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.4 4 5 5 0 0 0 19.3.5S18.2.1 15 1.8a13.4 13.4 0 0 0-7 0C4.8.1 3.7.5 3.7.5A5 5 0 0 0 3.6 4a5.4 5.4 0 0 0-1.4 3.7c0 5.3 3.5 6.5 6.8 6.9A4.8 4.8 0 0 0 8 18v4"/><path d="M8 19c-3 .9-3-1.5-4-2"/></svg><span>GitHub</span></a></div>
   </aside>
   <main class="main">
-    <div class="topbar">
-      <div class="title"><h1 id="pageTitle">导入节点</h1><p id="pageDesc">支持订阅链接、URI、Base64 和 Clash YAML。</p></div>
-      <div class="topbar-actions"><div id="globalRefreshStatus"></div><a class="github-link" href="https://github.com/daimon3332/easy-proxies" target="_blank" rel="noopener noreferrer" title="打开 GitHub 仓库" aria-label="打开 Easy Proxies GitHub 仓库"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.4 4 5 5 0 0 0 19.3.5S18.2.1 15 1.8a13.4 13.4 0 0 0-7 0C4.8.1 3.7.5 3.7.5A5 5 0 0 0 3.6 4a5.4 5.4 0 0 0-1.4 3.7c0 5.3 3.5 6.5 6.8 6.9A4.8 4.8 0 0 0 8 18v4"/><path d="M8 19c-3 .9-3-1.5-4-2"/></svg></a></div>
-    </div>
+    <h1 id="pageTitle" class="sr-only">导入并生成端口</h1>
+    <div id="globalRefreshStatus" class="global-refresh-slot"></div>
     <section id="view"></section>
   </main>
 </div>
@@ -404,15 +406,14 @@ pre.log-view{height:100%;max-height:none}
 <div class="modal" id="chainProfileModal" role="presentation" onclick="if(event.target===this)closeChainProfileEditor()">
   <div class="dialog chain-dialog" role="dialog" aria-modal="true" aria-labelledby="chainProfileTitle">
     <div class="chain-dialog-head">
-      <div><h2 id="chainProfileTitle">添加前置代理</h2><p id="chainProfileSubtitle">保存后可用于导入节点的链式连接。</p></div>
+      <h2 id="chainProfileTitle">添加前置代理</h2>
       <button class="btn small ghost" type="button" onclick="closeChainProfileEditor()">关闭</button>
     </div>
     <div class="chain-dialog-body">
       <input id="chainEditID" type="hidden">
       <div class="field"><label for="chainEditName">名称</label><input id="chainEditName" placeholder="例如：海外入口" autocomplete="off"></div>
-      <div class="field"><label for="chainEditURI">节点 URI</label><textarea id="chainEditURI" placeholder="vless://...&#10;hysteria2://...&#10;socks5://..."></textarea><div class="field-help">填写一个可独立连接的代理节点 URI。</div></div>
-      <label class="toggle-row"><input id="chainEditEnabled" type="checkbox" checked><div><strong>启用</strong><span>启用后才会出现在导入页的前置代理列表中。</span></div></label>
-      <div id="chainEditUsage" class="settings-highlight" hidden></div>
+      <div class="field"><label for="chainEditURI">节点 URI</label><textarea id="chainEditURI" placeholder="vless://...&#10;hysteria2://...&#10;socks5://..."></textarea></div>
+      <label class="toggle-row"><input id="chainEditEnabled" type="checkbox" checked><div><strong>启用</strong></div></label>
       <div id="chainEditStatus" class="inline-status" aria-live="polite"></div>
     </div>
     <div class="chain-dialog-actions">
@@ -433,6 +434,11 @@ const CONNECTIVITY_TIMEOUT_KEY='easy_proxies_connectivity_timeout_seconds';
 const CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS=10;
 const CONNECTIVITY_MIN_TIMEOUT_SECONDS=1;
 const CONNECTIVITY_MAX_TIMEOUT_SECONDS=60;
+const VERIFICATION_TARGETS=[{id:'google',name:'Google'},{id:'github',name:'GitHub'},{id:'outlook',name:'Outlook'},{id:'proxyspace',name:'ProxySpace'}];
+const IMPORT_SITE_TARGETS_KEY='easy_proxies_import_site_targets';
+const IMPORT_TEST_204_KEY='easy_proxies_import_test_204';
+const MAX_JOB_EVENT_CACHE=32;
+function storedTargetSet(key){try{const value=JSON.parse(localStorage.getItem(key)||'[]');return new Set(Array.isArray(value)?value.filter(id=>VERIFICATION_TARGETS.some(target=>target.id===id)):[])}catch(e){return new Set()}}
 function parseConnectivityTimeout(value){
   const raw=String(value??'').trim(),seconds=Number(raw);
   if(!raw||!Number.isInteger(seconds))return {error:'请输入 1-60 秒的整数'};
@@ -453,6 +459,8 @@ const S={
   chainUsage:{},
   chainEditorOrigin:'settings',
   importAutoPromote:localStorage.getItem('easy_proxies_import_auto_promote')!=='0',
+  importTest204:localStorage.getItem(IMPORT_TEST_204_KEY)!=='0',
+  importSiteTargets:storedTargetSet(IMPORT_SITE_TARGETS_KEY),
   importSummary:null,
   nodes:[],
   viewNodes:[],
@@ -525,15 +533,15 @@ const S={
   filters:{scope:'all',country:'',tag:'',source:'',latency:'',q:'',sort:'latency'}
 };
 const pages=[
-  ['import','导入并生成端口','粘贴订阅 URL，自动测速并生成本地端口'],
-  ['pool','可用端口','已经生成的本地代理端口'],
-  ['nodes','候选节点','测速成功但尚未生成端口的节点'],
-  ['failed','失败节点','保留失败节点，避免误删可用节点'],
-  ['bulk','批量工具','手动批量测速 / 测试国家 / 入池'],
-  ['connectivity','站点检测','按 Tag 检测 Google、GitHub、Outlook 和 ProxySpace'],
-  ['ports','端口状态','扫描本机端口占用'],
-  ['logs','日志','查看最近运行日志'],
-  ['settings','设置','运行参数和订阅刷新']
+  ['import','导入并生成端口'],
+  ['pool','可用端口'],
+  ['nodes','候选节点'],
+  ['failed','失败节点'],
+  ['bulk','批量工具'],
+  ['connectivity','站点检测'],
+  ['ports','端口状态'],
+  ['logs','日志'],
+  ['settings','设置']
 ];
 const qs=s=>document.querySelector(s);
 const qsa=s=>Array.from(document.querySelectorAll(s));
@@ -576,13 +584,26 @@ async function api(path,opt={}){
   return data;
 }
 function jobEventValue(event){return event?.kind==='test'?event.test:event?.kind==='refresh'?event.refresh:event?.kind==='connectivity'?event.connectivity:null}
+function trimJobEventCache(){
+  let completed=0;
+  for(const [key,job] of S.jobEvents)if(job?.status&&job.status!=='running'&&!S.jobWaiters.has(key))completed++;
+  if(completed<=MAX_JOB_EVENT_CACHE)return;
+  for(const [key,job] of S.jobEvents){
+    if(!job?.status||job.status==='running'||S.jobWaiters.has(key))continue;
+    S.jobEvents.delete(key);
+    if(--completed<=MAX_JOB_EVENT_CACHE)break;
+  }
+}
 function storeJobEvent(event){
   const job=jobEventValue(event);if(!job||!event.id)return;
   const key=`${event.kind}:${event.id}`;
+  S.jobEvents.delete(key);
   S.jobEvents.set(key,job);
-  const waiters=S.jobWaiters.get(key);if(!waiters)return;
-  for(const notify of [...waiters])notify(job);
+  const waiters=S.jobWaiters.get(key);
+  if(waiters)for(const notify of [...waiters])notify(job);
+  trimJobEventCache();
 }
+function forgetJobEvent(kind,id){const key=`${kind}:${id}`;if(!S.jobWaiters.has(key))S.jobEvents.delete(key)}
 function wakeJobEventWaiters(){
   for(const waiters of S.jobWaiters.values())for(const notify of [...waiters])notify({__stream_lost:true});
 }
@@ -660,10 +681,9 @@ async function go(page,fromHash=false){
   if(!pages.some(item=>item[0]===page))page='import';
   if(!fromHash&&location.hash!==`#${page}`){location.hash=page;return}
 	if(S.page!==page)resetFilters();
-	S.page=page;
+  S.page=page;
   const p=pages.find(x=>x[0]===page);
   qs('#pageTitle').textContent=p[1];
-  qs('#pageDesc').textContent=p[2];
 	renderNav();
 	await refresh();
 }
@@ -822,6 +842,8 @@ async function loadSubscriptionConfig(request){
   const sub=await api('/api/subscription/config',{signal:request?.signal}).catch(err=>{if(isAbortError(err))throw err;return {subscriptions:[],enabled:true,interval:'24h'}});
   if(!isCurrentPageRequest(request))return null;
   sub.subscriptions=Array.isArray(sub.subscriptions)?sub.subscriptions:[];
+  sub.test_204=sub.test_204!==false;
+  sub.site_targets=Array.isArray(sub.site_targets)?sub.site_targets.filter(id=>VERIFICATION_TARGETS.some(target=>target.id===id)):[];
   if(!sub.subscriptions.length && (!sub.interval || sub.interval==='1h0m0s' || sub.interval==='1h'))sub.interval='24h';
   if(sub.enabled===undefined || !sub.subscriptions.length)sub.enabled=true;
   S.subConfig=sub;
@@ -872,31 +894,21 @@ function renderManaged(kind){
   const items=S.nodes||[];
   const countries=S.nodePage?.countries||[];
   const tags=S.nodePage?.tags||[];
-  const filterHint=kind==='nodes'?'这里只显示测速成功、还没有加入节点池的候选节点；可按国家、标签和名称筛选，点击表头列名排序，再点一次反向。'
-    :kind==='pool'?'当前节点池；可按国家、标签和名称筛选，点击表头列名排序，再点一次反向。'
-    :'失败节点可按国家、标签和名称筛选。';
-  const filters=`<p class="muted">${filterHint}</p>
-      <div class="filters compact">
+  const filters=`<div class="filters compact">
         <select id="countryFilter" onchange="updateFilters()"><option value="">全部国家</option>${countries.map(v=>`<option value="${esc(v)}">${esc(countryLabel(v))} (${esc(v)})</option>`).join('')}</select>
         <select id="tagFilter" onchange="updateFilters()"><option value="">全部标签</option>${tags.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')}</select>
         <input id="nameFilter" type="search" placeholder="根据名称搜索" oninput="onNameFilterInput(event)" value="${esc(S.filters.q||'')}">
       </div>`;
   const heading=kind==='pool'?'节点池':kind==='failed'?'失败节点':'候选节点';
-  const hint=kind==='failed'
-    ? '<p class="muted">失败节点可多选后一键测速；测速成功后会自动测试国家，并按开关进入候选节点或直接加入节点池。</p>'
-    : kind==='pool'
-      ? ''
-      : '<p class="muted">候选节点已经通过 generate_204；需要使用时再加入节点池，国家可单独测试。</p>';
+  const total=S.nodePage?.total||0;
   qs('#view').innerHTML=`<div class="grid">
-    <div class="card"><div class="card-head"><h2>${heading}</h2><span class="muted">当前 ${items.length} 个</span></div><div class="card-body">
+    <div class="card"><div class="card-head"><h2>${heading}<span class="section-count"> · ${esc(total)} 个节点</span></h2></div><div class="card-body">
       ${kind==='pool'?poolActionBar():''}
       ${kind==='failed'?failedOptionBar(tags):''}
       ${autoProbeBar(kind)}
       ${batchActionBar(items,kind)}
       ${S.actionStatus?`<p class="action-status ${S.actionStatusType==='err'?'err':''}">${esc(S.actionStatus)}</p>`:''}
-      ${hint}
       ${filters}
-      <div class="muted" style="margin-bottom:10px">正在显示第 ${S.nodePage?.page||1} 页，共 ${S.nodePage?.total||0} 个节点</div>
       <div id="nodeList">${renderNodeTable(items,kind)}</div>
     </div></div>
   </div>`;
@@ -904,9 +916,8 @@ function renderManaged(kind){
 }
 function autoProbeBar(kind){
   const cfg=autoProbeConfig(kind);
-  const label=kind==='pool'?'节点池':kind==='failed'?'失败节点':'候选节点';
   return `<div class="pool-toolbar">
-    <div><strong>${label}自动测速</strong><div class="muted">只处理当前页面的节点；节点池/候选失败会进入失败节点，失败节点成功后按上方开关处理。</div></div>
+    <strong>自动测速</strong>
     <div class="row">
       <label class="row"><input type="checkbox" style="width:auto" ${cfg.enabled?'checked':''} onchange="setAutoProbe('${kind}','enabled',this.checked)"> 启用</label>
       <input style="width:92px" type="number" min="10" value="${cfg.seconds}" onchange="setAutoProbe('${kind}','seconds',this.value)">
@@ -937,7 +948,7 @@ function setupAutoProbe(kind){
 function setupAllAutoProbe(){['nodes','pool','failed'].forEach(setupAutoProbe)}
 function failedOptionBar(tags=[]){
   return `<div class="pool-toolbar">
-    <div><strong>失败节点测速结果</strong><div class="muted">开启后，失败节点测速成功并测试国家后直接进入节点池；关闭则进入候选节点。</div></div>
+    <strong>测速成功后</strong>
     <div class="row">
       <label class="row"><input type="checkbox" style="width:auto" ${S.failedAutoPromote?'checked':''} onchange="setFailedAutoPromote(this.checked)"> 自动加入到节点池</label>
     </div>
@@ -1150,6 +1161,7 @@ async function pollBatchJob(jobId,label){
   }finally{
     S.batchPollingJob='';
     if(last && last.status!=='running'){
+      forgetJobEvent('test',jobId);
       S.activeBatchJob='';
       localStorage.removeItem(ACTIVE_BATCH_JOB_KEY);
     }
@@ -1172,16 +1184,23 @@ async function cancelActiveBatchTest(){
     toast('已发送终止请求');
   }catch(err){toast(err.message,'err')}
 }
+function siteProgressSummary(progress){
+  if(!Array.isArray(progress)||!progress.length)return '';
+  return progress.map(item=>`${item.name||connectivityTargetName(item.target_id)} ${Number(item.done)||0}/${Number(item.total)||0}，成功 ${Number(item.passed)||0}`).join(' · ');
+}
 function updateProgress(job,title){
   const t=qs('#progressTitle');if(t)t.textContent=title;
   const body=qs('#progressBody');if(!body)return;
   const total=job.total||0,done=job.done||0;
   const probing=job.phase==='probe'&&Number(job.probe_round)>0;
-  const progressDone=probing?Number(job.probe_round_done||0):done;
-  const progressTotal=probing?Number(job.probe_round_total||0):total;
+  const siteTesting=job.phase==='sites'&&Array.isArray(job.site_progress)&&job.site_progress.length;
+  const siteDone=siteTesting?job.site_progress.reduce((sum,item)=>sum+(Number(item.done)||0),0):0;
+  const siteTotal=siteTesting?job.site_progress.reduce((sum,item)=>sum+(Number(item.total)||0),0):0;
+  const progressDone=probing?Number(job.probe_round_done||0):siteTesting?siteDone:done;
+  const progressTotal=probing?Number(job.probe_round_total||0):siteTesting?siteTotal:total;
   const pct=progressTotal>0?Math.min(100,Math.round(progressDone/progressTotal*100)):0;
-  const phaseLabel={probe:'测速中',country:'测试国家',promote:'入池',done:'完成',protected:'已回滚',failed:'失败',queued:'排队中',empty:'空',canceling:'正在终止',canceled:'已终止'}[job.phase]||job.phase||'';
-  const progressText=probing?`第 ${job.probe_round}/${job.probe_rounds||3} 轮 · 本轮 ${progressDone}/${progressTotal} (${pct}%) · 剩余 ${job.probe_pending||0}`:`${done}/${total} (${pct}%)`;
+  const phaseLabel={probe:'204 测速中',sites:'站点检测中',country:'测试国家',promote:'入池',done:'完成',protected:'已回滚',failed:'失败',queued:'排队中',empty:'空',canceling:'正在终止',canceled:'已终止'}[job.phase]||job.phase||'';
+  const progressText=probing?`第 ${job.probe_round}/${job.probe_rounds||3} 轮 · 本轮 ${progressDone}/${progressTotal} (${pct}%) · 剩余 ${job.probe_pending||0}`:siteTesting?siteProgressSummary(job.site_progress):`${done}/${total} (${pct}%)`;
   const stats=[];
   if(Array.isArray(job.chain_probes))job.chain_probes.forEach(probe=>stats.push(probe.error?`前置 ${probe.profile_name||probe.profile_id} 失败`:`前置 ${probe.profile_name||probe.profile_id} ${probe.latency_ms||0} ms`));
   if(job.passed!=null)stats.push(`成功 ${job.passed}`);
@@ -1350,9 +1369,8 @@ async function saveOrder(){
   try{await api('/api/nodes/order',{method:'PUT',body:JSON.stringify({order:ids})});toast('排序已保存')}catch(err){toast(err.message,'err')}
 }
 function poolActionBar(){
-  const poolCount=S.nodePage?.total||0;
   return `<div class="pool-toolbar">
-    <div><strong>节点池显示排序</strong><div class="muted">这里只改变表格显示顺序，不改端口。</div></div>
+    <strong>显示排序</strong>
     <div class="row">
       ${poolSortButton('port','按端口排序')}
       ${poolSortButton('country','按国家排序')}
@@ -1361,7 +1379,7 @@ function poolActionBar(){
     </div>
   </div>
   <div class="pool-toolbar">
-    <div><strong>重排端口</strong><div class="muted">池内 ${poolCount} 个。下面三个按钮会直接改端口顺序。</div></div>
+    <strong>重排端口</strong>
     <div class="row">
       <button class="btn green" onclick="saveGroupedOrderMode('country')">按国家重排</button>
       <button class="btn green" onclick="saveGroupedOrderMode('tag')">按标签重排</button>
@@ -1381,7 +1399,7 @@ function batchActionBar(items,kind){
   const deleteButton=(kind==='failed'||kind==='nodes'||kind==='pool')?'<button class="btn danger" onclick="deleteSelectedVisible()">删除选中</button>':'';
   const speedButtons=kind==='failed'?'':'<button class="btn" onclick="retestSelectedVisible()">测速</button><button class="btn" onclick="countrySelectedVisible()">测试国家</button>';
   return `<div class="pool-toolbar">
-    <div><strong>批量操作</strong><div class="muted">已选择 ${selected.length} 个。测速只访问 generate_204；测试国家只访问 ipinfo.io。</div></div>
+    <strong>批量操作<span class="section-count"> · 已选择 ${selected.length} 个</span></strong>
     <div class="row">
       ${promoteButton}
       ${failedButton}
@@ -1483,16 +1501,16 @@ function renderImport(){
       <div class="card-body stack">
         <div class="import-format-card">
           <button class="btn primary format-main" onclick="openImportTypeModal()">选择导入格式</button>
-          <div style="flex:1"><strong>${esc(importKindLabel())}</strong><span>${esc(importKindHelp())}</span></div>
+          <div style="flex:1"><strong>${esc(importKindLabel())}</strong></div>
           <button class="btn green format-main" onclick="directImport()">导入并测试</button>
         </div>
-        <div class="meta"><span class="pill green">${esc(importKindLabel())}</span><span class="pill">${S.importAutoPromote?'成功节点自动加入节点池':'成功节点进入候选池'}</span><span class="pill red">失败节点保留待重测</span></div>
         <div class="field"><label for="tagPrefix">Tag 前缀</label><input id="tagPrefix" value="" placeholder="例如：Glados" oninput="S.tagPrefix=this.value"></div>
         <div class="chain-import-row">
           <div class="field"><label for="importChain">前置代理（可选）</label><select id="importChain" onchange="selectImportChain(this.value)"><option value="">不使用前置代理</option>${S.chainProfiles.filter(profile=>profile.enabled).map(profile=>`<option value="${esc(profile.id)}">${esc(profile.name)}</option>`).join('')}</select></div>
           <div class="chain-import-actions"><button class="btn secondary" type="button" onclick="openChainProfileEditor('', 'import')">添加</button><button class="btn" id="editImportChain" type="button" onclick="openChainProfileEditor(S.chainProfileID,'import')" ${S.chainProfileID?'':'disabled'}>编辑</button></div>
         </div>
-        <label class="row"><input id="importAutoPromote" type="checkbox" ${S.importAutoPromote?'checked':''} style="width:auto" onchange="setImportAutoPromote(this.checked)"> 测速成功后自动加入节点池 <span class="muted">默认开启；关闭后成功节点进入候选节点。</span></label>
+        <label class="row"><input id="importAutoPromote" type="checkbox" ${S.importAutoPromote?'checked':''} style="width:auto" onchange="setImportAutoPromote(this.checked)"> 测速成功后自动加入节点池</label>
+        ${verificationPolicyHTML('import',S.importTest204,S.importSiteTargets,summary?.status==='running')}
         ${importFields()}
         <div class="progress"><div id="jobBar"></div></div>
         <div class="row" style="justify-content:space-between;align-items:center">
@@ -1546,7 +1564,6 @@ function chooseImportKind(kind){
   renderImport();
 }
 function importKindLabel(){return {sub_url:'订阅链接格式',uri:'URI 格式',base64:'Base64 格式',clash:'Clash YAML 格式',host_port:'Host:Port 代理列表'}[S.importKind]||'URI 格式'}
-function importKindHelp(){return {sub_url:'每行一个 http/https 订阅链接，链接内容会自动识别。',uri:'每行一个节点 URI，支持 ss / trojan / vmess / vless / http / https / socks5 / socks4 等协议。',base64:'粘贴 Base64 编码后的节点列表。',clash:'粘贴 Clash YAML，只提取 proxies 节点。',host_port:'每行一个 host:port 或 user:pass@host:port；同一批次使用一种协议。'}[S.importKind]||'每行一个节点 URI。'}
 function importInputLabel(){return S.importKind==='sub_url'?'订阅链接（每行一个）':S.importKind==='uri'?'URI 节点（每行一个）':S.importKind==='base64'?'Base64 内容':S.importKind==='host_port'?'代理地址（每行一个）':'Clash YAML 内容'}
 function importPlaceholder(){
   if(S.importKind==='sub_url')return 'https://example.com/sub1\nhttps://example.com/sub2';
@@ -1570,6 +1587,8 @@ function importPayload(){
 async function directImport(){
   try{
     const body=importPayload();
+    const policy=verificationPolicy('import');
+    if(!verificationPolicyValid(policy))return;
     if(!body.tag_prefix){
       openDialog('需要填写 Tag 前缀','<p>请先填写 Tag 前缀，再导入并测速节点。</p>');
       requestAnimationFrame(()=>qs('#tagPrefix')?.focus());
@@ -1604,7 +1623,7 @@ async function importOne(body,label){
   S.importSummary={status:'running',title:`已解析 ${nodes.length} 个节点`,detail:`来源 ${label}，格式 ${parsed.format || 'unknown'}，正在测试；成功节点${S.importAutoPromote?'会自动加入节点池':'会进入候选池'}`};
   renderImport();
   const ids=nodes.map(n=>n.id).filter(Boolean);
-  const res=await api('/api/import/'+parsed.import_id+'/commit',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true,promote_passed:S.importAutoPromote})});
+  const res=await api('/api/import/'+parsed.import_id+'/commit',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true,promote_passed:S.importAutoPromote,...verificationPolicy('import')})});
   S.lastJob=res.job_id;
   S.activeImportJob=res.job_id;
   localStorage.setItem(ACTIVE_IMPORT_JOB_KEY,res.job_id);
@@ -1620,7 +1639,7 @@ async function registerSubscriptionURLs(urls,tagPrefix){
   const oldUrls=S.subConfig?.subscriptions||[];
   const kept=oldUrls.filter(u=>names[u]!==tagPrefix && !urls.includes(u));
   const next=[...new Set([...kept,...urls])];
-  S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify({enabled:S.subConfig?.enabled!==false,interval:S.subConfig?.interval||'24h',subscriptions:next,refresh:false})});
+  S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify(subscriptionConfigPayload({subscriptions:next,refresh:false}))});
   toast(`已记录 ${urls.length} 个订阅链接；${tagPrefix} 采用最新快照`);
 }
 async function pollJob(id){
@@ -1635,12 +1654,15 @@ async function pollJob(id){
       const j=await api('/api/import/jobs/'+id);
       last=j;
       const done=(j.passed||0)+(j.failed||0);
-      const pct=j.total?Math.min(100,Math.round(done*100/j.total)):0;
+      const siteDone=(j.site_progress||[]).reduce((sum,item)=>sum+(Number(item.done)||0),0),siteTotal=(j.site_progress||[]).reduce((sum,item)=>sum+(Number(item.total)||0),0);
+      const probeDone=Number(j.probe_round_done)||0,probeTotal=Number(j.probe_round_total)||0;
+      const pct=siteTotal?Math.min(100,Math.round(siteDone*100/siteTotal)):probeTotal?Math.min(100,Math.round(probeDone*100/probeTotal)):j.total?Math.min(100,Math.round(done*100/j.total)):0;
       const front=j.chain_probe?(j.chain_probe.error?'前置失败':`前置 ${j.chain_probe.latency_ms||0} ms`):'';
-      const line=`${j.status}: ${front?front+'，':''}${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
+      const sites=siteProgressSummary(j.site_progress),probe=probeTotal?`204 第 ${j.probe_round||0}/${j.probe_rounds||3} 轮 ${probeDone}/${probeTotal}`:'';
+      const line=`${j.status}: ${front?front+'，':''}${sites?sites+'；':probe?probe+'；':''}${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}`;
       if(bar)bar.style.width=pct+'%';
       if(status)status.textContent=line;
-      S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`${front?front+'；':''}完整链路 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
+      S.importSummary={status:j.status,title:`导入任务 ${j.status}`,detail:`${front?front+'；':''}${sites?sites+'；':probe?probe+'；':''}完整链路 ${done}/${j.total}，成功 ${j.passed||0}，失败 ${j.failed||0}，入池 ${j.promoted||0}${j.error?'，错误: '+j.error:''}`};
       if(j.status==='completed'||j.status==='failed'||j.status==='canceled'){
         toast(j.status==='canceled'?'导入任务已终止':'导入任务结束');
         await refresh();
@@ -1721,6 +1743,48 @@ async function loadConnectivityScopes(request){
 }
 
 function connectivityTargetName(id){return {google:'Google',github:'GitHub',outlook:'Outlook',proxyspace:'ProxySpace'}[id]||id}
+function verificationPolicyHTML(scope,test204,targets,disabled=false){
+  const selected=targets instanceof Set?targets:new Set(targets||[]);
+  const count=selected.size+(test204?1:0);
+  const probeButton=`<button type="button" class="site-selector ${test204?'selected':''}" aria-pressed="${test204?'true':'false'}" ${disabled?'disabled':''} onclick="setVerification204('${scope}',${test204?'false':'true'})"><strong>204 测速</strong><span>${test204?'必须成功':'不检测'}</span></button>`;
+  const siteButtons=VERIFICATION_TARGETS.map(target=>`<button type="button" class="site-selector ${selected.has(target.id)?'selected':''}" aria-pressed="${selected.has(target.id)?'true':'false'}" ${disabled?'disabled':''} onclick="toggleVerificationTarget('${scope}','${target.id}')"><strong>${target.name}</strong><span>${selected.has(target.id)?'必须成功':'不检测'}</span></button>`).join('');
+  return `<div class="verification-policy"><div class="verification-policy-head"><div><strong>节点可用条件</strong><span>所选项目必须全部成功</span></div><span class="pill ${count?'green':'red'}">${count?`已选择 ${count} 项`:'未选择'}</span></div><div class="verification-targets">${probeButton}${siteButtons}</div></div>`;
+}
+function verificationPolicy(scope){
+  if(scope==='import')return {test_204:!!S.importTest204,site_targets:[...S.importSiteTargets]};
+  return {test_204:S.subConfig?.test_204!==false,site_targets:Array.isArray(S.subConfig?.site_targets)?[...S.subConfig.site_targets]:[]};
+}
+function verificationPolicyValid(policy,showError=true){
+  const valid=!!policy.test_204||(policy.site_targets||[]).length>0;
+  if(!valid&&showError)openDialog('请选择检测方式','<p>204 测速和站点检测不能同时关闭。请至少启用一项后再继续。</p>');
+  return valid;
+}
+function setVerification204(scope,enabled){
+  if(scope==='import'){
+    S.importTest204=!!enabled;
+    localStorage.setItem(IMPORT_TEST_204_KEY,S.importTest204?'1':'0');
+    renderImport();
+    return;
+  }
+  S.subConfig={...(S.subConfig||{}),test_204:!!enabled};
+  renderSettings();
+}
+function toggleVerificationTarget(scope,targetID){
+  if(!VERIFICATION_TARGETS.some(target=>target.id===targetID))return;
+  if(scope==='import'){
+    if(S.importSiteTargets.has(targetID))S.importSiteTargets.delete(targetID);else S.importSiteTargets.add(targetID);
+    localStorage.setItem(IMPORT_SITE_TARGETS_KEY,JSON.stringify([...S.importSiteTargets]));
+    renderImport();
+    return;
+  }
+  const selected=new Set(S.subConfig?.site_targets||[]);
+  if(selected.has(targetID))selected.delete(targetID);else selected.add(targetID);
+  S.subConfig={...(S.subConfig||{}),site_targets:[...selected]};
+  renderSettings();
+}
+function subscriptionConfigPayload(overrides={}){
+  return {enabled:S.subConfig?.enabled!==false,interval:S.subConfig?.interval||'24h',subscriptions:S.subConfig?.subscriptions||[],...verificationPolicy('refresh'),...overrides};
+}
 function setConnectivityTimeout(value){
   const parsed=parseConnectivityTimeout(value);
   S.connectivityTimeoutInput=String(value??'');
@@ -1746,7 +1810,7 @@ function renderConnectivity(){
   const timeoutValue=running?(Number(S.connectivityJob?.timeout_seconds)||CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS):S.connectivityTimeoutInput;
   const sites=(scopes.targets||[]).map(target=>`<button class="site-selector ${S.connectivityTestTargets.has(target.id)?'selected':''}" ${running?'disabled':''} onclick="toggleConnectivityTestTarget('${esc(target.id)}')" title="${esc(target.url||'')}"><strong>${esc(target.name)}</strong><span>${S.connectivityTestTargets.has(target.id)?'本轮检测':'不检测'}</span></button>`).join('');
   qs('#view').innerHTML=`<div class="connectivity-layout">
-    <section class="settings-section"><div class="settings-section-head connectivity-scope-head"><div><h2>检测范围</h2><p>选择Tag和本轮需要实际访问的站点，默认仅检测Outlook。</p></div><div class="row"><button class="btn small secondary" onclick="setAllConnectivityTags(true)">全选</button><button class="btn small ghost" onclick="setAllConnectivityTags(false)">清空</button></div></div><div class="settings-section-body"><div class="connectivity-scope-summary"><span>已选 <strong id="connectivityTagCount">${S.connectivitySelectedTags.size}</strong> / ${esc((scopes.tags||[]).length)} 个 Tag</span><span>共 ${esc((scopes.tags||[]).reduce((sum,item)=>sum+(Number(item.nodes)||0),0))} 个节点</span></div><div class="tag-picker">${tagRows||'<div class="connectivity-idle" style="grid-column:1/-1"><span>暂无带 Tag 的节点</span></div>'}</div><div class="connectivity-scope-footer"><div class="connectivity-test-controls"><div class="site-strip">${sites}</div><div class="connectivity-timeout-field" title="每个站点每次请求的最长等待时间；瞬时失败仍会重试一次"><label for="connectivityTimeout">单次超时</label><div class="number-suffix"><input id="connectivityTimeout" type="number" min="1" max="60" step="1" value="${esc(timeoutValue)}" ${running?'disabled':''} aria-describedby="connectivityTimeoutError" aria-invalid="${S.connectivityTimeoutValid?'false':'true'}" oninput="setConnectivityTimeout(this.value)"><span>秒</span></div><small id="connectivityTimeoutError" class="field-error" aria-live="polite">${S.connectivityTimeoutValid?'':'请输入 1-60 秒的整数'}</small></div></div><div id="connectivityActions" class="row">${connectivityActionsHTML()}</div></div></div></section>
+    <section class="settings-section"><div class="settings-section-head connectivity-scope-head"><h2>检测范围</h2><div class="row"><button class="btn small secondary" onclick="setAllConnectivityTags(true)">全选</button><button class="btn small ghost" onclick="setAllConnectivityTags(false)">清空</button></div></div><div class="settings-section-body"><div class="connectivity-scope-summary"><span>已选 <strong id="connectivityTagCount">${S.connectivitySelectedTags.size}</strong> / ${esc((scopes.tags||[]).length)} 个 Tag</span><span>共 ${esc((scopes.tags||[]).reduce((sum,item)=>sum+(Number(item.nodes)||0),0))} 个节点</span></div><div class="tag-picker">${tagRows||'<div class="connectivity-idle" style="grid-column:1/-1"><span>暂无带 Tag 的节点</span></div>'}</div><div class="connectivity-scope-footer"><div class="connectivity-test-controls"><div class="site-strip">${sites}</div><div class="connectivity-timeout-field"><label for="connectivityTimeout">单次超时</label><div class="number-suffix"><input id="connectivityTimeout" type="number" min="1" max="60" step="1" value="${esc(timeoutValue)}" ${running?'disabled':''} aria-describedby="connectivityTimeoutError" aria-invalid="${S.connectivityTimeoutValid?'false':'true'}" oninput="setConnectivityTimeout(this.value)"><span>秒</span></div><small id="connectivityTimeoutError" class="field-error" aria-live="polite">${S.connectivityTimeoutValid?'':'请输入 1-60 秒的整数'}</small></div></div><div id="connectivityActions" class="row">${connectivityActionsHTML()}</div></div></div></section>
     <section id="connectivityProgressHost"></section>
     <section id="connectivityCriteria"></section>
     <section id="connectivityMatrixHost"></section>
@@ -1829,7 +1893,10 @@ async function pollConnectivityJob(jobID,silent=false){
       await Promise.all([loadConnectivityResults(),loadConnectivityHistory()]);
       if(!silent)toast('站点检测完成');
     }else if(!silent){toast(last.status==='canceled'?'站点检测已终止':last.error||'站点检测失败','err')}
-  }finally{S.connectivityPollingJob=''}
+  }finally{
+    S.connectivityPollingJob='';
+    if(last&&last.status!=='running')forgetJobEvent('connectivity',jobID);
+  }
 }
 
 function handleConnectivityPollError(err){
@@ -1868,7 +1935,7 @@ function connectivityMatrixHTML(job){
     }).join('');
     return `<div class="connectivity-matrix-row" style="${columns}"><div><strong>${esc(summary.tag)}</strong><div class="muted">${esc(summary.routes||0)} 条路由</div></div>${cells}</div>`;
   }).join('');
-  return `<section class="settings-section"><details><summary class="section-summary">成功率矩阵<span>按 Tag 查看各站点结果</span></summary><div class="settings-section-body"><div class="connectivity-matrix">${head}${rows}</div></div></details></section>`;
+  return `<section class="settings-section"><details><summary class="section-summary">成功率矩阵</summary><div class="settings-section-body"><div class="connectivity-matrix">${head}${rows}</div></div></details></section>`;
 }
 
 function updateConnectivityJobView(job){
@@ -1913,7 +1980,7 @@ function renderConnectivityCriteria(){
   const job=S.connectivityJob;
   if(!job||job.status!=='finished'){host.innerHTML='';return}
   const buttons=(job.targets||[]).map(id=>`<button class="site-selector ${S.connectivitySelectedTargets.has(id)?'selected':''}" onclick="toggleConnectivityTarget('${id}')"><strong>${connectivityTargetName(id)}</strong><span>${S.connectivitySelectedTargets.has(id)?'必须成功':'不参与筛选'}</span></button>`).join('');
-  host.innerHTML=`<section class="settings-section"><div class="settings-section-head"><div><h2>检测结论与端口应用</h2><p>选择筛选条件后先预览；确认前不会修改节点状态或端口。</p></div><button class="btn secondary" onclick="openConnectivityPortPreview()">预览并应用</button></div><div class="settings-section-body"><div class="site-strip">${buttons}</div><div id="connectivityPreviewSummary" class="settings-highlight"><span class="muted">正在计算检测结论...</span></div></div></section>`;
+  host.innerHTML=`<section class="settings-section"><div class="settings-section-head"><h2>检测结论与端口应用</h2><button class="btn secondary" onclick="openConnectivityPortPreview()">预览并应用</button></div><div class="settings-section-body"><div class="site-strip">${buttons}</div><div id="connectivityPreviewSummary" class="settings-highlight"><span class="muted">正在计算检测结论...</span></div></div></section>`;
   refreshConnectivityPreviewSummary();
 }
 
@@ -1978,7 +2045,7 @@ function renderConnectivityResults(){
     return `<div class="connectivity-detail-row"><div><strong>${esc(item.node_name||item.node_id)}</strong><div class="muted">${(item.tags||[]).map(tag=>esc(tag)).join(' · ')}</div></div><div>${esc(connectivityTargetName(item.target_id))}</div><div>${badge}</div><div>${item.latency_ms?esc(item.latency_ms)+' ms':'-'}</div><div title="${esc(item.content_type||'')}">${esc(http)}</div><div class="muted" title="${esc(detail)}">${esc(item.error||components||'-')}</div></div>`;
   }).join('');
   const total=page?.total||0,current=page?.page||1,pages=Math.max(1,Math.ceil(total/(page?.page_size||100)));
-  host.innerHTML=`<section class="settings-section"><div class="settings-section-head"><div><h2>节点明细</h2><p>共 ${esc(total)} 条站点结果。</p></div><button class="btn small secondary" onclick="toggleConnectivityDetails()">${S.connectivityDetailsOpen?'收起明细':'查看明细'}</button></div>${S.connectivityDetailsOpen?`<div class="settings-section-body"><div class="row"><select style="width:170px" onchange="setConnectivityResultFilter('tag',this.value)"><option value="">全部 Tag</option>${tags}</select><select style="width:150px" onchange="setConnectivityResultFilter('target',this.value)"><option value="">全部站点</option>${targetOptions}</select><select style="width:140px" onchange="setConnectivityResultFilter('status',this.value)"><option value="">全部结果</option><option value="success" ${S.connectivityResultFilters.status==='success'?'selected':''}>完整可用</option><option value="partial" ${S.connectivityResultFilters.status==='partial'?'selected':''}>部分可用</option><option value="failed" ${S.connectivityResultFilters.status==='failed'?'selected':''}>失败</option></select></div><div class="connectivity-table"><div class="connectivity-detail-row connectivity-detail-head"><div>节点 / Tag</div><div>站点</div><div>结果</div><div>耗时</div><div>HTTP / 阶段</div><div>页面检查</div></div>${rows||'<div class="empty">没有符合筛选条件的结果</div>'}</div><div class="row" style="justify-content:flex-end"><button class="btn small" ${current<=1?'disabled':''} onclick="changeConnectivityResultPage(-1)">上一页</button><span class="muted">${current} / ${pages}</span><button class="btn small" ${current>=pages?'disabled':''} onclick="changeConnectivityResultPage(1)">下一页</button></div></div>`:'<div class="connectivity-detail-collapsed">明细已收起</div>'}</section>`;
+  host.innerHTML=`<section class="settings-section"><div class="settings-section-head"><h2>节点明细<span class="section-count"> · ${esc(total)} 条结果</span></h2><button class="btn small secondary" onclick="toggleConnectivityDetails()">${S.connectivityDetailsOpen?'收起明细':'查看明细'}</button></div>${S.connectivityDetailsOpen?`<div class="settings-section-body"><div class="row"><select style="width:170px" onchange="setConnectivityResultFilter('tag',this.value)"><option value="">全部 Tag</option>${tags}</select><select style="width:150px" onchange="setConnectivityResultFilter('target',this.value)"><option value="">全部站点</option>${targetOptions}</select><select style="width:140px" onchange="setConnectivityResultFilter('status',this.value)"><option value="">全部结果</option><option value="success" ${S.connectivityResultFilters.status==='success'?'selected':''}>完整可用</option><option value="partial" ${S.connectivityResultFilters.status==='partial'?'selected':''}>部分可用</option><option value="failed" ${S.connectivityResultFilters.status==='failed'?'selected':''}>失败</option></select></div><div class="connectivity-table"><div class="connectivity-detail-row connectivity-detail-head"><div>节点 / Tag</div><div>站点</div><div>结果</div><div>耗时</div><div>HTTP / 阶段</div><div>页面检查</div></div>${rows||'<div class="empty">没有符合筛选条件的结果</div>'}</div><div class="row" style="justify-content:flex-end"><button class="btn small" ${current<=1?'disabled':''} onclick="changeConnectivityResultPage(-1)">上一页</button><span class="muted">${current} / ${pages}</span><button class="btn small" ${current>=pages?'disabled':''} onclick="changeConnectivityResultPage(1)">下一页</button></div></div>`:''}</section>`;
 }
 function toggleConnectivityDetails(){S.connectivityDetailsOpen=!S.connectivityDetailsOpen;renderConnectivityResults()}
 
@@ -2025,8 +2092,7 @@ function renderPorts(){
   const skipped=(S.ports&&S.ports.skipped_ports)||[];
   const visibleOccupied=occupied.slice(0,80);
   qs('#view').innerHTML=`<div class="card"><div class="card-head"><h2>端口状态</h2><button class="btn small" onclick="refreshPorts()">重新扫描</button></div><div class="card-body stack">
-    <p class="muted">扫描范围 <b>${esc(basePort)}</b> – <b>${esc(endPort)}</b>（起始端口由 <code>multi_port.base_port</code> 控制，可在「设置」中修改）。</p>
-    <p class="muted">节点池占用 <b>${esc(occupied.length)}</b> 个，其他进程占用 <b>${esc(conflicts.length)}</b> 个，空闲 <b>${esc(free.length)}</b> 个。</p>
+    <div class="meta"><span class="value-pill muted">扫描 ${esc(basePort)}–${esc(endPort)}</span><span class="value-pill green">节点池 ${esc(occupied.length)}</span><span class="value-pill ${conflicts.length?'red':'muted'}">冲突 ${esc(conflicts.length)}</span><span class="value-pill green">空闲 ${esc(free.length)}</span></div>
     ${skipped.length?`<p class="status err">分配端口时跳过了被外部进程占用的 ${esc(skipped.length)} 个端口：${esc(skipped.join(' / '))}</p>`:''}
     <div class="section"><h3>节点池监听端口</h3><div class="table port-list-limited">${visibleOccupied.length?visibleOccupied.map(p=>`<div class="port"><b>${p.port}</b><span class="muted">${esc(p.node_name||'')}</span></div>`).join(''):'<div class="empty">节点池为空</div>'}</div>${occupied.length>visibleOccupied.length?`<p class="muted">仅显示前 ${visibleOccupied.length} 个，完整节点请在“可用端口”页面查看。</p>`:''}</div>
     ${conflicts.length?`<div class="section"><h3>冲突端口</h3><div class="table">${conflicts.map(p=>`<div class="port"><b>${p.port}</b><span class="pill red">${esc(reasonText(p.reason))}</span><span class="muted">${esc(reasonDetail(p.reason))}</span></div>`).join('')}</div></div>`:''}
@@ -2124,7 +2190,7 @@ function updateBulkSummary(){
   const actions=[];
   if(qs('#bulkRetest')?.checked)actions.push('重新测速');if(qs('#bulkCountry')?.checked)actions.push('检测国家');
   const host=qs('#bulkExecutionSummary');if(!host)return;
-  host.innerHTML=`<strong>${selected.length&&actions.length?'准备执行':'选择尚未完成'}</strong><span class="muted">范围：${esc(selected.join('、')||'未选择')} · 操作：${esc(actions.join('、')||'未选择')}${qs('#bulkPromote')?.checked?' · 成功节点加入池':''}</span>`;
+  host.innerHTML=`<span>${esc(selected.join('、')||'未选择范围')} · ${esc(actions.join('、')||'未选择操作')}${qs('#bulkPromote')?.checked?' · 成功后入池':''}</span>`;
 }
 async function runBulkTest(){
   const scopes={candidate:qs('#bulkCandidate').checked,pool:qs('#bulkPool').checked,failed:qs('#bulkFailed').checked};
@@ -2188,14 +2254,10 @@ function openChainProfileEditor(id='',origin=S.page){
   const profile=S.chainProfiles.find(item=>item.id===id)||{id:'',name:'',enabled:true,hops:[{uri:''}]};
   S.chainEditorOrigin=origin||S.page;
   qs('#chainProfileTitle').textContent=id?'编辑前置代理':'添加前置代理';
-  qs('#chainProfileSubtitle').textContent=id?'修改后会应用到所有关联链式节点。':'保存后可用于导入节点的链式连接。';
   qs('#chainEditID').value=profile.id||'';
   qs('#chainEditName').value=profile.name||'';
   qs('#chainEditURI').value=profile.hops?.[0]?.uri||'';
   qs('#chainEditEnabled').checked=profile.enabled!==false;
-  const usage=S.chainUsage?.[profile.id]||{nodes:0,ports:0},usageHost=qs('#chainEditUsage');
-  usageHost.hidden=!id||!usage.nodes;
-  usageHost.innerHTML=usage.nodes?`<strong>正在使用</strong><span class="muted">关联 ${esc(usage.nodes)} 个节点，当前 ${esc(usage.ports||0)} 个端口。节点 URI 变更后将重新检测关联节点。</span>`:'';
   setChainEditorStatus('');
   setChainEditorBusy(false);
   qs('#chainProfileModal').classList.add('show');
@@ -2257,9 +2319,8 @@ async function testChainProfile(id){
 function chainProfilesHTML(){
   if(!S.chainProfiles.length)return '<div class="connectivity-idle"><span>尚未配置前置代理</span><button class="btn small secondary" onclick="openChainProfileEditor(\'\', \'settings\')">添加前置代理</button></div>';
   const rows=S.chainProfiles.map(profile=>{
-    const usage=S.chainUsage?.[profile.id]||{nodes:0,ports:0};
-    const counts=usage.nodes?`<span class="pill">${esc(usage.nodes)} 节点</span><span class="pill green">${esc(usage.ports||0)} 端口</span>`:'';
-    return `<div class="chain-row"><div class="chain-main"><div class="row"><strong>${esc(profile.name)}</strong><span class="pill ${profile.enabled?'green':'amber'}">${profile.enabled?'已启用':'已禁用'}</span>${counts}</div><code class="source-value">${esc(maskProxyURI(profile.hops?.[0]?.uri||''))}</code></div><div class="chain-row-actions"><button class="btn small green" data-chain-test="${esc(profile.id)}" data-id="${esc(profile.id)}" onclick="testChainProfile(this.dataset.id)">测试</button><button class="btn small secondary" data-id="${esc(profile.id)}" onclick="openChainProfileEditor(this.dataset.id,'settings')">编辑</button><button class="btn small danger" data-id="${esc(profile.id)}" onclick="deleteChainProfile(this.dataset.id)">删除</button></div></div>`;
+    const disabled=profile.enabled?'':`<span class="pill amber">已停用</span>`;
+    return `<div class="chain-row"><div class="chain-main"><div class="row"><strong>${esc(profile.name)}</strong>${disabled}</div><code class="source-value">${esc(maskProxyURI(profile.hops?.[0]?.uri||''))}</code></div><div class="chain-row-actions"><button class="btn small green" data-chain-test="${esc(profile.id)}" data-id="${esc(profile.id)}" onclick="testChainProfile(this.dataset.id)">测试</button><button class="btn small secondary" data-id="${esc(profile.id)}" onclick="openChainProfileEditor(this.dataset.id,'settings')">编辑</button><button class="btn small danger" data-id="${esc(profile.id)}" onclick="deleteChainProfile(this.dataset.id)">删除</button></div></div>`;
   }).join('');
   return `<div class="chain-list">${rows}</div>`;
 }
@@ -2282,7 +2343,7 @@ function renderSettings(){
   qs('#view').innerHTML=`<div class="settings-grid">
       <section class="settings-section settings-compact" data-settings-column="left">
         <div class="settings-section-head">
-          <div><h2>前置代理</h2><p>链式节点先连接前置代理，再连接导入节点。</p></div>
+          <h2>前置代理</h2>
           <button class="btn small primary" onclick="openChainProfileEditor('', 'settings')">添加</button>
         </div>
         <div class="settings-section-body">
@@ -2292,35 +2353,24 @@ function renderSettings(){
 
       <section class="settings-section" data-settings-column="right">
         <div class="settings-section-head">
-          <div><h2>基础运行</h2><p>控制运行模式、测速目标和管理入口。</p></div>
-          <span class="pill green">${esc(s.mode||'pool')}</span>
+          <h2>基础运行</h2>
         </div>
         <div class="settings-section-body">
-          <div class="settings-highlight">
-            <strong>当前测速目标</strong>
-            <span class="muted">${esc(probeTarget)}</span>
-          </div>
           <div class="settings-form">
             <div class="field"><label>运行模式</label><select id="setMode"><option value="pool">pool</option><option value="multi-port">multi-port</option><option value="hybrid">hybrid</option></select></div>
             <div class="field"><label>探测目标</label><select id="setProbe"><option value="https://www.gstatic.com/generate_204">gstatic generate_204</option><option value="https://cp.cloudflare.com/generate_204">cloudflare generate_204</option></select></div>
             <div class="field"><label>外部 IP</label><input id="setExternal" value="${esc(s.external_ip||'')}" placeholder="留空则使用当前访问地址"></div>
             <div class="field"><label>管理监听</label><input id="setMgmtListen" value="${esc(management.listen||'')}"></div>
-            <label class="toggle-row wide"><input id="setSkip" type="checkbox" ${s.skip_cert_verify?'checked':''} style="width:auto"><div><strong>跳过证书验证</strong><span>仅在订阅或节点证书异常时使用。</span></div></label>
+            <label class="toggle-row wide"><input id="setSkip" type="checkbox" ${s.skip_cert_verify?'checked':''} style="width:auto"><div><strong>跳过证书验证</strong></div></label>
           </div>
         </div>
       </section>
 
       <section class="settings-section" data-settings-column="left">
         <div class="settings-section-head">
-          <div><h2>端口与监听</h2><p>这些设置决定用户最终复制和使用的本地端口。</p></div>
-          <span class="pill">起始端口 ${esc(multi.base_port||0)}</span>
+          <h2>端口与监听</h2>
         </div>
         <div class="settings-section-body">
-          <div class="metric-grid">
-            <div class="metric"><span>Pool 端口</span><strong>${esc(listener.port||0)}</strong></div>
-            <div class="metric"><span>Multi 起始</span><strong>${esc(multi.base_port||0)}</strong></div>
-            <div class="metric"><span>监听地址</span><strong>${esc(multi.address||listener.address||'-')}</strong></div>
-          </div>
           <div class="settings-form">
             <div class="field"><label>Pool 监听地址</label><input id="setListenAddr" value="${esc(listener.address||'')}"></div>
             <div class="field"><label>Pool 端口</label><input id="setListenPort" type="number" value="${esc(listener.port||0)}"></div>
@@ -2334,8 +2384,7 @@ function renderSettings(){
 
       <section class="settings-section" data-settings-column="right">
         <div class="settings-section-head">
-          <div><h2>节点池策略</h2><p>控制节点轮换、失败判定和临时拉黑。</p></div>
-          <span class="pill amber">失败阈值 ${esc(pool.failure_threshold||2)}</span>
+          <h2>节点池策略</h2>
         </div>
         <div class="settings-section-body">
           <div class="settings-form">
@@ -2348,14 +2397,15 @@ function renderSettings(){
         </div>
       </section>
 
-      <section class="settings-section" data-settings-column="right">
+      <section class="settings-section settings-wide">
         <div class="settings-section-head">
-          <div><h2>订阅刷新</h2><p>管理订阅定时刷新和手动刷新。</p></div>
+          <h2>订阅刷新</h2>
           <span class="pill green">${esc((sub.subscriptions||[]).length)} 个订阅</span>
         </div>
         <div class="settings-section-body">
           <div id="refreshStatusHost">${refreshStatusHTML(S.refreshJob)}</div>
-          <label class="toggle-row"><input id="subEnabled" type="checkbox" ${sub.enabled!==false?'checked':''} style="width:auto"><div><strong>启用自动刷新</strong><span>手动刷新不受这个开关影响。</span></div></label>
+          <label class="toggle-row"><input id="subEnabled" type="checkbox" ${sub.enabled!==false?'checked':''} style="width:auto"><div><strong>启用自动刷新</strong></div></label>
+          ${verificationPolicyHTML('refresh',sub.test_204!==false,new Set(sub.site_targets||[]),refreshing)}
           <div class="time-grid">
             <div class="field"><label>天</label><input id="subDays" type="number" min="0" value="${interval.days}"></div>
             <div class="field"><label>小时</label><input id="subHours" type="number" min="0" max="23" value="${interval.hours}"></div>
@@ -2367,7 +2417,7 @@ function renderSettings(){
 
       <section class="settings-section settings-wide">
         <div class="settings-section-head">
-          <div><h2>导入来源</h2><p>按 Tag 重新拉取订阅或检测已保存的本地导入节点。</p></div>
+          <h2>导入来源</h2>
           <div class="row"><button class="btn small green" data-refresh-action onclick="refreshAllImportSources()" ${sources.length&&!refreshing?'':'disabled'}>重新检测全部</button><button class="btn small danger" data-refresh-action onclick="deleteAllImportSources()" ${sources.length&&!refreshing?'':'disabled'}>删除全部</button></div>
         </div>
         <div class="settings-section-body">
@@ -2393,7 +2443,7 @@ function renderSettings(){
 
       <section class="settings-section settings-wide">
         <div class="settings-section-head">
-          <div><h2>数据导出</h2><p>按 Tag 导出原始来源类型；多个 Tag 会自动打包为 ZIP。</p></div>
+          <h2>数据导出</h2>
           <span class="pill" id="exportTagCount">已选 ${esc(S.selectedExportTags.size)} / ${esc(exportTags.length)}</span>
         </div>
         <div class="settings-section-body">
@@ -2404,22 +2454,21 @@ function renderSettings(){
 
       <section class="settings-section settings-wide">
         <div class="settings-section-head">
-          <div><h2>备份与恢复</h2><p>完整保存设置、订阅、导入节点和节点池状态。</p></div>
+          <h2>备份与恢复</h2>
           <span class="pill ${webdav.address?'green':''}">${webdav.address?'WebDAV 已配置':'仅本地'}</span>
         </div>
         <div class="settings-section-body">
           <div class="backup-settings-grid">
             <div class="backup-pane">
               <h3>本地备份</h3>
-              <div class="field-help">备份文件保存在当前设备；恢复前会校验文件，运行中的任务结束后才能恢复。</div>
               <button class="btn primary block" onclick="downloadLocalBackup()">导出完整备份</button>
               <button class="btn secondary block" onclick="qs('#localBackupFile').click()">从本地备份恢复</button>
               <input id="localBackupFile" type="file" accept=".zip,application/zip" onchange="restoreLocalBackup(this.files?.[0])" hidden>
             </div>
             <div class="backup-pane">
-              <div><h3>WebDAV 备份</h3><div class="field-help" style="margin-top:6px">地址、账号和密码明文显示并保存，远程文件只写入指定目录。</div></div>
+              <h3>WebDAV 备份</h3>
               <div class="field"><label>WebDAV 地址</label><input id="webdavAddress" type="text" value="${esc(webdav.address||'')}" placeholder="https://dav.example.com/remote.php/dav/files/user"></div>
-              <div class="field"><label>备份文件夹</label><input id="webdavFolder" type="text" value="${esc(webdav.folder||'/easy_proxies')}" placeholder="/easy_proxies"><div class="field-help">WebDAV 内的独立目录，默认 /easy_proxies；目录不存在时会自动创建。</div></div>
+              <div class="field"><label>备份文件夹</label><input id="webdavFolder" type="text" value="${esc(webdav.folder||'/easy_proxies')}" placeholder="/easy_proxies"><div class="field-help">默认 /easy_proxies</div></div>
               <div class="settings-form">
                 <div class="field"><label>账号</label><input id="webdavUsername" type="text" value="${esc(webdav.username||'')}"></div>
                 <div class="field"><label>密码</label><input id="webdavPassword" type="text" value="${esc(webdav.password||'')}"></div>
@@ -2516,7 +2565,9 @@ function subscriptionInterval(){
   return `${hh}h${mm}m`;
 }
 async function saveAutoRefresh(){
-  const body={enabled:qs('#subEnabled').checked,interval:subscriptionInterval(),subscriptions:S.subConfig?.subscriptions||[],refresh:false};
+  const policy=verificationPolicy('refresh');
+  if(!verificationPolicyValid(policy))return;
+  const body=subscriptionConfigPayload({enabled:qs('#subEnabled').checked,interval:subscriptionInterval(),refresh:false});
   try{S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify(body)});toast('订阅自动刷新设置已保存');renderSettings()}catch(err){toast(err.message,'err')}
 }
 function refreshPhaseText(job){
@@ -2551,6 +2602,14 @@ function activeRefreshProbe(job){
   }
   return null;
 }
+function activeRefreshSiteProgress(job){
+  for(const group of Array.isArray(job?.groups)?job.groups:[]){
+    for(const row of Array.isArray(group?.urls)?group.urls:[]){
+      if(row?.status==='testing'&&Array.isArray(row.site_progress)&&row.site_progress.length)return row.site_progress;
+    }
+  }
+  return [];
+}
 function refreshProgressHTML(job){
   const total=Number(job?.total_nodes)||0,done=Number(job?.done_nodes)||0;
   const pct=total?Math.min(100,Math.round(done*100/total)):0;
@@ -2572,6 +2631,8 @@ function refreshStatsHTML(job){
   const parts=[`<span>来源 ${esc(job?.done_urls||0)}/${esc(job?.total_urls||0)}</span>`,`<span>节点 ${esc(refreshNodeProgressText(job))}</span>`];
   const probe=activeRefreshProbe(job);
   if(probe)parts.push(`<span>第 ${esc(probe.probe_round||0)}/${esc(probe.probe_rounds||3)} 轮 · 本轮 ${esc(probe.probe_round_done||0)}/${esc(probe.probe_round_total||0)} · 剩余 ${esc(probe.probe_pending||0)}</span>`);
+  const sites=siteProgressSummary(activeRefreshSiteProgress(job));
+  if(sites)parts.push(`<span>${esc(sites)}</span>`);
   if(terminal){
     parts.push(`<span>成功/可用端口 ${esc(job?.pool_count||0)}</span>`);
     parts.push(`<span>测速通过 ${esc(job?.probe_passed||0)}</span>`);
@@ -2648,8 +2709,9 @@ function renderRefreshJobDialog(job){
       const source=local?'使用已保存的节点重新检测':maskedSubscriptionURL(r.url);
       const attempt=r.attempt?` · 拉取尝试 ${r.attempt}/${r.attempts||2}`:'';
       const probe=r.probe_round?`节点检测第 ${r.probe_round}/${r.probe_rounds||3} 轮 · 本轮 ${r.probe_round_done||0}/${r.probe_round_total||0} · 剩余 ${r.probe_pending||0} · ${probeTargetLabel(r.probe_target)} · 并发 ${r.probe_concurrency||'-'}`:'';
+      const sites=siteProgressSummary(r.site_progress);
       const front=r.chain_probe?(r.chain_probe.error?`前置 ${r.chain_probe.profile_name||r.chain_probe.profile_id} 失败：${r.chain_probe.error}`:`前置 ${r.chain_probe.profile_name||r.chain_probe.profile_id} · ${r.chain_probe.latency_ms||0} ms`):'';
-      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>${esc(title)}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span>${r.cached?'<span class="pill amber">缓存节点</span>':''}${r.protected?'<span class="pill red">结果未应用</span>':''}</div><div class="muted">${esc(source+attempt)}</div><div class="muted">${esc(progress)}</div>${front?`<div class="muted">${esc(front)}</div>`:''}${probe?`<div class="muted">${esc(probe)}</div>`:''}${r.total?`<div class="muted">${esc(counts)}</div>`:''}${r.warning?`<div class="muted" style="color:#9a6700">${esc(r.warning)}</div>`:''}${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
+      return `<div class="source-row"><div style="flex:1;min-width:0"><div class="row"><strong>${esc(title)}</strong><span class="pill ${cls}">${esc(refreshRowStatusText(raw))}</span>${r.cached?'<span class="pill amber">缓存节点</span>':''}${r.protected?'<span class="pill red">结果未应用</span>':''}</div><div class="muted">${esc(source+attempt)}</div><div class="muted">${esc(progress)}</div>${front?`<div class="muted">${esc(front)}</div>`:''}${probe?`<div class="muted">${esc(probe)}</div>`:''}${sites?`<div class="muted">${esc(sites)}</div>`:''}${r.total?`<div class="muted">${esc(counts)}</div>`:''}${r.warning?`<div class="muted" style="color:#9a6700">${esc(r.warning)}</div>`:''}${r.error?`<div class="muted" style="color:#b94a48">${esc(r.error)}</div>`:''}</div></div>`;
     }).join('');
     return `<div class="stack" style="gap:10px"><div class="row"><strong>${esc(g.tag_prefix||'local')}</strong><span class="muted">来源 ${esc(g.done||0)}/${esc(g.total||0)} · 成功 ${esc(g.successful||0)} · 失败 ${esc(g.failed||0)}</span></div>${rows}</div>`;
   }).join('');
@@ -2713,6 +2775,7 @@ async function pollRefreshSourceJob(jobID){
     await refresh();
   }finally{
     S.refreshPollingJob='';
+    if(last&&last.status!=='running')forgetJobEvent('refresh',jobID);
   }
 }
 async function cancelRefreshSourceJob(){
@@ -2736,7 +2799,9 @@ function handleRefreshPollError(err){
 }
 async function startRefreshSource(key){
   try{
-    const started=await api('/api/import/refresh',{method:'POST',body:JSON.stringify({key:key||''})});
+    const policy=verificationPolicy('refresh');
+    if(!verificationPolicyValid(policy))return;
+    const started=await api('/api/import/refresh',{method:'POST',body:JSON.stringify({key:key||'',...policy})});
     if(!started.job_id)throw new Error('启动刷新失败');
     rememberRefreshJob(started.job_id);
     openRefreshJobDetails();
@@ -2783,7 +2848,7 @@ async function removeSubscriptionURLs(urls){
   await loadSubscriptionConfig();
   const remove=new Set(urls);
   const next=(S.subConfig?.subscriptions||[]).filter(u=>!remove.has(u));
-  S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify({enabled:S.subConfig?.enabled!==false,interval:S.subConfig?.interval||'24h',subscriptions:next,refresh:false})});
+  S.subConfig=await api('/api/subscription/config',{method:'PUT',body:JSON.stringify(subscriptionConfigPayload({subscriptions:next,refresh:false}))});
 }
 async function deleteAllImportSources(){
   const sources=S.importSources||[];
@@ -2944,6 +3009,23 @@ async function downloadExport(){
 }
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&qs('#chainProfileModal')?.classList.contains('show'))closeChainProfileEditor();
+});
+function releasePageResources(){
+  S.pageController?.abort();
+  S.jobStreamAbort?.abort();
+  if(S.filterTimer)clearTimeout(S.filterTimer);
+  for(const timer of Object.values(S.autoTimers))if(timer)clearInterval(timer);
+  S.autoTimers={};
+  wakeJobEventWaiters();
+  S.jobWaiters.clear();
+  S.jobEvents.clear();
+}
+window.addEventListener('pagehide',releasePageResources);
+window.addEventListener('pageshow',event=>{
+  if(!event.persisted)return;
+  startJobEventStream(true);
+  setupAllAutoProbe();
+  refresh().catch(()=>{});
 });
 (async function boot(){
   renderNav();

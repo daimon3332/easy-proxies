@@ -65,9 +65,10 @@ var connectivityTargetSpecs = []connectivityTargetSpec{
 	},
 	{
 		target: ConnectivityTarget{ID: "outlook", Name: "Outlook", Host: "outlook.live.com", Port: 443, URL: "https://outlook.live.com/mail/0/"},
-		components: []connectivityComponentSpec{{
-			id: "page", name: "Outlook 页面", url: "https://outlook.live.com/mail/0/", allowedHosts: []string{"outlook.live.com"}, marker: "outlook",
-		}},
+		components: []connectivityComponentSpec{
+			{id: "page", name: "Outlook 页面", url: "https://outlook.live.com/mail/0/", allowedHosts: []string{"outlook.live.com"}, marker: "outlook"},
+			{id: "auth", name: "Microsoft 登录", url: "https://login.microsoftonline.com/", allowedHosts: []string{"login.microsoftonline.com"}, marker: "microsoft"},
+		},
 	},
 	{
 		target: ConnectivityTarget{ID: "proxyspace", Name: "ProxySpace", Host: "dashboard.proxyscrape.com", Port: 443, URL: "https://dashboard.proxyscrape.com/"},

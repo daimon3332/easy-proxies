@@ -139,7 +139,50 @@ type ImportSourceSummary struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	ChainProfileID string    `json:"chain_profile_id,omitempty"`
+	ChainBinding   string    `json:"chain_binding"`
 	FetchPolicy    string    `json:"fetch_policy,omitempty"`
+}
+
+const (
+	ChainBindingDirect  = "direct"
+	ChainBindingProfile = "profile"
+	ChainBindingMixed   = "mixed"
+)
+
+type TagBindingRequest struct {
+	Tags           []string `json:"tags"`
+	ChainProfileID string   `json:"chain_profile_id,omitempty"`
+	Test204        *bool    `json:"test_204,omitempty"`
+	SiteTargets    []string `json:"site_targets,omitempty"`
+}
+
+type TagBindingItem struct {
+	TagPrefix string    `json:"tag_prefix"`
+	Status    string    `json:"status"`
+	JobID     string    `json:"job_id,omitempty"`
+	Total     int       `json:"total"`
+	Passed    int       `json:"passed"`
+	Failed    int       `json:"failed"`
+	Promoted  int       `json:"promoted"`
+	Error     string    `json:"error,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type TagBindingJob struct {
+	ID             string           `json:"id"`
+	Status         string           `json:"status"`
+	ChainProfileID string           `json:"chain_profile_id,omitempty"`
+	Test204        bool             `json:"test_204"`
+	SiteTargets    []string         `json:"site_targets,omitempty"`
+	TotalTags      int              `json:"total_tags"`
+	DoneTags       int              `json:"done_tags"`
+	Successful     int              `json:"successful"`
+	Failed         int              `json:"failed"`
+	Skipped        int              `json:"skipped"`
+	Items          []TagBindingItem `json:"items"`
+	Error          string           `json:"error,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
 }
 
 type ChainProbeResult struct {

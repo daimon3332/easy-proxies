@@ -70,6 +70,11 @@ button{cursor:pointer}
 .stack{display:grid;gap:16px}
 .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .source-row{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:16px;background:#fbfdff}
+.source-row-select{display:flex;align-items:center;justify-content:center;width:40px;min-width:40px;min-height:40px}
+.binding-progress{display:grid;gap:12px}
+.binding-progress-list{display:grid;gap:8px;max-height:320px;overflow:auto}
+.binding-progress-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfdff}
+.binding-progress-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
 .filters.compact{display:flex;gap:10px;flex-wrap:wrap}
@@ -429,6 +434,8 @@ pre.log-view{height:100%;max-height:none}
 const ACTIVE_IMPORT_JOB_KEY='easy_proxies_active_import_job';
 const ACTIVE_BATCH_JOB_KEY='easy_proxies_active_batch_job';
 const ACTIVE_REFRESH_JOB_KEY='easy_proxies_active_refresh_job';
+const ACTIVE_TAG_BINDING_JOB_KEY='easy_proxies_active_tag_binding_job';
+const IMPORT_CHAIN_PROFILE_KEY='easy_proxies_import_chain_profile';
 const CONNECTIVITY_JOB_KEY='easy_proxies_connectivity_job';
 const CONNECTIVITY_TIMEOUT_KEY='easy_proxies_connectivity_timeout_seconds';
 const CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS=10;
@@ -453,7 +460,7 @@ const S={
   importKind:'sub_url',
   importText:'',
   tagPrefix:'',
-  chainProfileID:'',
+  chainProfileID:localStorage.getItem(IMPORT_CHAIN_PROFILE_KEY)||'',
   proxyProtocol:'http',
   chainProfiles:[],
   chainUsage:{},
@@ -489,6 +496,11 @@ const S={
   activeImportJob:localStorage.getItem(ACTIVE_IMPORT_JOB_KEY)||'',
   activeBatchJob:localStorage.getItem(ACTIVE_BATCH_JOB_KEY)||'',
   activeRefreshJob:localStorage.getItem(ACTIVE_REFRESH_JOB_KEY)||'',
+  activeTagBindingJob:localStorage.getItem(ACTIVE_TAG_BINDING_JOB_KEY)||'',
+  tagBindingJob:null,
+  tagBindingPollingJob:'',
+  pendingTagBindingTags:[],
+  selectedBindingTags:new Set(),
   connectivityJobID:localStorage.getItem(CONNECTIVITY_JOB_KEY)||'',
   connectivityScopes:null,
   connectivityJob:null,
@@ -731,7 +743,7 @@ async function refresh(){
 	  if(!isCurrentPageRequest(request))return;
 	  renderConnectivity();
 	}else{
-      await Promise.all([loadSubscriptionConfig(request), loadImportSummary(request), loadPortPreview(request),loadChainProfiles(request)]);
+      await Promise.all([loadSubscriptionConfig(request),loadImportSources(request),loadImportSummary(request),loadPortPreview(request),loadChainProfiles(request)]);
       if(!isCurrentPageRequest(request))return;
       renderImport();
     }
@@ -799,6 +811,7 @@ function openDialog(title,html,options={}){
   modal.classList.remove('refresh-modal');
   dialog.className=`dialog standard-dialog${options.wide?' wide':''}`;
   delete dialog.dataset.refreshShell;
+  delete dialog.dataset.tagBindingShell;
   const actions=options.actions===undefined?'<button class="btn primary" type="button" onclick="closeDialog()">确定</button>':options.actions;
   dialog.innerHTML=`<div class="dialog-header"><h2 id="resultDialogTitle">${esc(title)}</h2><button class="btn ghost dialog-close" type="button" onclick="closeDialog()" aria-label="关闭">×</button></div><div class="dialog-body"><div class="stack">${html}</div></div>${actions!==''?`<div class="dialog-footer">${actions}</div>`:''}`;
   dialog.setAttribute('role','dialog');
@@ -858,7 +871,7 @@ async function loadChainProfiles(request){
   if(!isCurrentPageRequest(request))return null;
   S.chainProfiles=Array.isArray(data.profiles)?data.profiles:[];
   S.chainUsage=data.usage&&typeof data.usage==='object'?data.usage:{};
-  if(S.chainProfileID&&!S.chainProfiles.some(profile=>profile.id===S.chainProfileID&&profile.enabled))S.chainProfileID='';
+  if(S.chainProfileID&&!S.chainProfiles.some(profile=>profile.id===S.chainProfileID&&profile.enabled))selectImportChain('');
   return S.chainProfiles;
 }
 async function loadBackupData(request){
@@ -1504,7 +1517,7 @@ function renderImport(){
           <div style="flex:1"><strong>${esc(importKindLabel())}</strong></div>
           <button class="btn green format-main" onclick="directImport()">导入并测试</button>
         </div>
-        <div class="field"><label for="tagPrefix">Tag 前缀</label><input id="tagPrefix" value="" placeholder="例如：Glados" oninput="S.tagPrefix=this.value"></div>
+        <div class="field"><label for="tagPrefix">Tag 前缀</label><input id="tagPrefix" value="" placeholder="例如：Glados" oninput="S.tagPrefix=this.value" onchange="syncImportChainForTag(this.value)"></div>
         <div class="chain-import-row">
           <div class="field"><label for="importChain">前置代理（可选）</label><select id="importChain" onchange="selectImportChain(this.value)"><option value="">不使用前置代理</option>${S.chainProfiles.filter(profile=>profile.enabled).map(profile=>`<option value="${esc(profile.id)}">${esc(profile.name)}</option>`).join('')}</select></div>
           <div class="chain-import-actions"><button class="btn secondary" type="button" onclick="openChainProfileEditor('', 'import')">添加</button><button class="btn" id="editImportChain" type="button" onclick="openChainProfileEditor(S.chainProfileID,'import')" ${S.chainProfileID?'':'disabled'}>编辑</button></div>
@@ -1535,7 +1548,20 @@ function renderImport(){
   if(qs('#importChain'))qs('#importChain').value=S.chainProfileID||'';
   if(qs('#proxyProtocol'))qs('#proxyProtocol').value=S.proxyProtocol||'http';
 }
-function selectImportChain(value){S.chainProfileID=value||'';const button=qs('#editImportChain');if(button)button.disabled=!S.chainProfileID}
+function selectImportChain(value){
+  S.chainProfileID=value||'';
+  if(S.chainProfileID)localStorage.setItem(IMPORT_CHAIN_PROFILE_KEY,S.chainProfileID);else localStorage.removeItem(IMPORT_CHAIN_PROFILE_KEY);
+  const select=qs('#importChain');if(select&&select.value!==S.chainProfileID)select.value=S.chainProfileID;
+  const button=qs('#editImportChain');if(button)button.disabled=!S.chainProfileID;
+}
+function syncImportChainForTag(value){
+  const tag=String(value||'').trim();if(!tag)return;
+  const source=(S.importSources||[]).find(item=>String(item.tag_prefix||'').trim()===tag);
+  if(!source)return;
+  if(source.chain_binding==='mixed'){toast('该 Tag 当前包含多种前置代理，请在导入前明确选择','err');return}
+  const profileID=source.chain_binding==='profile'&&S.chainProfiles.some(profile=>profile.id===source.chain_profile_id&&profile.enabled)?source.chain_profile_id:'';
+  selectImportChain(profileID);
+}
 function renderGeneratedPorts(ports,total=ports.length){
   if(!ports.length)return '<div class="empty">还没有生成端口。粘贴订阅链接后点击“导入并测试”。</div>';
   return `<div class="table">${ports.map(n=>`<div class="port"><b>${esc(n.port||'-')}</b><span class="muted">${esc(nodeName(n))}</span><button class="btn small" onclick="copyPort('${esc(n.port||'')}')">复制</button></div>`).join('')}</div>${total>ports.length?`<p class="muted">已显示前 ${ports.length} 个端口，其余可在“可用端口”页面查看。</p>`:''}`;
@@ -1579,6 +1605,8 @@ async function loadHostPortFile(file){if(!file)return;S.importText=await file.te
 function importPayload(){
   S.tagPrefix=(qs('#tagPrefix')?.value||'').trim();
   S.importText=qs('#importContent')?.value||'';
+  S.chainProfileID=qs('#importChain')?.value||'';
+  if(S.chainProfileID)localStorage.setItem(IMPORT_CHAIN_PROFILE_KEY,S.chainProfileID);else localStorage.removeItem(IMPORT_CHAIN_PROFILE_KEY);
   const body={mode:S.importKind==='sub_url'?'url':'content',tag_prefix:S.tagPrefix,chain_profile_id:S.chainProfileID||''};
   if(S.importKind==='host_port'){body.content_format='host_port';body.proxy_protocol=S.proxyProtocol||'http'}
   if(body.mode==='url')body.url=S.importText.trim();else body.content=S.importText.trim();
@@ -1620,7 +1648,8 @@ async function importOne(body,label){
   const parsed=await api('/api/import/parse',{method:'POST',body:JSON.stringify(body)});
   const nodes=Array.isArray(parsed.nodes)?parsed.nodes:[];
   if(!nodes.length)throw new Error('未解析到任何节点');
-  S.importSummary={status:'running',title:`已解析 ${nodes.length} 个节点`,detail:`来源 ${label}，格式 ${parsed.format || 'unknown'}，正在测试；成功节点${S.importAutoPromote?'会自动加入节点池':'会进入候选池'}`};
+  const front=body.chain_profile_id?`前置 ${chainProfileName(body.chain_profile_id)}`:'直连';
+  S.importSummary={status:'running',title:`已解析 ${nodes.length} 个节点`,detail:`来源 ${label} · ${front} · ${parsed.format || 'unknown'}，正在测试；成功节点${S.importAutoPromote?'会自动加入节点池':'会进入候选池'}`};
   renderImport();
   const ids=nodes.map(n=>n.id).filter(Boolean);
   const res=await api('/api/import/'+parsed.import_id+'/commit',{method:'POST',body:JSON.stringify({node_ids:ids,auto_reload:true,promote_passed:S.importAutoPromote,...verificationPolicy('import')})});
@@ -1721,6 +1750,14 @@ function restoreActiveJobs(){
     }
     renderRefreshStatusHost();
     pollRefreshSourceJob(refreshId).catch(handleRefreshPollError);
+  }
+  const bindingId=localStorage.getItem(ACTIVE_TAG_BINDING_JOB_KEY);
+  if(bindingId&&!S.tagBindingPollingJob){
+    S.activeTagBindingJob=bindingId;
+    pollTagBindingJob(bindingId,S.page==='settings').catch(err=>{
+      S.activeTagBindingJob='';localStorage.removeItem(ACTIVE_TAG_BINDING_JOB_KEY);toast(err.message,'err');
+      if(S.page==='settings')renderSettings();
+    });
   }
   const connectivityId=localStorage.getItem(CONNECTIVITY_JOB_KEY);
   if(connectivityId&&!S.connectivityPollingJob&&(!S.connectivityJob||S.connectivityJob.id!==connectivityId||S.connectivityJob.status==='running')){
@@ -2299,7 +2336,7 @@ async function saveChainProfileDraft(){
     const data=await api('/api/chain-profiles',{method:'PUT',body:JSON.stringify({profiles:next,cascade})});
     S.chainProfiles=data.profiles||[];S.chainUsage=data.usage||{};
     const saved=S.chainProfiles.find(item=>item.id===id)||(S.chainProfiles.find(item=>item.name===name&&item.hops?.[0]?.uri===uri));
-    if(S.chainEditorOrigin==='import'&&saved?.enabled)S.chainProfileID=saved.id;
+    if(S.chainEditorOrigin==='import'&&saved?.enabled)selectImportChain(saved.id);
     qs('#chainProfileModal').classList.remove('show');
     toast(data.retest_job_id?'前置代理已保存，关联节点正在重新检测':'前置代理已保存');
     if(S.page==='settings')renderSettings();else if(S.page==='import')renderImport();
@@ -2310,7 +2347,7 @@ async function deleteChainProfile(id){
   const usage=S.chainUsage?.[id]||{nodes:0,ports:0};
   const warning=usage.nodes?`\n\n这会同时删除 ${usage.nodes} 个关联链式节点和 ${usage.ports||0} 个端口，无法撤销。`:'';
   if(!confirm(`确认删除前置代理“${profile.name}”？${warning}`))return;
-  try{const data=await api('/api/chain-profiles',{method:'PUT',body:JSON.stringify({profiles:S.chainProfiles.filter(item=>item.id!==id),cascade:usage.nodes>0})});S.chainProfiles=data.profiles||[];S.chainUsage=data.usage||{};if(S.chainProfileID===id)S.chainProfileID='';toast(data.deleted_nodes?`已删除前置代理和 ${data.deleted_nodes} 个关联节点`:'前置代理已删除');renderSettings()}catch(err){toast(err.message,'err')}
+  try{const data=await api('/api/chain-profiles',{method:'PUT',body:JSON.stringify({profiles:S.chainProfiles.filter(item=>item.id!==id),cascade:usage.nodes>0})});S.chainProfiles=data.profiles||[];S.chainUsage=data.usage||{};if(S.chainProfileID===id)selectImportChain('');toast(data.deleted_nodes?`已删除前置代理和 ${data.deleted_nodes} 个关联节点`:'前置代理已删除');renderSettings()}catch(err){toast(err.message,'err')}
 }
 async function testChainProfile(id){
   const button=document.querySelector(`[data-chain-test="${CSS.escape(id)}"]`),old=button?.textContent;if(button){button.disabled=true;button.textContent='测试中'}
@@ -2323,6 +2360,11 @@ function chainProfilesHTML(){
     return `<div class="chain-row"><div class="chain-main"><div class="row"><strong>${esc(profile.name)}</strong>${disabled}</div><code class="source-value">${esc(maskProxyURI(profile.hops?.[0]?.uri||''))}</code></div><div class="chain-row-actions"><button class="btn small green" data-chain-test="${esc(profile.id)}" data-id="${esc(profile.id)}" onclick="testChainProfile(this.dataset.id)">测试</button><button class="btn small secondary" data-id="${esc(profile.id)}" onclick="openChainProfileEditor(this.dataset.id,'settings')">编辑</button><button class="btn small danger" data-id="${esc(profile.id)}" onclick="deleteChainProfile(this.dataset.id)">删除</button></div></div>`;
   }).join('');
   return `<div class="chain-list">${rows}</div>`;
+}
+function chainBindingLabel(source){
+  if(source?.chain_binding==='mixed')return {text:'前置 混合',className:'amber'};
+  if(source?.chain_binding==='profile'&&source.chain_profile_id)return {text:`前置 ${chainProfileName(source.chain_profile_id)}`,className:'amber'};
+  return {text:'直连',className:'muted'};
 }
 function renderSettings(){
   const s=S.settings||{};
@@ -2337,6 +2379,10 @@ function renderSettings(){
   const blacklistSeconds=durationSeconds(pool.blacklist_duration,600);
   const rotationSeconds=durationSeconds(pool.rotation_interval,120);
   const refreshing=S.refreshJob?.status==='running'||!!S.activeRefreshJob;
+  const bindingRunning=S.tagBindingJob?.status==='running'||!!S.activeTagBindingJob;
+  const bindingTags=[...new Set(sources.map(source=>String(source.tag_prefix||'').trim()).filter(Boolean))];
+  const availableBindingTags=new Set(bindingTags);
+  for(const tag of S.selectedBindingTags)if(!availableBindingTags.has(tag))S.selectedBindingTags.delete(tag);
   const exportTags=exportTagGroups(sources);
   const availableTags=new Set(exportTags.map(group=>group.tag));
   for(const tag of S.selectedExportTags)if(!availableTags.has(tag))S.selectedExportTags.delete(tag);
@@ -2418,15 +2464,22 @@ function renderSettings(){
       <section class="settings-section settings-wide">
         <div class="settings-section-head">
           <h2>导入来源</h2>
-          <div class="row"><button class="btn small green" data-refresh-action onclick="refreshAllImportSources()" ${sources.length&&!refreshing?'':'disabled'}>重新检测全部</button><button class="btn small danger" data-refresh-action onclick="deleteAllImportSources()" ${sources.length&&!refreshing?'':'disabled'}>删除全部</button></div>
+          <div class="row">
+            <span class="pill" id="bindingTagCount">已选 ${esc(S.selectedBindingTags.size)}</span>
+            <button class="btn small secondary" data-binding-selected onclick="openTagBindingDialog([...S.selectedBindingTags])" ${S.selectedBindingTags.size&&!bindingRunning&&!refreshing?'':'disabled'}>设置所选前置代理</button>
+            <button class="btn small secondary" onclick="openTagBindingDialog(allBindingTags(),'all')" ${bindingTags.length&&!bindingRunning&&!refreshing?'':'disabled'}>设置全部前置代理</button>
+            <button class="btn small green" data-refresh-action onclick="refreshAllImportSources()" ${sources.length&&!refreshing&&!bindingRunning?'':'disabled'}>重新检测全部</button>
+            <button class="btn small danger" data-refresh-action onclick="deleteAllImportSources()" ${sources.length&&!refreshing&&!bindingRunning?'':'disabled'}>删除全部</button>
+          </div>
         </div>
         <div class="settings-section-body">
-      ${sources.length?`<div class="stack">${sources.map((src,i)=>`<div class="source-row">
+      ${sources.length?`<div class="stack">${sources.map((src,i)=>{const tag=String(src.tag_prefix||'').trim(),binding=chainBindingLabel(src);return `<div class="source-row">
+        <label class="source-row-select"><input type="checkbox" data-binding-tag="${esc(tag)}" aria-label="选择 ${esc(tag)}" ${tag&&S.selectedBindingTags.has(tag)?'checked':''} ${tag&&!bindingRunning&&!refreshing?'':'disabled'} onchange="toggleBindingTag(this.dataset.bindingTag,this.checked)"></label>
         <div style="flex:1;min-width:0">
           <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
             <span class="pill green">${esc(src.tag_prefix||'local')}</span>
             <span class="pill">${esc(importSourceType(src))}</span>
-            ${src.chain_profile_id?`<span class="pill amber">前置 ${esc(chainProfileName(src.chain_profile_id))}</span>`:''}
+            <span class="value-pill ${binding.className}">${esc(binding.text)}</span>
             <span class="value-pill muted">总数 ${esc(src.total||0)}</span>
             <span class="value-pill green">池内 ${esc(src.pool||0)}</span>
             <span class="value-pill red">失败 ${esc(src.failed||0)}</span>
@@ -2435,9 +2488,12 @@ function renderSettings(){
           <div style="margin-top:6px"><code class="source-value">${esc(importSourceText(src))}</code></div>
           <div class="muted" style="margin-top:6px">更新：${esc(fmtDate(src.updated_at))}</div>
         </div>
-        ${src.refreshable?`<button class="btn small green" data-refresh-action onclick="refreshImportSource(${i})" ${refreshing?'disabled':''}>重新检测</button>`:''}
-        <button class="btn small danger" data-refresh-action onclick="deleteImportSource(${i})" ${refreshing?'disabled':''}>删除</button>
-      </div>`).join('')}</div>`:`<div class="empty">还没有导入来源</div>`}
+        <div class="chain-row-actions">
+          ${tag?`<button class="btn small secondary" data-tag="${esc(tag)}" onclick="openTagBindingDialog([this.dataset.tag])" ${bindingRunning||refreshing?'disabled':''}>更改前置代理</button>`:''}
+          ${src.refreshable?`<button class="btn small green" data-refresh-action onclick="refreshImportSource(${i})" ${refreshing||bindingRunning?'disabled':''}>重新检测</button>`:''}
+          <button class="btn small danger" data-refresh-action onclick="deleteImportSource(${i})" ${refreshing||bindingRunning?'disabled':''}>删除</button>
+        </div>
+      </div>`}).join('')}</div>`:`<div class="empty">还没有导入来源</div>`}
         </div>
       </section>
 
@@ -2484,6 +2540,75 @@ function renderSettings(){
   qs('#setMode').value=s.mode||'pool';
   qs('#setProbe').value=probeTarget;
   qs('#setPoolMode').value=pool.mode||'rotate';
+}
+function allBindingTags(){return [...new Set((S.importSources||[]).map(source=>String(source.tag_prefix||'').trim()).filter(Boolean))]}
+function toggleBindingTag(tag,checked){
+  tag=String(tag||'').trim();if(!tag)return;
+  if(checked)S.selectedBindingTags.add(tag);else S.selectedBindingTags.delete(tag);
+  const count=qs('#bindingTagCount');if(count)count.textContent=`已选 ${S.selectedBindingTags.size}`;
+  const button=qs('[data-binding-selected]');if(button)button.disabled=!S.selectedBindingTags.size||!!S.activeTagBindingJob||!!S.activeRefreshJob;
+}
+function openTagBindingDialog(tags,scope='selected'){
+  const available=new Set(allBindingTags());
+  tags=[...new Set((tags||[]).map(tag=>String(tag||'').trim()).filter(tag=>available.has(tag)))];
+  if(!tags.length){toast('请先选择 Tag','err');return}
+  S.pendingTagBindingTags=tags;
+  const source=tags.length===1?(S.importSources||[]).find(item=>String(item.tag_prefix||'').trim()===tags[0]):null;
+  const current=source?.chain_binding==='profile'?source.chain_profile_id:'';
+  const options=S.chainProfiles.filter(profile=>profile.enabled).map(profile=>`<option value="${esc(profile.id)}" ${profile.id===current?'selected':''}>${esc(profile.name)}</option>`).join('');
+  const title=scope==='all'?'设置全部 Tag 前置代理':tags.length===1?`设置 ${tags[0]} 的前置代理`:'设置所选 Tag 前置代理';
+  openDialog(title,`<div class="field"><label for="tagBindingProfile">前置代理</label><select id="tagBindingProfile"><option value="">直连（解除前置代理）</option>${options}</select></div><div class="meta"><span class="pill green">${esc(tags.length)} 个 Tag</span>${source?.chain_binding==='mixed'?'<span class="pill amber">当前为混合绑定</span>':''}</div>`,{actions:'<button class="btn" type="button" onclick="closeDialog()">取消</button><button class="btn primary" id="applyTagBinding" type="button" onclick="submitTagBinding()">重新检测并应用</button>'});
+}
+async function submitTagBinding(){
+  const tags=[...S.pendingTagBindingTags],profileID=qs('#tagBindingProfile')?.value||'';
+  if(!tags.length)return;
+  const policy=verificationPolicy('refresh');if(!verificationPolicyValid(policy))return;
+  const button=qs('#applyTagBinding');if(button){button.disabled=true;button.textContent='正在创建任务'}
+  try{
+    const started=await api('/api/import/bindings',{method:'POST',body:JSON.stringify({tags,chain_profile_id:profileID,...policy})});
+    S.activeTagBindingJob=started.job_id;localStorage.setItem(ACTIVE_TAG_BINDING_JOB_KEY,started.job_id);
+    closeDialog();
+    await pollTagBindingJob(started.job_id,true);
+  }catch(err){if(button){button.disabled=false;button.textContent='重新检测并应用'}toast(err.message,'err')}
+}
+function tagBindingStatusLabel(status){return {waiting:'等待',preparing:'准备中',testing:'检测中',completed:'已应用',failed:'失败',skipped:'无需修改',canceled:'已取消',running:'进行中',partial:'部分完成'}[status]||status||'未知'}
+function openTagBindingProgress(job){
+  openDialog('修改 Tag 前置代理','<div id="tagBindingProgress"></div>',{wide:true,actions:'<button class="btn danger" id="cancelTagBinding" type="button" onclick="cancelTagBindingJob()">终止任务</button><button class="btn" type="button" onclick="closeDialog()">关闭</button>'});
+  const dialog=qs('#resultDialog');if(dialog)dialog.dataset.tagBindingShell='1';
+  renderTagBindingProgress(job);
+}
+function renderTagBindingProgress(job){
+  const host=qs('#tagBindingProgress');if(!host||qs('#resultDialog')?.dataset.tagBindingShell!=='1')return;
+  const total=Number(job?.total_tags)||0,done=Number(job?.done_tags)||0,pct=total?Math.min(100,Math.round(done*100/total)):0;
+  const rows=(job?.items||[]).map(item=>`<div class="binding-progress-row"><strong>${esc(item.tag_prefix)}</strong><div class="meta"><span class="pill ${item.status==='completed'||item.status==='skipped'?'green':item.status==='failed'||item.status==='canceled'?'red':'amber'}">${esc(tagBindingStatusLabel(item.status))}</span>${item.total?`<span class="value-pill muted">${esc((item.passed||0)+(item.failed||0))}/${esc(item.total)}</span>`:''}</div>${item.error?`<div class="muted" style="grid-column:1/-1">${esc(item.error)}</div>`:''}</div>`).join('');
+  host.innerHTML=`<div class="binding-progress"><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div><div class="meta"><span>Tag ${done}/${total}</span><span class="pill green">成功 ${esc(job?.successful||0)}</span><span class="pill red">失败 ${esc(job?.failed||0)}</span><span class="pill">无需修改 ${esc(job?.skipped||0)}</span></div>${job?.error?`<div class="inline-status bad">${esc(job.error)}</div>`:''}<div class="binding-progress-list">${rows}</div></div>`;
+  const cancel=qs('#cancelTagBinding');if(cancel)cancel.disabled=job?.status!=='running';
+}
+async function pollTagBindingJob(jobID,openProgress=false){
+  if(!jobID||S.tagBindingPollingJob===jobID)return;
+  S.tagBindingPollingJob=jobID;S.activeTagBindingJob=jobID;localStorage.setItem(ACTIVE_TAG_BINDING_JOB_KEY,jobID);
+  let last=null;
+  try{
+    while(true){
+      last=await api('/api/import/bindings/jobs/'+encodeURIComponent(jobID));S.tagBindingJob=last;
+      if(openProgress){openTagBindingProgress(last);openProgress=false}else renderTagBindingProgress(last);
+      if(last.status!=='running')break;
+      await new Promise(resolve=>setTimeout(resolve,600));
+    }
+    S.activeTagBindingJob='';localStorage.removeItem(ACTIVE_TAG_BINDING_JOB_KEY);
+    const failed=Number(last.failed)||0;
+    toast(failed?`前置代理修改完成，${failed} 个 Tag 保留原绑定`:'前置代理修改完成',failed?'err':'ok');
+    await Promise.all([loadImportSources(),loadImportSummary()]);
+    if(S.page==='settings')renderSettings();
+  }finally{
+    S.tagBindingPollingJob='';
+    if(last?.status&&last.status!=='running'){S.activeTagBindingJob='';localStorage.removeItem(ACTIVE_TAG_BINDING_JOB_KEY)}
+  }
+  return last;
+}
+async function cancelTagBindingJob(){
+  const id=S.activeTagBindingJob||localStorage.getItem(ACTIVE_TAG_BINDING_JOB_KEY);if(!id)return;
+  try{const job=await api('/api/import/bindings/jobs/'+encodeURIComponent(id),{method:'DELETE'});S.tagBindingJob=job;renderTagBindingProgress(job);toast('已发送终止请求')}catch(err){toast(err.message,'err')}
 }
 function arrangeSettingsLayout(){
   const grid=qs('#view .settings-grid');if(!grid)return;

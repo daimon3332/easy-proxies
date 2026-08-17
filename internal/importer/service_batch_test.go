@@ -1734,6 +1734,7 @@ func TestDeleteAllImportSourcesBatchesStoreAndConfigRemoval(t *testing.T) {
 	if err := store.UpsertNodes(nodes); err != nil {
 		t.Fatalf("UpsertNodes() error = %v", err)
 	}
+	mgr.configNodes = []config.NodeConfig{nodes[0].ToConfigNode(), nodes[1].ToConfigNode()}
 
 	deleted, err := svc.DeleteAllImportSources()
 	if err != nil {
@@ -1756,6 +1757,71 @@ func TestDeleteAllImportSourcesBatchesStoreAndConfigRemoval(t *testing.T) {
 	}
 	if mgr.reloadCount != 1 {
 		t.Fatalf("reloadCount = %d, want 1", mgr.reloadCount)
+	}
+	if len(mgr.configNodes) != 0 {
+		t.Fatalf("configNodes = %#v, want none", mgr.configNodes)
+	}
+}
+
+func TestDeleteAllImportSourcesPreservesStoreWhenConfigDeletionFails(t *testing.T) {
+	node := ManagedNode{ID: "pool", Name: "pool", URI: "trojan://pool", State: StateInPool, InPool: true, ImportMode: "url", ImportSource: "https://example.test/sub", TagPrefix: "sub"}
+	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{node.ToConfigNode()}, deleteErr: errors.New("delete failed")}
+	svc, store := newBatchServiceForTest(t, mgr)
+	if err := store.UpsertNode(node); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := svc.DeleteAllImportSources(); err == nil || !strings.Contains(err.Error(), "delete failed") {
+		t.Fatalf("DeleteAllImportSources() error = %v", err)
+	}
+	if _, ok := store.GetNode(node.ID); !ok {
+		t.Fatal("store node was deleted after config deletion failed")
+	}
+	if len(mgr.configNodes) != 1 || mgr.configNodes[0].Name != node.Name {
+		t.Fatalf("configNodes = %#v, want original node", mgr.configNodes)
+	}
+}
+
+func TestDeleteAllImportSourcesRestoresConfigWhenReloadFails(t *testing.T) {
+	node := ManagedNode{ID: "pool", Name: "pool", URI: "trojan://pool", State: StateInPool, InPool: true, ImportMode: "url", ImportSource: "https://example.test/sub", TagPrefix: "sub"}
+	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{node.ToConfigNode()}, reloadErr: errors.New("reload failed")}
+	svc, store := newBatchServiceForTest(t, mgr)
+	if err := store.UpsertNode(node); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := svc.DeleteAllImportSources(); err == nil || !strings.Contains(err.Error(), "reload failed") {
+		t.Fatalf("DeleteAllImportSources() error = %v", err)
+	}
+	if _, ok := store.GetNode(node.ID); !ok {
+		t.Fatal("store node was deleted after reload failed")
+	}
+	if mgr.restoreCount != 1 || len(mgr.configNodes) != 1 || mgr.configNodes[0].Name != node.Name {
+		t.Fatalf("restoreCount=%d configNodes=%#v", mgr.restoreCount, mgr.configNodes)
+	}
+}
+
+func TestApplyStagedNodesReconcilesOrphanRuntimeConfig(t *testing.T) {
+	mgr := &batchNodeManagerStub{configNodes: []config.NodeConfig{{Name: "orphan", URI: "trojan://orphan", Port: 24000}}}
+	svc, store := newBatchServiceForTest(t, mgr)
+	const uri = "trojan://new"
+	staged := ManagedNode{
+		ID: "staged-new", URI: uri, Name: "new", OriginalName: "new", TagPrefix: "edge",
+		ImportMode: "import_stage", ImportSource: "content", State: StatePassed,
+	}
+	if err := store.UpsertNode(staged); err != nil {
+		t.Fatal(err)
+	}
+
+	promoted, err := svc.applyStagedTagNodes(context.Background(), "edge", 0, []string{staged.ID}, true, nil)
+	if err != nil {
+		t.Fatalf("applyStagedTagNodes() error = %v", err)
+	}
+	if promoted != 1 || len(store.ListPoolNodes()) != 1 {
+		t.Fatalf("promoted=%d pool=%#v", promoted, store.ListPoolNodes())
+	}
+	if len(mgr.configNodes) != 1 || mgr.configNodes[0].URI != uri {
+		t.Fatalf("configNodes = %#v, want only imported node", mgr.configNodes)
 	}
 }
 

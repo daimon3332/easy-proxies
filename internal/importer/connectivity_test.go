@@ -127,14 +127,63 @@ func TestProbeConnectivityTargetClassifiesHTTPAndContentFailures(t *testing.T) {
 	}
 }
 
-func TestOutlookTargetChecksPageOnly(t *testing.T) {
+func TestOutlookTargetChecksPageAndAuthentication(t *testing.T) {
 	target, ok := connectivityTargetByID("outlook")
 	if !ok {
 		t.Fatal("Outlook target not found")
 	}
 	spec := connectivityTargetSpecFor(target)
-	if len(spec.components) != 1 || spec.components[0].id != "page" || spec.components[0].url != "https://outlook.live.com/mail/0/" {
+	if len(spec.components) != 2 || spec.components[0].id != "page" || spec.components[0].url != "https://outlook.live.com/mail/0/" ||
+		spec.components[1].id != "auth" || spec.components[1].url != "https://login.microsoftonline.com/" {
 		t.Fatalf("Outlook components = %#v", spec.components)
+	}
+}
+
+func TestProbeConnectivityTargetReturnsPartialWhenAuthenticationFails(t *testing.T) {
+	authFails := false
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.URL.Path == "/auth" && authFails {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = fmt.Fprint(w, "<html><body>authentication unavailable</body></html>")
+			return
+		}
+		marker := "outlook"
+		if r.URL.Path == "/auth" {
+			marker = "microsoft"
+		}
+		_, _ = fmt.Fprint(w, "<html><body>"+marker+" "+strings.Repeat("page ", 120)+"</body></html>")
+	}))
+	defer server.Close()
+	parsed, _ := url.Parse(server.URL)
+	host, _, _ := splitHostPort(parsed.Host)
+	runtime, err := newSharedProbeRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	outbound, _ := runtime.manager.Outbound(probeDirectTag)
+	roots := x509.NewCertPool()
+	roots.AddCert(server.Certificate())
+	client, transport := newConnectivityHTTPClient(outbound, roots, connectivityProbeTimeout)
+	defer transport.CloseIdleConnections()
+	spec := connectivityTargetSpec{
+		target: ConnectivityTarget{ID: "outlook", Name: "Outlook", Host: host, URL: server.URL + "/page"},
+		components: []connectivityComponentSpec{
+			{id: "page", name: "Outlook page", url: server.URL + "/page", allowedHosts: []string{host}, marker: "outlook"},
+			{id: "auth", name: "Microsoft login", url: server.URL + "/auth", allowedHosts: []string{host}, marker: "microsoft"},
+		},
+	}
+	node := ManagedNode{ID: "node"}
+	result := probeConnectivityTargetSpecWithClient(context.Background(), client, node, spec, 1, connectivityProbeTimeout)
+	if !result.Success || result.Verdict != ConnectivityVerdictUsable || len(result.Components) != 2 || !result.Components[1].Success {
+		t.Fatalf("usable result = %#v", result)
+	}
+
+	authFails = true
+	result = probeConnectivityTargetSpecWithClient(context.Background(), client, node, spec, 1, connectivityProbeTimeout)
+	if result.Success || result.Verdict != ConnectivityVerdictPartial || result.FailureStage != "auth" || len(result.Components) != 2 || result.Components[1].Success || !result.Retryable {
+		t.Fatalf("partial result = %#v", result)
 	}
 }
 

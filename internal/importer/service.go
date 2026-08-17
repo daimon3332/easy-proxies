@@ -92,6 +92,11 @@ type Service struct {
 	refreshStartMu        sync.Mutex
 	refreshCancelsMu      sync.Mutex
 	refreshCancels        map[string]context.CancelFunc
+	tagBindingJobsMu      sync.RWMutex
+	tagBindingJobs        map[string]*TagBindingJob
+	tagBindingStartMu     sync.Mutex
+	tagBindingCancelsMu   sync.Mutex
+	tagBindingCancels     map[string]context.CancelFunc
 	connectivityJobsMu    sync.RWMutex
 	connectivityJobs      map[string]*connectivityJobState
 	connectivityCancelsMu sync.Mutex
@@ -213,6 +218,8 @@ func NewService(store *Store, tester *NodeTester, nodeMgr NodeManager, opts ...O
 		testCancels:            make(map[string]context.CancelFunc),
 		refreshJobs:            make(map[string]*SourceRefreshJob),
 		refreshCancels:         make(map[string]context.CancelFunc),
+		tagBindingJobs:         make(map[string]*TagBindingJob),
+		tagBindingCancels:      make(map[string]context.CancelFunc),
 		connectivityJobs:       make(map[string]*connectivityJobState),
 		connectivityCancels:    make(map[string]context.CancelFunc),
 		jobEventSubs:           make(map[uint64]chan JobEvent),
@@ -274,6 +281,11 @@ func (s *Service) Close(ctx context.Context) error {
 			cancel()
 		}
 		s.refreshCancelsMu.Unlock()
+		s.tagBindingCancelsMu.Lock()
+		for _, cancel := range s.tagBindingCancels {
+			cancel()
+		}
+		s.tagBindingCancelsMu.Unlock()
 		s.connectivityCancelsMu.Lock()
 		for _, cancel := range s.connectivityCancels {
 			cancel()
@@ -311,7 +323,16 @@ func (s *Service) HasActiveJobs() bool {
 		}
 	}
 	s.refreshJobsMu.RUnlock()
-	return imports > 0 || tests > 0 || refreshing
+	s.tagBindingJobsMu.RLock()
+	binding := false
+	for _, job := range s.tagBindingJobs {
+		if job != nil && job.Status == "running" {
+			binding = true
+			break
+		}
+	}
+	s.tagBindingJobsMu.RUnlock()
+	return imports > 0 || tests > 0 || refreshing || binding
 }
 
 func WithHTTPClient(c *http.Client) Option {
@@ -1109,6 +1130,9 @@ func (s *Service) applyStagedNodes(ctx context.Context, tagPrefix string, revisi
 	if !ok {
 		return 0, fmt.Errorf("节点管理器不支持配置恢复")
 	}
+	if err := s.ensurePoolRuntimeConsistency(ctx); err != nil {
+		return 0, fmt.Errorf("校准节点池与运行配置: %w", err)
+	}
 	configBefore, err := configLister.ListConfigNodes(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("读取运行配置: %w", err)
@@ -1180,6 +1204,29 @@ func (s *Service) applyStagedNodes(ctx context.Context, tagPrefix string, revisi
 			keptRefs = append(keptRefs, ref)
 		}
 		if !matched {
+			incoming, exists := stagedByID[current.ID]
+			if !exists {
+				continue
+			}
+			touchedIDs[current.ID] = struct{}{}
+			beforeNodes[current.ID] = current
+			if incoming.State == StatePassed {
+				incoming.SourceRefs = deduplicateSourceRefs(append(nodeSourceRefs(current), incoming.SourceRefs...))
+				incoming.CreatedAt = current.CreatedAt
+				if current.InPool || current.State == StateInPool {
+					incoming.Name = current.Name
+					incoming.Port = current.Port
+					incoming.InPool = true
+					incoming.State = StateInPool
+					incoming.Enabled = current.Enabled
+					if incoming.CountryCode == "" {
+						incoming.CountryCode = current.CountryCode
+						incoming.CountryName = current.CountryName
+					}
+				}
+				updates[current.ID] = incoming
+			}
+			delete(stagedByID, current.ID)
 			continue
 		}
 		touchedIDs[current.ID] = struct{}{}
@@ -3890,24 +3937,66 @@ func (s *Service) deleteByTagPrefix(tagPrefix string) (int, error) {
 }
 
 func (s *Service) DeleteAllImportSources() (int, error) {
-	all := s.store.ListNodes()
-	if len(all) == 0 {
-		return 0, nil
+	s.applyMu.Lock()
+	defer s.applyMu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), runtimeApplyTimeout)
+	defer cancel()
+	lister, ok := s.nodeMgr.(NodeLister)
+	if !ok {
+		return 0, fmt.Errorf("节点管理器不支持配置快照")
 	}
+	restorer, ok := s.nodeMgr.(NodeSnapshotRestorer)
+	if !ok {
+		return 0, fmt.Errorf("节点管理器不支持配置恢复")
+	}
+	configBefore, err := lister.ListConfigNodes(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("读取运行配置: %w", err)
+	}
+	storeBefore := s.store.BackupSnapshot()
+	all := s.store.ListNodes()
 	ids := make([]string, 0, len(all))
-	poolNames := make([]string, 0)
 	for _, node := range all {
 		ids = append(ids, node.ID)
-		if (node.InPool || node.State == StateInPool) && strings.TrimSpace(node.Name) != "" {
-			poolNames = append(poolNames, node.Name)
+	}
+	configNames := make([]string, 0, len(configBefore))
+	for _, node := range configBefore {
+		if name := strings.TrimSpace(node.Name); name != "" {
+			configNames = append(configNames, name)
 		}
 	}
-	if len(poolNames) > 0 {
-		s.deleteConfigNodes(poolNames)
-		_ = s.nodeMgr.TriggerReload(context.Background())
+	rollback := func(cause error, restoreStore bool) error {
+		rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), runtimeApplyTimeout)
+		defer rollbackCancel()
+		var rollbackErrors []string
+		if restoreStore {
+			if restoreErr := s.store.RestoreNodesSnapshot(storeBefore); restoreErr != nil {
+				rollbackErrors = append(rollbackErrors, "恢复节点数据: "+restoreErr.Error())
+			}
+		}
+		if restoreErr := restorer.RestoreConfigNodes(rollbackCtx, configBefore); restoreErr != nil {
+			rollbackErrors = append(rollbackErrors, "恢复运行配置: "+restoreErr.Error())
+		}
+		if len(rollbackErrors) > 0 {
+			return fmt.Errorf("%w; 回滚失败: %s", cause, strings.Join(rollbackErrors, "; "))
+		}
+		return cause
 	}
-	if err := s.store.DeleteNodes(ids); err != nil {
-		return 0, err
+	if len(configNames) > 0 {
+		if err := s.deleteConfigNodesStrictContext(ctx, configNames); err != nil {
+			return 0, rollback(fmt.Errorf("删除运行配置: %w", err), false)
+		}
+		if err := s.nodeMgr.TriggerReload(ctx); err != nil {
+			return 0, rollback(fmt.Errorf("重载运行配置: %w", err), false)
+		}
+	}
+	if len(ids) > 0 {
+		if err := s.store.DeleteNodes(ids); err != nil {
+			return 0, rollback(fmt.Errorf("删除节点数据: %w", err), false)
+		}
+	}
+	if err := s.verifyAppliedRuntime(ctx); err != nil {
+		return 0, rollback(fmt.Errorf("验证删除结果: %w", err), true)
 	}
 	return len(ids), nil
 }
@@ -3915,6 +4004,7 @@ func (s *Service) DeleteAllImportSources() (int, error) {
 func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 	nodes := s.store.ListNodes()
 	groups := make(map[string]*ImportSourceSummary)
+	bindings := make(map[string]map[string]struct{})
 	for _, node := range nodes {
 		counted := make(map[string]struct{})
 		for _, ref := range nodeSourceRefs(node) {
@@ -3923,6 +4013,10 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 			if key == "" {
 				key = "node:" + node.ID
 			}
+			if bindings[key] == nil {
+				bindings[key] = make(map[string]struct{})
+			}
+			bindings[key][strings.TrimSpace(ref.ChainProfileID)] = struct{}{}
 			group := groups[key]
 			if group == nil {
 				group = &ImportSourceSummary{
@@ -3985,7 +4079,25 @@ func (s *Service) ListImportSources() ([]ImportSourceSummary, error) {
 		}
 	}
 	result := make([]ImportSourceSummary, 0, len(groups))
-	for _, group := range groups {
+	for key, group := range groups {
+		profiles := bindings[key]
+		switch len(profiles) {
+		case 0:
+			group.ChainBinding = ChainBindingDirect
+			group.ChainProfileID = ""
+		case 1:
+			for profileID := range profiles {
+				group.ChainProfileID = profileID
+				if profileID == "" {
+					group.ChainBinding = ChainBindingDirect
+				} else {
+					group.ChainBinding = ChainBindingProfile
+				}
+			}
+		default:
+			group.ChainBinding = ChainBindingMixed
+			group.ChainProfileID = ""
+		}
 		result = append(result, *group)
 	}
 	sort.Slice(result, func(i, j int) bool {

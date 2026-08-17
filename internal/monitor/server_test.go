@@ -81,3 +81,23 @@ func TestWebUIKeepsDecisionDataAndRemovesRedundantCopy(t *testing.T) {
 		}
 	}
 }
+
+func TestWebUIKeepsImportChainSelectionAndExposesTagBindingActions(t *testing.T) {
+	data, err := embeddedFS.ReadFile("assets/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(data)
+	for _, required := range []string{
+		`IMPORT_CHAIN_PROFILE_KEY`,
+		`S.chainProfileID=qs('#importChain')?.value||''`,
+		`openTagBindingDialog`,
+		`设置所选前置代理`,
+		`设置全部前置代理`,
+		`/api/import/bindings`,
+	} {
+		if !strings.Contains(page, required) {
+			t.Fatalf("WebUI missing Tag binding marker %q", required)
+		}
+	}
+}

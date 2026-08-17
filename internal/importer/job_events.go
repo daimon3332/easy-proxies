@@ -26,6 +26,8 @@ type JobRetentionStats struct {
 	RefreshRunning       int `json:"refresh_running"`
 	ConnectivityRetained int `json:"connectivity_retained"`
 	ConnectivityRunning  int `json:"connectivity_running"`
+	TagBindingRetained   int `json:"tag_binding_retained"`
+	TagBindingRunning    int `json:"tag_binding_running"`
 }
 
 func (s *Service) JobEventStats() JobEventStats {
@@ -63,6 +65,15 @@ func (s *Service) JobRetentionStats() JobRetentionStats {
 		}
 	}
 	s.connectivityJobsMu.RUnlock()
+
+	s.tagBindingJobsMu.RLock()
+	stats.TagBindingRetained = len(s.tagBindingJobs)
+	for _, job := range s.tagBindingJobs {
+		if job != nil && job.Status == "running" {
+			stats.TagBindingRunning++
+		}
+	}
+	s.tagBindingJobsMu.RUnlock()
 	return stats
 }
 
@@ -90,6 +101,14 @@ func (s *Service) cleanupExpiredJobs(now time.Time) {
 		}
 	}
 	s.connectivityJobsMu.Unlock()
+
+	s.tagBindingJobsMu.Lock()
+	for id, job := range s.tagBindingJobs {
+		if job != nil && job.Status != "running" && now.Sub(job.UpdatedAt) > refreshJobTTL {
+			delete(s.tagBindingJobs, id)
+		}
+	}
+	s.tagBindingJobsMu.Unlock()
 }
 
 func (s *Service) runJobCleanup(ctx context.Context) {

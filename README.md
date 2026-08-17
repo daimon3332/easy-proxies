@@ -44,6 +44,7 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 - Imports plain `host:port` and optional `user:pass@host:port` lists as HTTP or SOCKS5 nodes.
 - ⚡ Concurrent and asynchronous node testing with live progress.
 - 🔀 Optional front-proxy profiles for chained routes, using any proxy URI protocol supported by the current sing-box build.
+- Front-proxy bindings can be changed or removed for one tag, selected tags, or all tags; replacement routes are retested before they are applied.
 - Subscription fetching keeps the standard direct-first strategy with bounded fallback through available pooled proxies; the selected front proxy is used only for the chained node route.
 - Chained imports report the front-proxy baseline and the complete route separately; terminal nodes are not tested by direct connection.
 - Site connectivity checks run against any selected tags for Google, GitHub, Outlook, and ProxySpace, support a per-run 1-60 second timeout with a 10-second default, and can rebuild ports from the strict intersection of selected sites.
@@ -61,6 +62,7 @@ The default runtime mode is `multi-port`, so every passed node receives its own 
 - Probe work uses bounded asynchronous workers, delayed retries, alternate targets, and cross-job de-duplication.
 - A pooled node is only reported as passed after its actual local multi-port listener also reaches the probe target.
 - Source refresh, local URI/YAML/Base64 retesting, cancellation, and pool updates use transactional recovery and bounded queues.
+- An empty pool is a valid management state: proxy listeners stop while the WebUI remains available, and the runtime starts again when nodes enter the pool.
 - Runtime diagnostics expose startup stages, listener counts, memory, goroutines, and probe queues without exposing node credentials or subscription URLs.
 
 ## 🖼️ WebUI preview

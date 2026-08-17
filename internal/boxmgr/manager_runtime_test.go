@@ -93,6 +93,28 @@ func TestVerifyRuntimeRetriesPortsThatBecomeReady(t *testing.T) {
 	}
 }
 
+func TestStartAllowsEmptyNodePool(t *testing.T) {
+	cfg := &config.Config{
+		Mode:      "multi-port",
+		LogLevel:  "error",
+		MultiPort: config.MultiPortConfig{Address: "127.0.0.1", BasePort: 24000},
+	}
+	manager := New(cfg, monitor.Config{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := manager.Start(ctx); err != nil {
+		t.Fatalf("Start() with empty pool: %v", err)
+	}
+	defer manager.Close()
+	manager.mu.RLock()
+	instance := manager.currentBox
+	runtimeCfg := cloneConfig(manager.runtimeCfg)
+	manager.mu.RUnlock()
+	if instance != nil || runtimeCfg == nil || len(runtimeCfg.Nodes) != 0 {
+		t.Fatalf("currentBox=%v runtimeCfg=%#v, want management-only runtime", instance, runtimeCfg)
+	}
+}
+
 func TestIncrementalMultiPortReconcileKeepsBoxRunning(t *testing.T) {
 	if os.Getenv("EASY_PROXIES_RUNTIME_TEST") != "1" {
 		t.Skip("set EASY_PROXIES_RUNTIME_TEST=1 to run sing-box integration test")
@@ -162,6 +184,37 @@ func TestIncrementalMultiPortReconcileKeepsBoxRunning(t *testing.T) {
 	}
 	assertListening(t, firstPort, true)
 	assertListening(t, secondPort, false)
+
+	if err := manager.DeleteNode(ctx, "runtime-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.TriggerReload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	manager.mu.RLock()
+	afterEmpty := manager.currentBox
+	emptyRuntimeCfg := cloneConfig(manager.runtimeCfg)
+	manager.mu.RUnlock()
+	if afterEmpty != nil || emptyRuntimeCfg == nil || len(emptyRuntimeCfg.Nodes) != 0 {
+		t.Fatalf("currentBox=%v runtimeCfg=%#v, want management-only runtime", afterEmpty, emptyRuntimeCfg)
+	}
+	assertListening(t, firstPort, false)
+
+	if _, err := manager.CreateNode(ctx, config.NodeConfig{
+		Name: "runtime-c", URI: "socks5://127.0.0.1:3", Port: secondPort, Source: config.NodeSourceInline,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.TriggerReload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	manager.mu.RLock()
+	afterRestart := manager.currentBox
+	manager.mu.RUnlock()
+	if afterRestart == nil {
+		t.Fatal("adding a node did not restart the sing-box instance")
+	}
+	assertListening(t, firstPort, true)
 }
 
 func freePort(t *testing.T) uint16 {

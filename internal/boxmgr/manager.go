@@ -252,6 +252,9 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.baseCtx = ctx
 	cfg := m.cfg
 	m.mu.Unlock()
+	if len(cfg.Nodes) == 0 {
+		return m.enterEmptyRuntime(cfg)
+	}
 
 	// Try to start, with automatic port conflict resolution
 	var instance *box.Box
@@ -1308,6 +1311,9 @@ func (m *Manager) triggerReloadLocked(ctx context.Context) error {
 	if cfgCopy == nil {
 		return errConfigUnavailable
 	}
+	if len(cfgCopy.Nodes) == 0 {
+		return m.enterEmptyRuntime(cfgCopy)
+	}
 	if notStarted && (cfgCopy.Mode == "multi-port" || cfgCopy.Mode == "hybrid") {
 		if err := m.rebuildMultiPortAssignments(cfgCopy); err != nil {
 			return fmt.Errorf("rebuild multi-port assignments: %w", err)
@@ -1360,6 +1366,13 @@ func (m *Manager) ApplyRestoredConfig(ctx context.Context, restored *config.Conf
 		return m.Start(baseCtx)
 	}
 
+	return m.enterEmptyRuntime(restored)
+}
+
+func (m *Manager) enterEmptyRuntime(cfg *config.Config) error {
+	if cfg == nil {
+		return errConfigUnavailable
+	}
 	m.mu.RLock()
 	oldBox := m.currentBox
 	m.mu.RUnlock()
@@ -1367,22 +1380,32 @@ func (m *Manager) ApplyRestoredConfig(ctx context.Context, restored *config.Conf
 		if err := oldBox.Close(); err != nil {
 			return fmt.Errorf("stop current instance: %w", err)
 		}
+		m.runtimeContexts.Delete(oldBox)
 	}
+
+	pool.ResetSharedStateStore()
 	m.mu.Lock()
 	m.currentBox = nil
-	m.cfg = restored
-	m.applyConfigSettings(restored)
-	if m.geoRouter != nil {
-		m.geoRouter.Stop()
-		m.geoRouter = nil
-	}
+	m.cfg = cfg
+	m.runtimeCfg = cloneConfig(cfg)
+	m.applyConfigSettings(cfg)
+	geoRouter := m.geoRouter
+	m.geoRouter = nil
+	monitorMgr := m.monitorMgr
+	monitorServer := m.monitorServer
 	m.mu.Unlock()
-	if m.monitorMgr != nil {
-		m.monitorMgr.ClearNodes()
+
+	if geoRouter != nil {
+		geoRouter.Stop()
 	}
-	if m.monitorServer != nil {
-		m.monitorServer.SetConfig(restored)
+	if monitorMgr != nil {
+		monitorMgr.StopPeriodicHealthCheck()
+		monitorMgr.ClearNodes()
 	}
+	if monitorServer != nil {
+		monitorServer.SetConfig(cfg)
+	}
+	m.logger.Infof("proxy runtime stopped; management remains available with 0 nodes")
 	return nil
 }
 

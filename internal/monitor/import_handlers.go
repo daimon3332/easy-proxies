@@ -36,6 +36,9 @@ type ImportService interface {
 	StartRefreshSourcesWithPolicy(key string, test204 *bool, siteTargets []string) (string, error)
 	GetRefreshJob(jobID string) (importer.SourceRefreshJob, bool)
 	CancelRefreshJob(jobID string) (importer.SourceRefreshJob, error)
+	StartTagBinding(req importer.TagBindingRequest) (string, error)
+	GetTagBindingJob(jobID string) (importer.TagBindingJob, bool)
+	CancelTagBindingJob(jobID string) (importer.TagBindingJob, error)
 	ListAll() ([]importer.ManagedNode, error)
 	ListPool() ([]importer.ManagedNode, error)
 	ListFailed() ([]importer.ManagedNode, error)
@@ -517,6 +520,57 @@ func (s *Server) handleImportAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/api/import/")
+	path = strings.Trim(path, "/")
+
+	if path == "bindings" && r.Method == http.MethodPost {
+		var req importer.TagBindingRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]string{"error": "请求格式错误"})
+			return
+		}
+		jobID, err := s.importSvc.StartTagBinding(req)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(w, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]string{"job_id": jobID})
+		return
+	}
+
+	if strings.HasPrefix(path, "bindings/jobs/") {
+		jobID := strings.TrimSpace(strings.TrimPrefix(path, "bindings/jobs/"))
+		if jobID == "" || strings.Contains(jobID, "/") {
+			w.WriteHeader(http.StatusNotFound)
+			writeJSON(w, map[string]string{"error": "绑定任务不存在"})
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			job, found := s.importSvc.GetTagBindingJob(jobID)
+			if !found {
+				w.WriteHeader(http.StatusNotFound)
+				writeJSON(w, map[string]string{"error": "绑定任务不存在或已过期"})
+				return
+			}
+			writeJSON(w, job)
+			return
+		case http.MethodDelete:
+			job, err := s.importSvc.CancelTagBindingJob(jobID)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				writeJSON(w, map[string]string{"error": err.Error()})
+				return
+			}
+			writeJSON(w, job)
+			return
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			writeJSON(w, map[string]string{"error": "仅支持 GET/DELETE 请求"})
+			return
+		}
+	}
 
 	if path == "refresh" && r.Method == http.MethodPost {
 		var req struct {

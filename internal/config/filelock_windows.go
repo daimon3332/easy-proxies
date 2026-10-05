@@ -4,6 +4,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 
 	"golang.org/x/sys/windows"
@@ -35,4 +36,20 @@ func unlockFile(f *os.File) error {
 		0xFFFFFFFF,
 		&ol,
 	)
+}
+
+func tryLockFile(f *os.File) (bool, error) {
+	var ol windows.Overlapped
+	err := windows.LockFileEx(
+		windows.Handle(f.Fd()),
+		windows.LOCKFILE_EXCLUSIVE_LOCK|windows.LOCKFILE_FAIL_IMMEDIATELY,
+		0,
+		0xFFFFFFFF,
+		0xFFFFFFFF,
+		&ol,
+	)
+	if errors.Is(err, windows.ERROR_LOCK_VIOLATION) {
+		return false, nil
+	}
+	return err == nil, err
 }

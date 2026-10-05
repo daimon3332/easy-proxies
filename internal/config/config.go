@@ -1534,8 +1534,55 @@ func IsPortAvailable(address string, port uint16) bool {
 	return true
 }
 
-// writeFileWithLock writes data to a file with exclusive locking.
+// ClashAPIListen returns the opt-in embedded Clash API address; empty disables it.
+func ClashAPIListen() string {
+	return strings.TrimSpace(os.Getenv("EASY_PROXIES_CLASH_API_LISTEN"))
+}
+
+// writeFileWithLock replaces a file atomically, falling back to an exclusive
+// in-place write when the platform refuses the rename (e.g. sharing violations).
 func writeFileWithLock(path string, data []byte, perm os.FileMode) error {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	if info, err := os.Stat(path); err == nil {
+		perm = info.Mode().Perm()
+	}
+	tmpPath, err := writeTempFile(path, data, perm)
+	if err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err == nil {
+		return nil
+	}
+	_ = os.Remove(tmpPath)
+	return writeFileInPlace(path, data, perm)
+}
+
+func writeTempFile(path string, data []byte, perm os.FileMode) (string, error) {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return "", fmt.Errorf("create temp file: %w", err)
+	}
+	name := f.Name()
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Sync()
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Chmod(name, perm)
+	}
+	if err != nil {
+		_ = os.Remove(name)
+		return "", fmt.Errorf("write temp file: %w", err)
+	}
+	return name, nil
+}
+
+func writeFileInPlace(path string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)

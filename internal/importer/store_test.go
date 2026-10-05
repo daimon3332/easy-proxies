@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -305,5 +306,44 @@ func TestStoreApplyNodeChangesRollsBackMemoryOnDatabaseFailure(t *testing.T) {
 	after, ok := store.GetNode(original.ID)
 	if !ok || !reflect.DeepEqual(after, before) {
 		t.Fatalf("memory state was not rolled back: before=%#v after=%#v found=%v", before, after, ok)
+	}
+}
+
+func TestStorePruneJobsAtRuntimeKeepsRunningJobs(t *testing.T) {
+	store, err := newTestStore(t, filepath.Join(t.TempDir(), "managed_nodes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	old := now.Add(-storedJobMaxAge - time.Hour)
+	if err := store.UpsertJob(ImportJob{ID: "running", Status: ImportStatusRunning, CreatedAt: old, UpdatedAt: old}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertJob(ImportJob{ID: "expired", Status: ImportStatusCompleted, CreatedAt: old, UpdatedAt: old}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < maxStoredJobs+2; i++ {
+		at := now.Add(-time.Duration(i) * time.Minute)
+		if err := store.UpsertJob(ImportJob{ID: "job-" + strconv.Itoa(i), Status: ImportStatusParsed, CreatedAt: at, UpdatedAt: at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.PruneJobs(now); err != nil {
+		t.Fatalf("PruneJobs() error = %v", err)
+	}
+	if job, ok := store.GetJob("running"); !ok || job.Status != ImportStatusRunning {
+		t.Fatalf("running job changed: %#v ok=%v", job, ok)
+	}
+	if _, ok := store.GetJob("expired"); ok {
+		t.Fatal("expired job retained")
+	}
+	if _, ok := store.GetJob("job-" + strconv.Itoa(maxStoredJobs+1)); ok {
+		t.Fatal("oldest job beyond the retention limit retained")
+	}
+	store.mu.RLock()
+	retained := len(store.jobs)
+	store.mu.RUnlock()
+	if retained != maxStoredJobs+1 {
+		t.Fatalf("retained jobs = %d, want %d", retained, maxStoredJobs+1)
 	}
 }

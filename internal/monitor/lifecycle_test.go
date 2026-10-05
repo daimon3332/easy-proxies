@@ -158,3 +158,21 @@ func TestServerShutdownCancelsCleanupAndReleasesPort(t *testing.T) {
 	}
 	_ = rebound.Close()
 }
+
+func TestServerStartFailsWhenListenAddressIsBusy(t *testing.T) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer occupied.Close()
+	mgr, err := NewManager(Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mgr.Stop()
+	s := NewServer(Config{Enabled: true, Listen: occupied.Addr().String()}, mgr, log.New(io.Discard, "", 0))
+	defer s.Close()
+	if err := s.Start(context.Background()); err == nil {
+		t.Fatal("Start succeeded on an occupied address")
+	}
+}

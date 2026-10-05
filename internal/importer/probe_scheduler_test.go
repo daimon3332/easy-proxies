@@ -152,3 +152,45 @@ func TestProbeSchedulerBoundsExecutionAndSkipsCanceledQueue(t *testing.T) {
 		t.Fatal("canceled queued task executed")
 	}
 }
+
+func TestProbeSchedulerCancelsRunningTaskOnlyAfterAllWaitersLeave(t *testing.T) {
+	scheduler := newProbeScheduler(1, 8)
+	defer scheduler.Close()
+	release := make(chan struct{})
+	blocker, _ := scheduler.Submit(context.Background(), "blocker", probePriorityNormal, time.Minute, func(context.Context) TestResult {
+		<-release
+		return TestResult{}
+	})
+	started, canceled := make(chan struct{}), make(chan struct{})
+	fn := func(ctx context.Context) TestResult {
+		close(started)
+		<-ctx.Done()
+		close(canceled)
+		return TestResult{Error: ctx.Err()}
+	}
+	ctxA, cancelA := context.WithCancel(context.Background())
+	ctxB, cancelB := context.WithCancel(context.Background())
+	defer cancelA()
+	defer cancelB()
+	if _, err := scheduler.Submit(ctxA, "shared", probePriorityNormal, time.Minute, fn); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := scheduler.Submit(ctxB, "shared", probePriorityNormal, time.Minute, fn); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	<-blocker
+	<-started
+	cancelA()
+	select {
+	case <-canceled:
+		t.Fatal("probe canceled while a waiter is still active")
+	case <-time.After(50 * time.Millisecond):
+	}
+	cancelB()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("probe not canceled after all waiters left")
+	}
+}

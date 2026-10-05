@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	mathrand "math/rand"
 	"net"
@@ -17,6 +18,7 @@ import (
 	"net/netip"
 	neturl "net/url"
 	"os"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -29,8 +31,15 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-//go:embed assets/index.html assets/logo.png assets/favicon.svg
+//go:embed assets
 var embeddedFS embed.FS
+
+var assetContentTypes = map[string]string{
+	".css": "text/css; charset=utf-8",
+	".js":  "text/javascript; charset=utf-8",
+	".svg": "image/svg+xml",
+	".png": "image/png",
+}
 
 // Session represents a user session with expiration.
 type Session struct {
@@ -143,6 +152,7 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
+	mux.HandleFunc("/assets/", s.handleAsset)
 	mux.HandleFunc("/logo.png", s.handleLogo)
 	mux.HandleFunc("/favicon.svg", s.handleFavicon)
 	mux.HandleFunc("/api/auth", s.handleAuth)
@@ -211,7 +221,9 @@ func NewServer(cfg Config, mgr *Manager, logger *log.Logger) *Server {
 	}
 	s.srv = &http.Server{
 		Addr: cfg.Listen, Handler: mux,
-		BaseContext: func(net.Listener) context.Context { return lifecycleCtx },
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		BaseContext:       func(net.Listener) context.Context { return lifecycleCtx },
 	}
 	return s
 }
@@ -351,22 +363,23 @@ func (s *Server) updateSettings(externalIP, probeTarget string, skipCertVerify b
 	return nil
 }
 
-// Start launches the HTTP server.
-func (s *Server) Start(ctx context.Context) {
+// Start binds the listen address and serves the HTTP server in the background.
+func (s *Server) Start(ctx context.Context) error {
 	if s == nil || s.srv == nil {
-		return
+		return nil
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	s.logger.Printf("Starting monitor server on %s", s.cfg.Listen)
+	listener, err := net.Listen("tcp", s.cfg.Listen)
+	if err != nil {
+		return fmt.Errorf("listen monitor server on %s: %w", s.cfg.Listen, err)
+	}
 	go func() {
-		if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := s.srv.Serve(listener); err != nil && err != http.ErrServerClosed {
 			s.logger.Printf("❌ Monitor server error: %v", err)
 		}
 	}()
-	// Give server a moment to start and check for immediate errors
-	time.Sleep(100 * time.Millisecond)
 	s.logger.Printf("✅ Monitor server started on http://%s", s.cfg.Listen)
 
 	go func() {
@@ -379,6 +392,7 @@ func (s *Server) Start(ctx context.Context) {
 		defer cancel()
 		_ = s.Shutdown(shutdownCtx)
 	}()
+	return nil
 }
 
 // Shutdown stops the server gracefully.
@@ -452,6 +466,23 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(data)
+}
+
+func (s *Server) handleAsset(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/assets/")
+	contentType, ok := assetContentTypes[path.Ext(name)]
+	if !ok || !fs.ValidPath(name) {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := embeddedFS.ReadFile("assets/" + name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(data)
 }
 
@@ -1627,8 +1658,19 @@ func (s *Server) respondNodeError(w http.ResponseWriter, err error) {
 // handleTraffic streams real-time traffic from sing-box Clash API as SSE.
 // Clash API /traffic returns newline-delimited JSON; we convert to SSE for browser EventSource.
 func (s *Server) handleTraffic(w http.ResponseWriter, r *http.Request) {
-	// Connect to sing-box Clash API
-	resp, err := http.Get("http://127.0.0.1:9092/traffic")
+	listen := config.ClashAPIListen()
+	if listen == "" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		writeJSON(w, map[string]any{"error": "流量统计接口未启用（需设置 EASY_PROXIES_CLASH_API_LISTEN）"})
+		return
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "http://"+listen+"/traffic", nil)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		writeJSON(w, map[string]any{"error": "无法连接到流量统计接口", "details": err.Error()})
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 		writeJSON(w, map[string]any{"error": "无法连接到流量统计接口", "details": err.Error()})

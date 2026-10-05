@@ -98,13 +98,24 @@ func compactPersistedJob(job ImportJob) ImportJob {
 }
 
 func (s *Store) recoverAndPruneJobs(now time.Time) error {
+	return s.pruneJobs(now, true)
+}
+
+// PruneJobs applies the startup retention policy at runtime without touching running jobs.
+func (s *Store) PruneJobs(now time.Time) error {
+	return s.pruneJobs(now, false)
+}
+
+func (s *Store) pruneJobs(now time.Time, recoverRunning bool) error {
 	s.mutationMu.Lock()
 	defer s.mutationMu.Unlock()
 
 	s.mu.Lock()
-	previous := make(map[string]ImportJob, len(s.jobs))
-	for id, job := range s.jobs {
-		previous[id] = job
+	previous := make(map[string]ImportJob)
+	remember := func(id string) {
+		if _, ok := previous[id]; !ok {
+			previous[id] = s.jobs[id]
+		}
 	}
 	changed := false
 	changedJobs := make(map[string]ImportJob)
@@ -116,7 +127,11 @@ func (s *Store) recoverAndPruneJobs(now time.Time) error {
 	}
 	retained := make([]retainedJob, 0, len(s.jobs))
 	for id, job := range s.jobs {
+		if job.Status == ImportStatusRunning && !recoverRunning {
+			continue
+		}
 		if job.Status == ImportStatusRunning {
+			remember(id)
 			job.Status = ImportStatusCanceled
 			job.Error = "程序重启，任务已中断"
 			job.ProbePending = 0
@@ -130,6 +145,7 @@ func (s *Store) recoverAndPruneJobs(now time.Time) error {
 			at = job.CreatedAt
 		}
 		if !at.IsZero() && now.After(at) && now.Sub(at) > storedJobMaxAge {
+			remember(id)
 			delete(s.jobs, id)
 			delete(changedJobs, id)
 			deletedJobs[id] = struct{}{}
@@ -149,6 +165,7 @@ func (s *Store) recoverAndPruneJobs(now time.Time) error {
 	})
 	if len(retained) > maxStoredJobs {
 		for _, item := range retained[maxStoredJobs:] {
+			remember(item.id)
 			delete(s.jobs, item.id)
 			delete(changedJobs, item.id)
 			deletedJobs[item.id] = struct{}{}
@@ -170,7 +187,9 @@ func (s *Store) recoverAndPruneJobs(now time.Time) error {
 	}
 	if err := s.db.applyJobs(upserts, deletes); err != nil {
 		s.mu.Lock()
-		s.jobs = previous
+		for id, job := range previous {
+			s.jobs[id] = job
+		}
 		s.mu.Unlock()
 		return err
 	}

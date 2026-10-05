@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/netip"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -77,20 +76,11 @@ func Build(cfg *config.Config) (option.Options, error) {
 		chainDetours[profile.ID] = chainOutbounds[len(chainOutbounds)-1].Tag
 	}
 
-	// Initialize GeoIP lookup if enabled
+	// Region metadata only feeds pool outbounds; multi-port mode never reads it.
 	var geoLookup *geoip.Lookup
-	if cfg.GeoIP.Enabled && cfg.GeoIP.DatabasePath != "" {
+	if GeoIPRoutingEnabled(cfg) && cfg.GeoIP.DatabasePath != "" {
 		var err error
-		// Use auto-update if enabled
-		if cfg.GeoIP.AutoUpdateEnabled {
-			interval := cfg.GeoIP.AutoUpdateInterval
-			if interval == 0 {
-				interval = 24 * time.Hour // Default to 24 hours
-			}
-			geoLookup, err = geoip.NewWithAutoUpdate(cfg.GeoIP.DatabasePath, interval)
-		} else {
-			geoLookup, err = geoip.New(cfg.GeoIP.DatabasePath)
-		}
+		geoLookup, err = geoip.New(cfg.GeoIP.DatabasePath)
 		if err != nil {
 			log.Printf("⚠️  GeoIP database load failed: %v (region routing disabled)", err)
 		} else {
@@ -255,7 +245,7 @@ func Build(cfg *config.Config) (option.Options, error) {
 	log.Printf("✅ Successfully built %d/%d nodes", len(memberTags), len(cfg.Nodes))
 
 	// Log GeoIP region distribution
-	if cfg.GeoIP.Enabled {
+	if geoLookup != nil {
 		log.Println("🌍 GeoIP Region Distribution:")
 		for _, region := range geoip.AllRegions() {
 			count := len(regionMembers[region])
@@ -380,20 +370,18 @@ func Build(cfg *config.Config) (option.Options, error) {
 		Inbounds:  inbounds,
 		Outbounds: outbounds,
 		Route:     &route,
-		Experimental: &option.ExperimentalOptions{
-			ClashAPI: &option.ClashAPIOptions{
-				ExternalController: clashAPIListen(),
-			},
-		},
+	}
+	if listen := config.ClashAPIListen(); listen != "" {
+		opts.Experimental = &option.ExperimentalOptions{
+			ClashAPI: &option.ClashAPIOptions{ExternalController: listen},
+		}
 	}
 	return opts, nil
 }
 
-func clashAPIListen() string {
-	if listen := strings.TrimSpace(os.Getenv("EASY_PROXIES_CLASH_API_LISTEN")); listen != "" {
-		return listen
-	}
-	return "127.0.0.1:9092"
+// GeoIPRoutingEnabled reports whether GeoIP region pools apply to the mode.
+func GeoIPRoutingEnabled(cfg *config.Config) bool {
+	return cfg != nil && cfg.GeoIP.Enabled && (cfg.Mode == "pool" || cfg.Mode == "hybrid")
 }
 
 func coreLogLevel(cfg *config.Config, inboundCount int) string {

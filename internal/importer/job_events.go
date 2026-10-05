@@ -118,6 +118,9 @@ func (s *Service) runJobCleanup(ctx context.Context) {
 		select {
 		case now := <-ticker.C:
 			s.cleanupExpiredJobs(now)
+			if s.store != nil {
+				_ = s.store.PruneJobs(now)
+			}
 		case <-ctx.Done():
 			return
 		}

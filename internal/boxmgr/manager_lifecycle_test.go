@@ -171,3 +171,19 @@ func TestRuntimeShutdownReleasesPortsAndContexts(t *testing.T) {
 		})
 	}
 }
+
+func TestEnsureMonitorFailsWhenManagementPortIsBusy(t *testing.T) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer occupied.Close()
+	mgr := New(&config.Config{}, monitor.Config{Enabled: true, Listen: occupied.Addr().String()})
+	defer mgr.Close()
+	if err := mgr.EnsureMonitor(context.Background()); err == nil {
+		t.Fatal("EnsureMonitor succeeded on an occupied management port")
+	}
+	if mgr.MonitorServer() != nil {
+		t.Fatal("failed monitor server remains registered")
+	}
+}

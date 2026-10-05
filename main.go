@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -17,6 +18,9 @@ import (
 
 	"gopkg.in/natefinch/lumberjack.v2"
 )
+
+// Covers the launcher's graceful shutdown window for a previous instance.
+const instanceLockWait = 40 * time.Second
 
 func main() {
 	var configPath string
@@ -37,6 +41,16 @@ func main() {
 			os.Exit(1)
 		}()
 	}
+
+	releaseLock, err := config.AcquireInstanceLock(configPath, 0)
+	if errors.Is(err, config.ErrInstanceRunning) {
+		log.Printf("⏳ Another instance is using %s; waiting up to %s for it to exit...", configPath, instanceLockWait)
+		releaseLock, err = config.AcquireInstanceLock(configPath, instanceLockWait)
+	}
+	if err != nil {
+		log.Fatalf("instance lock: %v", err)
+	}
+	defer releaseLock()
 
 	var cfg *config.Config
 	for attempt := 1; attempt <= 3; attempt++ {

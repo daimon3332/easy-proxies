@@ -375,7 +375,7 @@ func (m *Manager) startLocked(ctx context.Context) error {
 	m.logger.Infof("sing-box instance started with %d nodes", len(cfg.Nodes))
 
 	// Start GeoIP router if enabled
-	if cfg.GeoIP.Enabled {
+	if builder.GeoIPRoutingEnabled(cfg) {
 		m.startGeoIPRouter(ctx, cfg)
 	}
 
@@ -524,7 +524,7 @@ func (m *Manager) reloadLocked(newCfg *config.Config) error {
 	m.logger.Infof("reload completed successfully with %d nodes", len(newCfg.Nodes))
 
 	// Restart GeoIP router with new pools
-	if newCfg.GeoIP.Enabled {
+	if builder.GeoIPRoutingEnabled(newCfg) {
 		m.startGeoIPRouter(ctx, newCfg)
 	} else {
 		m.mu.Lock()
@@ -1116,7 +1116,15 @@ func (m *Manager) ensureMonitor(ctx context.Context) error {
 	m.mu.Unlock()
 
 	if serverToStart != nil {
-		serverToStart.Start(ctx)
+		if err := serverToStart.Start(ctx); err != nil {
+			m.mu.Lock()
+			if m.monitorServer == serverToStart {
+				m.monitorServer = nil
+			}
+			m.mu.Unlock()
+			_ = serverToStart.Close()
+			return err
+		}
 	}
 	return nil
 }

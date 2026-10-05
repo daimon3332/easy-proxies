@@ -273,26 +273,17 @@ func (s *probeScheduler) execute(waiters []probeWaiter, timeout time.Duration, f
 		timeout = DefaultProbeTimeout*2 + 1500*time.Millisecond
 	}
 	ctx, cancel := context.WithTimeout(s.ctx, timeout)
-	done := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(25 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				if len(activeProbeWaiters(waiters)) == 0 {
-					cancel()
-					return
-				}
+	defer cancel()
+	var active atomic.Int32
+	active.Store(int32(len(waiters)))
+	for _, waiter := range waiters {
+		stop := context.AfterFunc(waiter.ctx, func() {
+			if active.Add(-1) == 0 {
+				cancel()
 			}
-		}
-	}()
-	defer func() {
-		close(done)
-		cancel()
-	}()
+		})
+		defer stop()
+	}
 	return safeTestResult(func() TestResult { return fn(ctx) })
 }
 

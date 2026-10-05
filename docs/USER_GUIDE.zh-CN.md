@@ -1,162 +1,56 @@
 # Easy Proxies 使用教程
 
-[English](./USER_GUIDE.md) · [简体中文](./USER_GUIDE.zh-CN.md) · [繁體中文](./USER_GUIDE.zh-TW.md)
+[English](./USER_GUIDE.md) · [简体中文](./USER_GUIDE.zh-CN.md)
 
-本教程介绍准备并启动 Easy Proxies 的两种方法。教程在程序启动后结束，不包含 WebUI 的使用流程。
+## 1. 获取程序
 
-## 方法一：从源码构建
+### 方式 A：下载 Release
 
-### 1. 准备环境
+打开 [最新 Release](https://github.com/daimon3332/easy-proxies/releases/latest)，下载与系统匹配的 ZIP 并解压到新文件夹：
 
-- Git
-- Go 1.24.4，或兼容的 Go 1.24 版本
+| 系统 | 文件后缀 |
+| --- | --- |
+| Windows（Intel/AMD） | `windows-amd64.zip` |
+| Windows ARM | `windows-arm64.zip` |
+| Linux（Intel/AMD） | `linux-amd64.zip` |
+| Linux ARM64 | `linux-arm64.zip` |
 
-### 2. 复制项目到本地
+### 方式 B：从源码构建
+
+需要 Git 和 Go 1.24.4 或兼容的 Go 1.24 工具链。
 
 ```bash
 git clone https://github.com/daimon3332/easy-proxies.git
 cd easy-proxies
-```
-
-### 3. 创建本地配置
-
-复制配置模板，不要直接修改模板文件。
-
-Windows PowerShell：
-
-```powershell
-Copy-Item config.example.yaml config.yaml
-```
-
-Windows 命令提示符：
-
-```batch
-copy config.example.yaml config.yaml
-```
-
-Linux 或 macOS：
-
-```bash
-cp config.example.yaml config.yaml
-```
-
-### 4. 自行构建 Easy Proxies
-
-Windows PowerShell 或命令提示符：
-
-```powershell
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies.exe .
-```
-
-Linux 或 macOS：
-
-```bash
 go build -tags "with_clash_api with_utls with_quic" -o easy_proxies .
 ```
 
-其中 `with_clash_api` 用于启用内置 Clash API，其他 tags 用于启用 uTLS/Reality 相关能力和基于 QUIC 的协议支持。
+Windows 下改用 `-o easy_proxies.exe`。这些 tags 用于启用 uTLS/Reality、基于 QUIC 的协议（Hysteria2、TUIC）以及可选的 Clash API；Clash API 默认关闭，设置环境变量 `EASY_PROXIES_CLASH_API_LISTEN`（如 `127.0.0.1:9092`）后才启用。
 
-### 5. 启动自行构建的程序
+## 2. 创建配置
 
-Windows：
-
-```powershell
-.\easy_proxies.exe -config config.yaml
-```
-
-Linux 或 macOS：
+在程序所在目录复制模板：
 
 ```bash
-chmod +x easy_proxies
-./easy_proxies -config config.yaml
+cp config.example.yaml config.yaml          # Linux
+Copy-Item config.example.yaml config.yaml   # Windows PowerShell
 ```
 
-程序运行期间请保持终端窗口开启。
-
-## 方法二：下载 Release
-
-### 1. 选择下载文件
-
-打开[最新 Release](https://github.com/daimon3332/easy-proxies/releases/latest)，根据操作系统和 CPU 选择对应的 ZIP 压缩包：
-
-| 系统 | 常见 CPU | 文件名后缀 |
-| --- | --- | --- |
-| Windows 64 位电脑 | Intel 或 AMD | `windows-amd64.zip` |
-| Windows ARM 设备 | ARM64 | `windows-arm64.zip` |
-| Linux 64 位电脑或服务器 | Intel 或 AMD | `linux-amd64.zip` |
-| Linux ARM 设备或服务器 | ARM64 | `linux-arm64.zip` |
-| Intel Mac | Intel | `macos-amd64.zip` |
-| Apple 芯片 Mac | M1/M2/M3/M4 或更新型号 | `macos-arm64.zip` |
-
-ZIP 压缩包已经包含可执行文件，此方法不需要本地构建。
-
-### 2. 解压并创建配置
-
-把 ZIP 解压到新目录，然后复制配置模板。
-
-Windows PowerShell：
-
-```powershell
-Copy-Item config.example.yaml config.yaml
-```
-
-Windows 命令提示符：
-
-```batch
-copy config.example.yaml config.yaml
-```
-
-Linux 或 macOS：
+## 3. 启动
 
 ```bash
-cp config.example.yaml config.yaml
+./easy_proxies -config config.yaml          # Linux（先执行 chmod +x easy_proxies）
+.\easy_proxies.exe -config config.yaml      # Windows
 ```
 
-### 3. 启动 Easy Proxies
-
-Windows：
-
-```powershell
-.\easy_proxies.exe -config config.yaml
-```
-
-Linux 或 macOS：
-
-```bash
-chmod +x easy_proxies
-./easy_proxies -config config.yaml
-```
-
-程序运行期间请保持终端窗口开启。
+保持终端窗口开启，然后在浏览器打开 `management.listen` 地址（默认 `http://127.0.0.1:9091`）。
 
 ## 常见问题
 
-### 提示 `clash api is not included in this build`
+**找不到 `config.yaml`**：在包含 `config.yaml` 的目录启动程序，或给 `-config` 传入完整路径。
 
-方法一需要使用以下命令重新构建：
+**提示 `another easy_proxies instance is using this config`**：同一份配置只允许一个进程使用。新进程会最多等待 40 秒让旧进程退出；如果旧进程仍在运行，请先关闭它。
 
-```bash
-go build -tags "with_clash_api with_utls with_quic" -o easy_proxies .
-```
+**程序启动后立即退出**：查看终端输出。常见原因是 `config.yaml` 格式错误、管理端口（默认 `9091`）已被占用，或程序与操作系统/CPU 架构不匹配。
 
-方法二请重新下载官方 Release 压缩包，不要使用缺少构建 tags 的程序。
-
-### 找不到 `config.yaml`
-
-请在包含 `config.example.yaml` 的目录中执行复制命令，并在同一目录启动 Easy Proxies。
-
-### 程序启动后立即退出
-
-先查看终端中的错误信息，确认 `config.yaml` 格式正确、所需端口未被占用，并确认程序与操作系统和 CPU 架构匹配。
-
-### WebUI 无法打开
-
-确认程序仍在运行，并检查 `config.yaml` 中的 `management.listen` 是否与浏览器地址一致，同时确认 `9091` 端口未被其他程序占用。
-
-### macOS 阻止运行程序
-
-macOS 文件未使用 Apple Developer 证书签名或公证。使用 `SHA256SUMS.txt` 核对下载文件后，可以移除隔离属性：
-
-```bash
-xattr -d com.apple.quarantine easy_proxies
-```
+**提示 `clash api is not included in this build`**：按上面的 tags 重新构建，或使用官方 Release 包。

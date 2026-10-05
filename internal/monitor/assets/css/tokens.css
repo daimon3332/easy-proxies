@@ -1,0 +1,60 @@
+:root{
+  --bg:#eef3f9;
+  --bg-gradient:linear-gradient(120deg,#f0f7ff 0%,#e8f2ff 48%,#eef8ff 100%);
+  --blob-1:radial-gradient(circle at 30% 30%,rgba(122,162,255,.42),rgba(182,212,255,0) 70%);
+  --blob-2:radial-gradient(circle at 60% 40%,rgba(107,197,255,.34),rgba(125,235,220,0) 70%);
+
+  --surface:#ffffff;
+  --surface-glass:rgba(255,255,255,.72);
+  --surface-subtle:#f6f9fd;
+  --surface-hover:#f1f6fd;
+  --surface-sunken:#eef3f9;
+
+  --line:rgba(15,23,42,.08);
+  --line-strong:rgba(15,23,42,.14);
+  --line-soft:#e3ebf5;
+
+  --text:#1f2d3d;
+  --text-2:#5f6c7b;
+  --muted:#8b95a6;
+  --faint:#b5bdca;
+
+  --blue:#3b82f6;
+  --blue-deep:#2563eb;
+  --blue-soft:rgba(59,130,246,.1);
+  --blue-softer:#eff6ff;
+  --blue-line:#bfdbfe;
+  --green:#16a34a;
+  --green-deep:#15803d;
+  --green-soft:#ecfdf3;
+  --green-line:#bbf7d0;
+  --red:#dc2626;
+  --red-deep:#b91c1c;
+  --red-soft:#fef2f2;
+  --red-line:#fecaca;
+  --amber:#d97706;
+  --amber-deep:#b45309;
+  --amber-soft:#fffbeb;
+  --amber-line:#fde68a;
+  --violet:#7c3aed;
+  --violet-soft:#f5f3ff;
+  --slate-soft:#f1f5f9;
+
+  --radius-lg:16px;
+  --radius:12px;
+  --radius-sm:8px;
+  --radius-pill:999px;
+
+  --gap:20px;
+  --pad:20px;
+  --side-width:224px;
+  --side-collapsed:68px;
+  --topbar-h:60px;
+
+  --shadow-pop:0 18px 48px rgba(15,23,42,.14),0 2px 8px rgba(15,23,42,.06);
+  --ring:0 0 0 3px rgba(59,130,246,.22);
+  --ease:cubic-bezier(.22,1,.36,1);
+
+  --font:"Segoe UI Variable Text","Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"Cascadia Mono","JetBrains Mono",Consolas,"SFMono-Regular",monospace;
+}

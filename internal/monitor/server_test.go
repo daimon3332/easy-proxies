@@ -1,8 +1,11 @@
 package monitor
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"path"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -36,13 +39,55 @@ func TestHandleFavicon(t *testing.T) {
 	}
 }
 
-func TestHandleIndexIncludesRefreshProgressUI(t *testing.T) {
+func webUISource(t *testing.T) string {
+	t.Helper()
+	var source strings.Builder
+	err := fs.WalkDir(embeddedFS, "assets", func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		switch path.Ext(name) {
+		case ".html", ".js", ".css":
+			data, err := embeddedFS.ReadFile(name)
+			if err != nil {
+				return err
+			}
+			source.Write(data)
+			source.WriteByte('\n')
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return source.String()
+}
+
+func TestHandleIndexServesShellAndAssets(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	(&Server{}).handleIndex(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	server := &Server{}
+	server.handleIndex(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("unexpected status: %d", recorder.Code)
 	}
-	body := recorder.Body.String()
+	for _, ref := range regexp.MustCompile(`(?:src|href)="(/assets/[^"]+)"`).FindAllStringSubmatch(recorder.Body.String(), -1) {
+		asset := httptest.NewRecorder()
+		server.handleAsset(asset, httptest.NewRequest(http.MethodGet, ref[1], nil))
+		if asset.Code != http.StatusOK || asset.Body.Len() == 0 {
+			t.Fatalf("asset %s status=%d", ref[1], asset.Code)
+		}
+		if asset.Header().Get("Cache-Control") != "no-cache" {
+			t.Fatalf("asset %s cache control = %q", ref[1], asset.Header().Get("Cache-Control"))
+		}
+	}
+	for _, bad := range []string{"/assets/../server.go", "/assets/js/", "/assets/missing.js", "/assets/index.html"} {
+		asset := httptest.NewRecorder()
+		server.handleAsset(asset, httptest.NewRequest(http.MethodGet, bad, nil))
+		if asset.Code != http.StatusNotFound {
+			t.Fatalf("asset %s status=%d, want 404", bad, asset.Code)
+		}
+	}
+	body := webUISource(t)
 	for _, marker := range []string{"easy_proxies_active_refresh_job", "failed_nodes", "refresh-modal", "probe_round_done", "重新检测部分完成", "正在应用节点和端口", "正在验证端口监听", "恢复检测前节点池", "测速已终止，检测前节点池已恢复", "return await retestNodes([id])", "dialog.dataset.refreshShell", "const scrollTop=listHost.scrollTop", "listHost.scrollTop=scrollTop"} {
 		if !strings.Contains(body, marker) {
 			t.Fatalf("index is missing refresh UI marker %q", marker)
@@ -51,11 +96,7 @@ func TestHandleIndexIncludesRefreshProgressUI(t *testing.T) {
 }
 
 func TestWebUIKeepsDecisionDataAndRemovesRedundantCopy(t *testing.T) {
-	data, err := embeddedFS.ReadFile("assets/index.html")
-	if err != nil {
-		t.Fatal(err)
-	}
-	page := string(data)
+	page := webUISource(t)
 	for _, required := range []string{
 		`id="pageTitle" class="sr-only"`,
 		`所选项目必须全部成功`,
@@ -83,11 +124,7 @@ func TestWebUIKeepsDecisionDataAndRemovesRedundantCopy(t *testing.T) {
 }
 
 func TestWebUIKeepsImportChainSelectionAndExposesTagBindingActions(t *testing.T) {
-	data, err := embeddedFS.ReadFile("assets/index.html")
-	if err != nil {
-		t.Fatal(err)
-	}
-	page := string(data)
+	page := webUISource(t)
 	for _, required := range []string{
 		`IMPORT_CHAIN_PROFILE_KEY`,
 		`S.chainProfileID=qs('#importChain')?.value||''`,

@@ -111,11 +111,7 @@ func TestConnectivityHandlersLifecycle(t *testing.T) {
 }
 
 func TestConnectivityWebUIIncludesTimeoutControl(t *testing.T) {
-	data, err := embeddedFS.ReadFile("assets/index.html")
-	if err != nil {
-		t.Fatal(err)
-	}
-	page := string(data)
+	page := webUISource(t)
 	for _, required := range []string{
 		`CONNECTIVITY_DEFAULT_TIMEOUT_SECONDS=10`,
 		`id="connectivityTimeout"`,

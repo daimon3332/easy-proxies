@@ -1,0 +1,61 @@
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{
+  margin:0;min-height:100vh;color:var(--text);background:var(--bg-gradient) fixed;
+  font:14px/1.55 var(--font);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+body::before,body::after{content:"";position:fixed;z-index:-1;pointer-events:none;border-radius:50%;filter:blur(60px)}
+body::before{width:620px;height:620px;right:-140px;top:-180px;background:var(--blob-1)}
+body::after{width:560px;height:560px;left:18%;bottom:-260px;background:var(--blob-2)}
+h1,h2,h3,h4{margin:0;color:var(--text);font-weight:650;letter-spacing:0}
+h2{font-size:16px}
+h3{font-size:14px}
+p{margin:0}
+a{color:var(--blue-deep)}
+code,pre{font-family:var(--mono)}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:none;box-shadow:var(--ring)}
+::selection{background:rgba(59,130,246,.18)}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.muted{color:var(--muted)}
+.icon{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.icon.sm{width:16px;height:16px}
+.icon.lg{width:20px;height:20px}
+
+input,textarea,select{
+  width:100%;min-height:38px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);
+  padding:8px 12px;outline:none;transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;
+}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+input:hover,textarea:hover,select:hover{border-color:rgba(15,23,42,.22)}
+input:focus,textarea:focus,select:focus{border-color:var(--blue);box-shadow:var(--ring)}
+input:disabled,textarea:disabled,select:disabled{background:var(--surface-sunken);color:var(--muted);cursor:not-allowed}
+select{
+  appearance:none;padding-right:34px;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b95a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+}
+textarea{resize:vertical;min-height:200px;font-family:var(--mono);font-size:13px;line-height:1.6;padding:12px 14px}
+input[type="number"]{font-variant-numeric:tabular-nums}
+input[type="checkbox"]{
+  appearance:none;width:18px!important;height:18px;min-width:18px;min-height:18px;padding:0;margin:0;flex:none;
+  border:1.5px solid rgba(15,23,42,.28);border-radius:5px;background:var(--surface);
+  display:inline-grid;place-content:center;cursor:pointer;vertical-align:middle;transition:background .14s ease,border-color .14s ease;
+}
+input[type="checkbox"]::before{content:"";width:10px;height:10px;transform:scale(0);transition:transform .14s var(--ease);background:#fff;clip-path:polygon(14% 44%,0 59%,42% 100%,100% 18%,84% 4%,39% 67%)}
+input[type="checkbox"]:hover{border-color:var(--blue)}
+input[type="checkbox"]:checked{background:var(--blue);border-color:var(--blue)}
+input[type="checkbox"]:checked::before{transform:scale(1)}
+input[type="checkbox"]:focus-visible{box-shadow:var(--ring)}
+input[type="checkbox"]:disabled{opacity:.45;cursor:not-allowed}
+
+pre{
+  margin:0;white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.65;color:#334155;
+  background:var(--surface-subtle);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;max-height:460px;overflow:auto;
+}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:rgba(100,116,139,.28);border-radius:999px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(100,116,139,.45);background-clip:content-box}
+::-webkit-scrollbar-track{background:transparent}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}

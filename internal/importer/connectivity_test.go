@@ -708,3 +708,80 @@ func waitConnectivityJobTerminal(t *testing.T, svc *Service, jobID string) Conne
 }
 
 var errConnectivityFixture = errors.New("connectivity fixture failure")
+
+func TestConnectivityPortApplySkipsNodesThatCannotBuild(t *testing.T) {
+	mgr := &batchNodeManagerStub{nextPort: 25000, validationErrs: map[string]error{"bad": errors.New("unsupported transport")}}
+	svc, store := newBatchServiceForTest(t, mgr)
+	nodes := []ManagedNode{
+		{ID: "good", Name: "good", URI: "trojan://good", TagPrefix: "A", State: StatePassed},
+		{ID: "bad", Name: "bad", URI: "trojan://bad", TagPrefix: "A", State: StatePassed},
+	}
+	if err := store.UpsertNodes(nodes); err != nil {
+		t.Fatal(err)
+	}
+	state := &connectivityJobState{
+		job:    ConnectivityJob{ID: "job", Status: ConnectivityJobFinished, Tags: []string{"A"}, Targets: []string{"google"}},
+		routes: map[string]connectivityRoute{}, results: map[string]ConnectivityResult{},
+	}
+	for _, node := range nodes {
+		fingerprint := connectivityRouteFingerprint(node)
+		state.routes[fingerprint] = connectivityRoute{node: node, tags: []string{"A"}, fingerprint: fingerprint}
+		state.results[connectivityResultKey(node.ID, "google")] = ConnectivityResult{NodeID: node.ID, NodeName: node.Name, Tags: []string{"A"}, RouteFingerprint: fingerprint, TargetID: "google", FirstSuccess: true, Success: true, Attempts: 1}
+	}
+	svc.connectivityJobs["job"] = state
+	req := ConnectivityPortRequest{JobID: "job", Tags: []string{"A"}, Targets: []string{"google"}}
+	preview, err := svc.PreviewConnectivityPool(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.PreviewToken = preview.PreviewToken
+	applied, err := svc.ApplyConnectivityPool(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ApplyConnectivityPool() error = %v", err)
+	}
+	for _, batch := range mgr.createdBatches {
+		for _, created := range batch {
+			if created.Name == "bad" {
+				t.Fatal("node that cannot build was sent to the runtime")
+			}
+		}
+	}
+	good, _ := store.GetNode("good")
+	bad, _ := store.GetNode("bad")
+	if !good.InPool || good.Port == 0 {
+		t.Fatalf("good = %#v", good)
+	}
+	if bad.InPool || bad.State != StateFailed || bad.Port != 0 || !strings.Contains(bad.LastError, "unsupported transport") {
+		t.Fatalf("bad = %#v", bad)
+	}
+	if applied.PoolCount != 1 || applied.BuildFailed != 1 {
+		t.Fatalf("applied = %#v", applied)
+	}
+}
+
+func TestConnectivityPortApplyRejectsWhenNoNodeCanBuild(t *testing.T) {
+	mgr := &batchNodeManagerStub{validationErrs: map[string]error{"bad": errors.New("unsupported transport")}}
+	svc, store := newBatchServiceForTest(t, mgr)
+	node := ManagedNode{ID: "bad", Name: "bad", URI: "trojan://bad", TagPrefix: "A", State: StatePassed}
+	if err := store.UpsertNode(node); err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := connectivityRouteFingerprint(node)
+	svc.connectivityJobs["job"] = &connectivityJobState{
+		job:     ConnectivityJob{ID: "job", Status: ConnectivityJobFinished, Tags: []string{"A"}, Targets: []string{"google"}},
+		routes:  map[string]connectivityRoute{fingerprint: {node: node, tags: []string{"A"}, fingerprint: fingerprint}},
+		results: map[string]ConnectivityResult{connectivityResultKey(node.ID, "google"): {NodeID: node.ID, Tags: []string{"A"}, RouteFingerprint: fingerprint, TargetID: "google", FirstSuccess: true, Success: true, Attempts: 1}},
+	}
+	req := ConnectivityPortRequest{JobID: "job", Tags: []string{"A"}, Targets: []string{"google"}}
+	preview, err := svc.PreviewConnectivityPool(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.PreviewToken = preview.PreviewToken
+	if _, err := svc.ApplyConnectivityPool(context.Background(), req); err == nil || !strings.Contains(err.Error(), "运行配置") {
+		t.Fatalf("ApplyConnectivityPool() error = %v, want build failure rejection", err)
+	}
+	if len(mgr.createdBatches) != 0 {
+		t.Fatalf("created batches = %#v", mgr.createdBatches)
+	}
+}

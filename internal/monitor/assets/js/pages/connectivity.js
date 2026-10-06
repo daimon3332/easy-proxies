@@ -285,7 +285,7 @@ async function applyConnectivityPorts(allowEmpty){
   try{
     const request={...(S.connectivityPreviewRequest||connectivityPortRequest()),allow_empty:!!allowEmpty};
     const result=await api('/api/connectivity/ports/apply',{method:'POST',body:JSON.stringify(request)});
-    closeDialog();toast(`端口已更新，当前池内 ${result.pool_count||0} 个节点`);
+    closeDialog();toast(result.build_failed?`端口已更新，当前池内 ${result.pool_count||0} 个节点；${result.build_failed} 个节点无法生成运行配置，已移入失败节点`:`端口已更新，当前池内 ${result.pool_count||0} 个节点`,result.build_failed?'err':'ok');
     S.connectivityPreview=null;S.connectivityPreviewRequest=null;
     await loadImportSummary();renderNav();refreshConnectivityPreviewSummary();
   }catch(err){toast(err.message,'err');if(button){button.disabled=false;button.textContent=oldText}}

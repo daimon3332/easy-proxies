@@ -1406,6 +1406,25 @@ func (s *Service) ApplyConnectivityPool(ctx context.Context, req ConnectivityPor
 		}
 		return cause
 	}
+	desiredIDs := make(map[string]struct{}, len(selection.desiredIDs))
+	for id := range selection.desiredIDs {
+		desiredIDs[id] = struct{}{}
+	}
+	buildFailures := make(map[string]string)
+	if validator, ok := s.nodeMgr.(NodeRuntimeValidator); ok {
+		for _, node := range nodesBefore {
+			if _, desired := desiredIDs[node.ID]; !desired || node.InPool || node.State == StateInPool {
+				continue
+			}
+			if err := validator.ValidateNode(applyCtx, node.ToConfigNode()); err != nil {
+				buildFailures[node.ID] = "运行配置构建失败: " + err.Error()
+				delete(desiredIDs, node.ID)
+			}
+		}
+	}
+	if len(desiredIDs) == 0 && len(buildFailures) > 0 && !req.AllowEmpty {
+		return ConnectivityPortApplyResponse{}, fmt.Errorf("%d 个达标节点都无法生成运行配置，未修改端口", len(buildFailures))
+	}
 	configByRoute := make(map[string]config.NodeConfig, len(configBefore))
 	for _, node := range configBefore {
 		fingerprint := connectivityRouteFingerprint(ManagedNode{URI: node.URI, ChainProfileID: node.ChainProfileID})
@@ -1414,7 +1433,7 @@ func (s *Service) ApplyConnectivityPool(ctx context.Context, req ConnectivityPor
 	removeNames := make([]string, 0)
 	addNodes := make([]config.NodeConfig, 0)
 	for _, node := range nodesBefore {
-		_, desired := selection.desiredIDs[node.ID]
+		_, desired := desiredIDs[node.ID]
 		inPool := node.InPool || node.State == StateInPool
 		fingerprint := connectivityRouteFingerprint(node)
 		if inPool && !desired {
@@ -1459,7 +1478,7 @@ func (s *Service) ApplyConnectivityPool(ctx context.Context, req ConnectivityPor
 	updates := make([]ManagedNode, 0, len(nodesBefore))
 	order := 0
 	for _, node := range nodesBefore {
-		_, desired := selection.desiredIDs[node.ID]
+		_, desired := desiredIDs[node.ID]
 		if desired {
 			configuredNode, found := configuredByRoute[connectivityRouteFingerprint(node)]
 			if !found || configuredNode.Port == 0 {
@@ -1474,6 +1493,11 @@ func (s *Service) ApplyConnectivityPool(ctx context.Context, req ConnectivityPor
 			node.ConsecutiveFailures = 0
 			node.LastError = ""
 			order++
+		} else if failureReason, failed := buildFailures[node.ID]; failed {
+			node.State = StateFailed
+			node.InPool = false
+			node.Port = 0
+			node.LastError = failureReason
 		} else if failureReason, failed := selection.failedIDs[node.ID]; failed {
 			node.State = StateFailed
 			node.InPool = false
@@ -1488,5 +1512,5 @@ func (s *Service) ApplyConnectivityPool(ctx context.Context, req ConnectivityPor
 	if err := s.verifyAppliedRuntime(applyCtx); err != nil {
 		return ConnectivityPortApplyResponse{}, rollback(err)
 	}
-	return ConnectivityPortApplyResponse{ConnectivityPortPreview: selection.preview, PoolCount: len(selection.desiredIDs)}, nil
+	return ConnectivityPortApplyResponse{ConnectivityPortPreview: selection.preview, PoolCount: len(desiredIDs), BuildFailed: len(buildFailures)}, nil
 }

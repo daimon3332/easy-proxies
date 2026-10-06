@@ -383,7 +383,8 @@ type ConnectivityPortPreview struct {
 
 type ConnectivityPortApplyResponse struct {
 	ConnectivityPortPreview
-	PoolCount int `json:"pool_count"`
+	PoolCount   int `json:"pool_count"`
+	BuildFailed int `json:"build_failed"`
 }
 
 type ConnectivityHistoryCounts struct {

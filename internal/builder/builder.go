@@ -33,7 +33,7 @@ func Build(cfg *config.Config) (option.Options, error) {
 	memberTags := make([]string, 0, len(cfg.Nodes))
 	metadata := make(map[string]poolout.MemberMeta)
 	var failedNodes []string
-	usedTags := make(map[string]int) // Track tag usage for uniqueness
+	reservedTags := make(map[string]struct{})
 	chainDetours := make(map[string]string, len(cfg.ChainProfiles))
 	usedChainProfiles := make(map[string]struct{})
 	for _, node := range cfg.Nodes {
@@ -71,7 +71,7 @@ func Build(cfg *config.Config) (option.Options, error) {
 				}
 			}
 			baseOutbounds = append(baseOutbounds, chainOutbounds[index])
-			usedTags[chainOutbounds[index].Tag] = 1
+			reservedTags[chainOutbounds[index].Tag] = struct{}{}
 		}
 		chainDetours[profile.ID] = chainOutbounds[len(chainOutbounds)-1].Tag
 	}
@@ -95,23 +95,12 @@ func Build(cfg *config.Config) (option.Options, error) {
 	}
 
 	totalNodes := len(cfg.Nodes)
+	nodeTags := NodeTags(cfg.Nodes, reservedTags)
 	for i, node := range cfg.Nodes {
 		if i > 0 && i%1000 == 0 {
 			log.Printf("⏳ Building nodes... %d/%d", i, totalNodes)
 		}
-		baseTag := sanitizeTag(node.Name)
-		if baseTag == "" {
-			baseTag = fmt.Sprintf("node-%d", len(memberTags)+1)
-		}
-
-		// Ensure tag uniqueness by appending a counter if needed
-		tag := baseTag
-		if count, exists := usedTags[baseTag]; exists {
-			usedTags[baseTag] = count + 1
-			tag = fmt.Sprintf("%s-%d", baseTag, count+1)
-		} else {
-			usedTags[baseTag] = 1
-		}
+		tag := nodeTags[i]
 
 		outbound, err := buildNodeOutbound(tag, node.URI, cfg.SkipCertVerify)
 		if err != nil {

@@ -148,6 +148,33 @@ func NodeTag(name string) string {
 	return sanitizeTag(name)
 }
 
+// NodeTags assigns each node a unique outbound tag. Generated suffixes are
+// reserved too, so a node literally named "x-2" never collides with the
+// second "x". reserved holds tags already taken (e.g. chain hops).
+func NodeTags(nodes []config.NodeConfig, reserved map[string]struct{}) []string {
+	used := make(map[string]struct{}, len(nodes)+len(reserved))
+	for tag := range reserved {
+		used[tag] = struct{}{}
+	}
+	tags := make([]string, len(nodes))
+	for i, node := range nodes {
+		base := sanitizeTag(node.Name)
+		if base == "" {
+			base = fmt.Sprintf("node-%d", i+1)
+		}
+		tag := base
+		for n := 2; ; n++ {
+			if _, taken := used[tag]; !taken {
+				break
+			}
+			tag = fmt.Sprintf("%s-%d", base, n)
+		}
+		used[tag] = struct{}{}
+		tags[i] = tag
+	}
+	return tags
+}
+
 func BuildMultiPortInbound(cfg *config.Config, node config.NodeConfig, outboundTag string) (option.Inbound, error) {
 	addr, err := parseAddr(cfg.MultiPort.Address)
 	if err != nil {

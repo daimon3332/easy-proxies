@@ -1799,20 +1799,8 @@ type runtimeNodeSpec struct {
 
 func runtimeNodeSpecs(nodes []config.NodeConfig) map[string]runtimeNodeSpec {
 	result := make(map[string]runtimeNodeSpec, len(nodes))
-	used := make(map[string]int, len(nodes))
-	for index, node := range nodes {
-		base := builder.NodeTag(node.Name)
-		if base == "" {
-			base = fmt.Sprintf("node-%d", index+1)
-		}
-		tag := base
-		if count := used[base]; count > 0 {
-			count++
-			used[base] = count
-			tag = fmt.Sprintf("%s-%d", base, count)
-		} else {
-			used[base] = 1
-		}
+	for index, tag := range builder.NodeTags(nodes, nil) {
+		node := nodes[index]
 		result[tag] = runtimeNodeSpec{node: node, outboundTag: tag, inboundTag: "in-" + tag}
 	}
 	return result

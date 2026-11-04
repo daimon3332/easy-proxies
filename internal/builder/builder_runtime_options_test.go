@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"easy_proxies/internal/config"
+
+	"github.com/sagernet/sing-box/option"
 )
 
 func multiPortGeoIPConfig(t *testing.T) *config.Config {
@@ -56,5 +58,37 @@ func TestBuildClashAPIIsOptIn(t *testing.T) {
 	}
 	if options.Experimental == nil || options.Experimental.ClashAPI == nil || options.Experimental.ClashAPI.ExternalController != "127.0.0.1:19092" {
 		t.Fatalf("Clash API opt-in not applied: %#v", options.Experimental)
+	}
+}
+
+func TestBuildMultiPortGivesEveryNodeAListenerWhenSuffixTagsCollide(t *testing.T) {
+	cfg := multiPortGeoIPConfig(t)
+	cfg.GeoIP.Enabled = false
+	cfg.Nodes = []config.NodeConfig{
+		{Name: "Edge", URI: "http://127.0.0.1:18001", Port: 12001},
+		{Name: "Edge", URI: "http://127.0.0.1:18002", Port: 12002},
+		{Name: "Edge-2", URI: "http://127.0.0.1:18003", Port: 12003},
+		{Name: "edge 2", URI: "http://127.0.0.1:18004", Port: 12004},
+	}
+	options, err := Build(cfg)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	ports := map[uint16]bool{}
+	tags := map[string]bool{}
+	for _, inbound := range options.Inbounds {
+		if tags[inbound.Tag] {
+			t.Fatalf("duplicate inbound tag %q", inbound.Tag)
+		}
+		tags[inbound.Tag] = true
+		ports[inbound.Options.(*option.HTTPMixedInboundOptions).ListenPort] = true
+	}
+	for _, node := range cfg.Nodes {
+		if !ports[node.Port] {
+			t.Fatalf("port %d has no listener; inbounds=%d", node.Port, len(options.Inbounds))
+		}
+	}
+	if got := NodeTags(cfg.Nodes, nil); len(got) != 4 || got[0] == got[2] || got[1] == got[2] || got[1] == got[3] {
+		t.Fatalf("NodeTags() = %v", got)
 	}
 }

@@ -1,42 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Easy Proxies">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Orca Proxy">
   <defs>
-    <linearGradient id="bg" x1="16" y1="12" x2="112" y2="116" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#073b8f"/>
-      <stop offset="0.55" stop-color="#066b91"/>
-      <stop offset="1" stop-color="#00b96b"/>
+    <linearGradient id="bg" x1="12" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111c34"/>
+      <stop offset="0.58" stop-color="#07566a"/>
+      <stop offset="1" stop-color="#087f78"/>
     </linearGradient>
-    <linearGradient id="flow" x1="25" y1="24" x2="105" y2="105" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#00c8ff"/>
-      <stop offset="1" stop-color="#39ed87"/>
-    </linearGradient>
-    <linearGradient id="shield" x1="49" y1="48" x2="80" y2="84" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#54e8ff"/>
-      <stop offset="1" stop-color="#16c995"/>
+    <linearGradient id="whale" x1="26" y1="42" x2="102" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#c9f7f3"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="26" fill="url(#bg)"/>
-  <path d="M27 76a42 42 0 0 1 64-43" fill="none" stroke="url(#flow)" stroke-width="5" stroke-linecap="round"/>
-  <path d="m85 28 13 2-5 12" fill="url(#flow)"/>
-  <path d="M101 52a42 42 0 0 1-64 43" fill="none" stroke="url(#flow)" stroke-width="5" stroke-linecap="round"/>
-  <path d="m43 100-13-3 6-12" fill="url(#flow)"/>
-  <circle cx="64" cy="64" r="31" fill="none" stroke="#bffcf2" stroke-opacity="0.82" stroke-width="2.5"/>
-  <g fill="none" stroke="#4cf1e4" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 5">
-    <path d="M64 38c0 13-8 16-20 14"/>
-    <path d="M44 52c9 7 9 16 0 24"/>
-    <path d="M44 76c12-2 20 2 20 14"/>
-    <path d="M64 90c0-12 8-16 20-14"/>
-    <path d="M84 76c-9-8-9-16 0-24"/>
-    <path d="M84 52c-12 2-20-1-20-14"/>
-  </g>
-  <g stroke="#bffcf2" stroke-width="2">
-    <circle cx="64" cy="36" r="7" fill="#15d8e7"/>
-    <circle cx="40" cy="50" r="7" fill="#00c9ef"/>
-    <circle cx="40" cy="78" r="7" fill="#0ed7d4"/>
-    <circle cx="64" cy="92" r="7" fill="#1de093"/>
-    <circle cx="88" cy="78" r="7" fill="#37e882"/>
-    <circle cx="88" cy="50" r="7" fill="#27ddd0"/>
-  </g>
-  <path d="M64 48c7 5 13 7 19 9v11c0 13-8 22-19 28-11-6-19-15-19-28V57c6-2 12-4 19-9Z" fill="#e8ffff"/>
-  <path d="M64 54c5 3 9 5 13 6v8c0 9-5 16-13 21-8-5-13-12-13-21v-8c4-1 8-3 13-6Z" fill="url(#shield)"/>
-  <path d="M64 54v35c8-5 13-12 13-21v-8c-4-1-8-3-13-6Z" fill="#13bd9f" fill-opacity="0.72"/>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <circle cx="64" cy="64" r="48" fill="none" stroke="#a6fff0" stroke-opacity=".22" stroke-width="2"/>
+  <path d="M23 63 12 49c12 1 22 7 29 16-7 8-16 13-27 15l9-17Z" fill="#52e6d2"/>
+  <path d="M23 63 12 49c12 1 22 7 29 16-7 8-16 13-27 15l9-17Z" fill="none" stroke="#c8fff6" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M31 68c9-14 25-23 44-23 11 0 20 3 28 10l13 7-12 6c-6 3-10 8-14 14-9 12-23 18-40 14-13-3-22-13-25-28Z" fill="url(#whale)"/>
+  <path d="M68 46c1-12 8-21 18-26 0 12-3 21-10 29" fill="#d9fffa"/>
+  <path d="M58 85c-8 9-11 17-7 25 11-4 19-12 24-23" fill="#a9eee7"/>
+  <path d="M44 68c8 7 20 10 34 6-7 10-22 13-34 6-4-3-7-7-9-12 3 1 6 1 9 0Z" fill="#0d5260"/>
+  <path d="M83 56c5-4 11-4 15-1-3 5-8 8-14 8-3 0-5-1-7-3 2-1 4-2 6-4Z" fill="#0d5260"/>
+  <circle cx="89" cy="57" r="2.5" fill="#f4ffff"/>
+  <path d="M35 31h14M42 24v14M91 96h14M98 89v14" stroke="#7af4df" stroke-width="3" stroke-linecap="round" opacity=".9"/>
 </svg>

@@ -1,0 +1,89 @@
+/* shadcn/ui-inspired dark surface and control layer for the embedded vanilla UI. */
+html,body{background:var(--bg);color:var(--text)}
+body{background:var(--bg-gradient) fixed}
+body::before,body::after{opacity:.42;filter:blur(86px)}
+.app{background:transparent}
+.side{background:rgba(12,12,15,.92);border-right:1px solid var(--line);backdrop-filter:blur(18px)}
+.main{background:transparent}
+.topbar{background:rgba(9,9,11,.78);border-bottom:1px solid var(--line);backdrop-filter:blur(18px)}
+.brand{border-bottom:1px solid var(--line)}
+.brand-text strong{color:#fafafa;letter-spacing:-.025em}
+.brand-text span,.nav-group,.crumbs{color:var(--muted)}
+.nav-item{color:#a1a1aa;border:1px solid transparent;border-radius:8px;transition:background .16s ease,color .16s ease,border-color .16s ease}
+.nav-item:hover{color:#fafafa;background:#1b1b1f}
+.nav-item.active{color:#fafafa;background:#202024;border-color:#303036;box-shadow:inset 2px 0 0 #60a5fa}
+.nav-item .badge{background:#303036;color:#d4d4d8}
+.icon-btn{color:#a1a1aa;border:1px solid transparent;border-radius:8px}
+.icon-btn:hover{color:#fafafa;background:#202024;border-color:#303036}
+.card,.settings-section{background:rgba(17,17,19,.92);border:1px solid #29292f;border-radius:var(--radius-lg);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.card-head,.settings-section-head{border-bottom:1px solid var(--line)}
+.card-head h2,.settings-section-head h2,.panel-title{color:#fafafa}
+.panel-title::before{background:#60a5fa}
+.card-body,.settings-section-body{color:#d4d4d8}
+input,textarea,select{background:#09090b;border:1px solid #303036;border-radius:8px;color:#fafafa}
+input:hover,textarea:hover,select:hover{border-color:#52525b}
+input:focus,textarea:focus,select:focus{border-color:#60a5fa;box-shadow:var(--ring)}
+input::placeholder,textarea::placeholder{color:#71717a}
+input:disabled,textarea:disabled,select:disabled{background:#18181b;color:#71717a;border-color:#27272a}
+input[type=checkbox]{background:#09090b;border-color:#52525b;border-radius:4px}
+input[type=checkbox]:checked{background:#fafafa;border-color:#fafafa}
+input[type=checkbox]::before{background:#18181b}
+pre{color:#d4d4d8;background:#09090b;border:1px solid #27272a;border-radius:8px}
+.btn{background:#18181b;color:#e4e4e7;border:1px solid #303036;border-radius:8px;box-shadow:none;font-weight:550}
+.btn:hover{background:#27272a;border-color:#45454d;color:#fafafa}
+.btn.primary{background:#fafafa;color:#18181b;border-color:#fafafa;box-shadow:none}
+.btn.primary:hover{background:#e4e4e7;border-color:#e4e4e7;color:#09090b}
+.btn.secondary{background:rgba(59,130,246,.12);color:#93c5fd;border-color:rgba(59,130,246,.28)}
+.btn.secondary:hover{background:rgba(59,130,246,.2);color:#bfdbfe;border-color:rgba(96,165,250,.46)}
+.btn.green{background:rgba(34,197,94,.1);color:#86efac;border-color:rgba(34,197,94,.25)}
+.btn.green:hover{background:rgba(34,197,94,.18);color:#bbf7d0;border-color:rgba(34,197,94,.4)}
+.btn.danger{background:rgba(239,68,68,.08);color:#fca5a5;border-color:rgba(239,68,68,.28)}
+.btn.danger:hover{background:rgba(239,68,68,.16);color:#fecaca;border-color:rgba(239,68,68,.42)}
+.btn.ghost{background:transparent;color:#a1a1aa;border-color:transparent}
+.btn.ghost:hover{background:#222226;color:#fafafa}
+.segmented,.tabs{background:#09090b;border:1px solid #303036;border-radius:8px}
+.segmented button,.tabs button{color:#a1a1aa;border-radius:6px}
+.segmented button:hover,.tabs button:hover{color:#fafafa}
+.segmented button.active,.tabs button.active{background:#27272a;color:#fafafa;box-shadow:0 1px 2px rgba(0,0,0,.35)}
+.pill,.value-pill{background:rgba(59,130,246,.12);color:#93c5fd;border-color:rgba(59,130,246,.18);font-weight:550}
+.pill.green,.value-pill.green{background:rgba(34,197,94,.1);color:#86efac;border-color:rgba(34,197,94,.18)}
+.pill.red,.value-pill.red{background:rgba(239,68,68,.1);color:#fca5a5;border-color:rgba(239,68,68,.18)}
+.pill.amber,.value-pill.amber{background:rgba(245,158,11,.1);color:#fcd34d;border-color:rgba(245,158,11,.18)}
+.value-pill.muted,.pill.muted{background:#202024;color:#a1a1aa;border-color:#303036}
+.table-head,.table-row,.table-footer,.mini-table th,.mini-table td{border-color:#27272a}
+.table-head{background:#141417;color:#a1a1aa}
+.table-row:hover{background:#18181b}
+.mini-table th{color:#a1a1aa;background:#141417}
+.mini-table td{color:#d4d4d8}
+.metric,.kpi,.strip-item,.settings-highlight,.empty,.node,.port,.job-item,.source-row{background:#141417;border-color:#29292f;color:#d4d4d8}
+.kpi{transition:border-color .16s ease,background .16s ease,transform .16s ease}
+.kpi:hover{background:#19191d;border-color:#45454d}
+.kpi-head,.kv-row>span,.metric>span,.strip-item span,.muted{color:#a1a1aa}
+.kpi-value,.metric strong,.kv-row strong{color:#fafafa}
+.search-field{background:#09090b;border:1px solid #303036;border-radius:8px}
+.search-field:focus-within{border-color:#60a5fa;box-shadow:var(--ring)}
+.filter,.filters select{background:#09090b}
+.row-menu-panel{background:#18181b;border:1px solid #303036;box-shadow:var(--shadow-pop);border-radius:10px}
+.modal,.dialog-back{background:rgba(0,0,0,.72);backdrop-filter:blur(5px)}
+.dialog{background:#111113;border:1px solid #303036;border-radius:12px;box-shadow:var(--shadow-pop);color:#e4e4e7}
+.dialog-header,.dialog-footer,.chain-dialog-head,.chain-dialog-actions{border-color:#27272a}
+.dialog h2,.dialog h3{color:#fafafa}
+.toast{background:#18181b;border:1px solid #303036;color:#fafafa;box-shadow:var(--shadow-pop)}
+.toast.err{border-color:rgba(239,68,68,.4)}
+.action-status{background:rgba(34,197,94,.09);border:1px solid rgba(34,197,94,.2);color:#86efac}
+.action-status.err{background:rgba(239,68,68,.09);border-color:rgba(239,68,68,.22);color:#fca5a5}
+.status-dot{box-shadow:0 0 0 3px rgba(255,255,255,.035)}
+.progress,.progress-bar{background:#27272a}
+.progress>div,.progress-fill{background:#60a5fa}
+.section-summary,.section{border-color:#27272a}
+.site-selector{background:#141417;border:1px solid #303036;color:#d4d4d8;border-radius:8px}
+.site-selector:hover{border-color:#52525b;background:#1b1b1f}
+.site-selector.selected{background:rgba(59,130,246,.12);border-color:rgba(96,165,250,.5);color:#bfdbfe}
+.connectivity-matrix-row,.connectivity-cell{border-color:#303036}
+.connectivity-cell.good{background:rgba(34,197,94,.08)}
+.connectivity-cell.partial{background:rgba(245,158,11,.08)}
+.connectivity-cell.bad{background:rgba(239,68,68,.08)}
+.field-error{color:#fca5a5}
+::-webkit-scrollbar-thumb{background:rgba(161,161,170,.25);background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:rgba(161,161,170,.42);background-clip:content-box}
+@media(max-width:700px){.side{background:#0c0c0f}}

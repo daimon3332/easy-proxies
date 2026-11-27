@@ -7,7 +7,7 @@
   border-right:1px solid var(--line);overflow:hidden;z-index:5;
 }
 .brand{display:flex;align-items:center;gap:11px;padding:4px 6px 10px;min-width:0}
-.logo{width:36px;height:36px;flex:none;border-radius:10px;background:url('/logo.png') center/cover no-repeat;box-shadow:0 6px 16px rgba(37,99,235,.18)}
+.logo{width:36px;height:36px;flex:none;border-radius:10px;background:url('/favicon.svg') center/cover no-repeat;box-shadow:0 6px 16px rgba(37,99,235,.18)}
 .brand-text{display:grid;min-width:0;line-height:1.2}
 .brand-text strong{font-size:16px;font-weight:700;white-space:nowrap}
 .brand-text span{font-size:12px;color:var(--muted);white-space:nowrap}

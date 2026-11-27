@@ -15,8 +15,8 @@ const MAX_JOB_EVENT_CACHE=32;
 function storedTargetSet(key){try{const value=JSON.parse(localStorage.getItem(key)||'[]');return new Set(Array.isArray(value)?value.filter(id=>VERIFICATION_TARGETS.some(target=>target.id===id)):[])}catch(e){return new Set()}}
 function parseConnectivityTimeout(value){
   const raw=String(value??'').trim(),seconds=Number(raw);
-  if(!raw||!Number.isInteger(seconds))return {error:'请输入 1-60 秒的整数'};
-  if(seconds<CONNECTIVITY_MIN_TIMEOUT_SECONDS||seconds>CONNECTIVITY_MAX_TIMEOUT_SECONDS)return {error:'单次超时必须在 1-60 秒之间'};
+  if(!raw||!Number.isInteger(seconds))return {error:'1–60 arasında tam sayı girin'};
+  if(seconds<CONNECTIVITY_MIN_TIMEOUT_SECONDS||seconds>CONNECTIVITY_MAX_TIMEOUT_SECONDS)return {error:'Tek deneme zaman aşımı 1–60 saniye arasında olmalı'};
   return {seconds,error:''};
 }
 const initialConnectivityTimeout=parseConnectivityTimeout(localStorage.getItem(CONNECTIVITY_TIMEOUT_KEY));
@@ -116,30 +116,30 @@ const S={
   filters:{scope:'all',country:'',tag:'',source:'',latency:'',q:'',sort:'latency'}
 };
 const pages=[
-  ['dashboard','仪表盘','dashboard','概览'],
-  ['import','导入节点','import','节点'],
-  ['pool','可用端口','server','节点'],
-  ['nodes','候选节点','list','节点'],
-  ['failed','失败节点','alert','节点'],
-  ['bulk','批量工具','layers','工具'],
-  ['connectivity','站点检测','globe','工具'],
-  ['ports','端口状态','network','工具'],
-  ['logs','日志','logs','系统'],
-  ['settings','设置','settings','系统']
+  ['dashboard','Kontrol paneli','dashboard','Genel'],
+  ['import','Düğüm içe aktar','import','Düğümler'],
+  ['pool','Kullanılabilir portlar','server','Düğümler'],
+  ['nodes','Aday düğümler','list','Düğümler'],
+  ['failed','Başarısız düğümler','alert','Düğümler'],
+  ['bulk','Toplu işlemler','layers','Araçlar'],
+  ['connectivity','Site bağlantı testi','globe','Araçlar'],
+  ['ports','Port durumu','network','Araçlar'],
+  ['logs','Çalışma günlükleri','logs','Sistem'],
+  ['settings','Ayarlar','settings','Sistem']
 ];
 const icon=(name,cls='')=>`<svg class="icon${cls?' '+cls:''}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const qs=s=>document.querySelector(s);
 const qsa=s=>Array.from(document.querySelectorAll(s));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function decodeText(s){s=String(s??'');for(let i=0;i<2;i++){try{const d=decodeURIComponent(s);if(!d||d===s)break;s=d}catch(e){break}}return s}
-function countryLabel(code){return {JP:'日本',SG:'新加坡',HK:'香港',TW:'台湾',US:'美国',KR:'韩国',CH:'瑞士',NL:'荷兰',RU:'俄罗斯',GB:'英国',DE:'德国',FR:'法国',CA:'加拿大',AU:'澳大利亚',IN:'印度'}[String(code||'').toUpperCase()]||code||'未知'}
+function countryLabel(code){return {JP:'Japonya',SG:'Singapur',HK:'Hong Kong',TW:'Tayvan',US:'ABD',KR:'Güney Kore',CH:'İsviçre',NL:'Hollanda',RU:'Rusya',GB:'Birleşik Krallık',DE:'Almanya',FR:'Fransa',CA:'Kanada',AU:'Avustralya',IN:'Hindistan'}[String(code||'').toUpperCase()]||code||'Bilinmiyor'}
 function nodeName(n){return decodeText(n.name||n.original_name||n.id)}
 function toast(msg,type='ok'){const el=document.createElement('div');el.className='toast '+(type==='err'?'err':'');el.textContent=msg;qs('#toasts').appendChild(el);setTimeout(()=>el.remove(),3600)}
 function setStatus(id,msg){const el=qs(id);if(el)el.textContent=msg||''}
 function setActionStatus(msg,type='ok'){S.actionStatus=msg||'';S.actionStatusType=type}
 function statePill(s){
   const cls=s==='in_pool'||s==='passed'?'green':s==='failed'||s==='blocked_by_chain'||s==='excluded'?'red':s==='testing'?'amber':'';
-  const text={in_pool:'池内',passed:'候选',failed:'失败',blocked_by_chain:'前置不可用',excluded:'已排除',testing:'检测中',parsed:'待检测',finished:'已完成',running:'进行中',canceled:'已终止'}[s]||'未知';
+  const text={in_pool:'Havuzda',passed:'Aday',failed:'Başarısız',blocked_by_chain:'Ön proxy kullanılamıyor',excluded:'Hariç tutuldu',testing:'Test ediliyor',parsed:'Test bekliyor',finished:'Tamamlandı',running:'Devam ediyor',canceled:'Durduruldu'}[s]||'Bilinmiyor';
   return `<span class="pill ${cls}">${esc(text)}</span>`;
 }
 function valuePill(text,cls='muted'){return `<span class="value-pill ${cls}">${esc(text||'-')}</span>`}
@@ -163,7 +163,7 @@ async function api(path,opt={}){
   const message=typeof data==='string'?data:(data&&data.error);
   if(res.status===401){
     qs('#authModal').classList.add('show');
-    const err=new Error(message||'未授权');err.status=res.status;throw err;
+    const err=new Error(message||'Yetkilendirme gerekli');err.status=res.status;throw err;
   }
   if(!res.ok){const err=new Error(message||res.statusText);err.status=res.status;throw err}
   return data;
@@ -211,7 +211,7 @@ function consumeJobEventData(data){
   storeJobEvent(data);
 }
 async function readJobEventStream(response,signal){
-  if(!response.body)throw new Error('浏览器不支持流式进度');
+  if(!response.body)throw new Error('Tarayıcı canlı ilerleme akışını desteklemiyor');
   const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
   while(!signal.aborted){
     const {value,done}=await reader.read();if(done)break;
@@ -234,7 +234,7 @@ function startJobEventStream(force=false){
       try{
         const headers=S.token?{Authorization:'Bearer '+S.token}:{};
         const response=await fetch('/api/job-events',{headers,signal:controller.signal});
-        if(!response.ok)throw new Error(`进度流连接失败: ${response.status}`);
+        if(!response.ok)throw new Error(`İlerleme akışına bağlanılamadı: ${response.status}`);
         failures=0;S.jobStreamConnected=true;await readJobEventStream(response,controller.signal);
       }catch(err){if(controller.signal.aborted)break;failures++}
       S.jobStreamConnected=false;wakeJobEventWaiters();
@@ -292,9 +292,9 @@ function renderSideStatus(){
   const runtime=S.diagnostics?.runtime,goStats=S.diagnostics?.go;
   if(!runtime&&!S.summary){host.innerHTML='';return}
   const running=!!runtime?.running,pool=Number(S.summary?.in_pool)||0;
-  host.innerHTML=`<div class="side-stat"><span class="status-dot ${running?'ok':pool?'bad':'warn'}"></span><div><span>代理核心</span><strong>${running?'运行中':'未运行'}</strong></div></div>
-    <div class="side-stat">${icon('server','sm')}<div><span>池内端口</span><strong>${esc(pool)}</strong></div></div>
-    ${goStats?`<div class="side-stat">${icon('cpu','sm')}<div><span>堆内存 · 协程</span><strong>${esc(formatHeap(goStats.heap_alloc_bytes))} · ${esc(goStats.goroutines)}</strong></div></div>`:''}`;
+  host.innerHTML=`<div class="side-stat"><span class="status-dot ${running?'ok':pool?'bad':'warn'}"></span><div><span>Proxy çekirdeği</span><strong>${running?'Çalışıyor':'Çalışmıyor'}</strong></div></div>
+    <div class="side-stat">${icon('server','sm')}<div><span>Havuz portları</span><strong>${esc(pool)}</strong></div></div>
+    ${goStats?`<div class="side-stat">${icon('cpu','sm')}<div><span>Yığın belleği · Goroutine</span><strong>${esc(formatHeap(goStats.heap_alloc_bytes))} · ${esc(goStats.goroutines)}</strong></div></div>`:''}`;
 }
 function pageFromHash(){
   const page=decodeURIComponent(location.hash.replace(/^#/,''));
@@ -309,7 +309,7 @@ async function go(page,fromHash=false){
   qs('#pageTitle').textContent=p[1];
   qs('#crumbTitle').textContent=p[1];
   qs('#crumbGroup').textContent=p[3];
-  document.title=`${p[1]} · Easy Proxies`;
+  document.title=`${p[1]} · Orca Proxy`;
   if(page!=='dashboard')stopDashboardClock();
 	renderNav();
 	await refresh();
@@ -432,8 +432,8 @@ function openDialog(title,html,options={}){
   dialog.className=`dialog standard-dialog${options.wide?' wide':''}`;
   delete dialog.dataset.refreshShell;
   delete dialog.dataset.tagBindingShell;
-  const actions=options.actions===undefined?'<button class="btn primary" type="button" onclick="closeDialog()">确定</button>':options.actions;
-  dialog.innerHTML=`<div class="dialog-header"><h2 id="resultDialogTitle">${esc(title)}</h2><button class="btn ghost dialog-close" type="button" onclick="closeDialog()" aria-label="关闭">×</button></div><div class="dialog-body"><div class="stack">${html}</div></div>${actions!==''?`<div class="dialog-footer">${actions}</div>`:''}`;
+  const actions=options.actions===undefined?'<button class="btn primary" type="button" onclick="closeDialog()">Tamam</button>':options.actions;
+  dialog.innerHTML=`<div class="dialog-header"><h2 id="resultDialogTitle">${esc(title)}</h2><button class="btn ghost dialog-close" type="button" onclick="closeDialog()" aria-label="Kapat">×</button></div><div class="dialog-body"><div class="stack">${html}</div></div>${actions!==''?`<div class="dialog-footer">${actions}</div>`:''}`;
   dialog.setAttribute('role','dialog');
   dialog.setAttribute('aria-modal','true');
   dialog.setAttribute('aria-labelledby','resultDialogTitle');

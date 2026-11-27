@@ -3,7 +3,7 @@ function restoreActiveJobs(){
   if(importId && !S.importPollingJob){
     S.activeImportJob=importId;
     if(S.page==='import' && !S.importSummary){
-      S.importSummary={status:'running',title:'恢复导入任务',detail:'正在读取后端进度'};
+  S.importSummary={status:'running',title:'İçe aktarma görevi geri yükleniyor',detail:'Sunucu ilerleme bilgisi okunuyor'};
       renderImport();
     }
     pollJob(importId).catch(err=>{
@@ -15,7 +15,7 @@ function restoreActiveJobs(){
   const batchId=localStorage.getItem(ACTIVE_BATCH_JOB_KEY);
   if(batchId && !S.batchPollingJob){
     S.activeBatchJob=batchId;
-    pollBatchJob(batchId,'恢复测速进度').catch(err=>{
+  pollBatchJob(batchId,'Hız testi ilerlemesi geri yükleniyor').catch(err=>{
       S.activeBatchJob='';
       localStorage.removeItem(ACTIVE_BATCH_JOB_KEY);
       toast(err.message,'err');

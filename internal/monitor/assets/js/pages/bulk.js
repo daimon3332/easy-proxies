@@ -18,45 +18,45 @@ function renderBulk(){
     failed:Number(summary.failed)||0,
   };
   qs('#view').innerHTML=`<div class="grid">
-    <div class="card"><div class="card-head"><h2>批量测试</h2></div><div class="card-body stack">
-      <div class="bulk-grid"><div class="bulk-group"><strong>测试范围</strong>
-        <label class="bulk-option"><input type="checkbox" id="bulkCandidate" ${sel.candidate?'checked':''} onchange="updateBulkSummary()"><span>候选节点</span><span class="value-pill muted">${counts.candidate}</span></label>
-        <label class="bulk-option"><input type="checkbox" id="bulkPool" ${sel.pool?'checked':''} onchange="updateBulkSummary()"><span>节点池</span><span class="value-pill green">${counts.pool}</span></label>
-        <label class="bulk-option"><input type="checkbox" id="bulkFailed" ${sel.failed?'checked':''} onchange="updateBulkSummary()"><span>失败节点</span><span class="value-pill red">${counts.failed}</span></label>
-      </div><div class="bulk-group"><strong>执行操作</strong>
-        <label class="bulk-option"><input type="checkbox" id="bulkRetest" ${sel.retest?'checked':''} onchange="updateBulkSummary()"><span>重新测速</span></label>
-        <label class="bulk-option"><input type="checkbox" id="bulkCountry" ${sel.country?'checked':''} onchange="updateBulkSummary()"><span>检测国家</span></label>
-        <label class="bulk-option"><input type="checkbox" id="bulkPromote" ${sel.promote?'checked':''} onchange="updateBulkSummary()"><span>成功后加入节点池</span></label>
+    <div class="card"><div class="card-head"><h2>Toplu test</h2></div><div class="card-body stack">
+      <div class="bulk-grid"><div class="bulk-group"><strong>Test kapsamı</strong>
+        <label class="bulk-option"><input type="checkbox" id="bulkCandidate" ${sel.candidate?'checked':''} onchange="updateBulkSummary()"><span>Aday düğümler</span><span class="value-pill muted">${counts.candidate}</span></label>
+        <label class="bulk-option"><input type="checkbox" id="bulkPool" ${sel.pool?'checked':''} onchange="updateBulkSummary()"><span>Proxy havuzu</span><span class="value-pill green">${counts.pool}</span></label>
+        <label class="bulk-option"><input type="checkbox" id="bulkFailed" ${sel.failed?'checked':''} onchange="updateBulkSummary()"><span>Başarısız düğümler</span><span class="value-pill red">${counts.failed}</span></label>
+      </div><div class="bulk-group"><strong>Yapılacak işlemler</strong>
+        <label class="bulk-option"><input type="checkbox" id="bulkRetest" ${sel.retest?'checked':''} onchange="updateBulkSummary()"><span>Hız testini tekrarla</span></label>
+        <label class="bulk-option"><input type="checkbox" id="bulkCountry" ${sel.country?'checked':''} onchange="updateBulkSummary()"><span>Ülkeyi belirle</span></label>
+        <label class="bulk-option"><input type="checkbox" id="bulkPromote" ${sel.promote?'checked':''} onchange="updateBulkSummary()"><span>Başarılı olanları havuza ekle</span></label>
       </div></div>
       <div id="bulkExecutionSummary" class="settings-highlight"></div>
-      <div class="row" style="justify-content:flex-end"><button class="btn primary" onclick="runBulkTest()">${icon('activity','sm')}执行批量测试</button></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn primary" onclick="runBulkTest()">${icon('activity','sm')}Toplu testi başlat</button></div>
     </div></div>
   </div>`;
   updateBulkSummary();
 }
 function updateBulkSummary(){
   const selected=[];
-  if(qs('#bulkCandidate')?.checked)selected.push('候选节点');if(qs('#bulkPool')?.checked)selected.push('节点池');if(qs('#bulkFailed')?.checked)selected.push('失败节点');
+  if(qs('#bulkCandidate')?.checked)selected.push('Aday düğümler');if(qs('#bulkPool')?.checked)selected.push('Proxy havuzu');if(qs('#bulkFailed')?.checked)selected.push('Başarısız düğümler');
   const actions=[];
-  if(qs('#bulkRetest')?.checked)actions.push('重新测速');if(qs('#bulkCountry')?.checked)actions.push('检测国家');
+  if(qs('#bulkRetest')?.checked)actions.push('Hız testini tekrarla');if(qs('#bulkCountry')?.checked)actions.push('Ülkeyi belirle');
   const host=qs('#bulkExecutionSummary');if(!host)return;
-  host.innerHTML=`<span>${esc(selected.join('、')||'未选择范围')} · ${esc(actions.join('、')||'未选择操作')}${qs('#bulkPromote')?.checked?' · 成功后入池':''}</span>`;
+  host.innerHTML=`<span>${esc(selected.join(', ')||'Kapsam seçilmedi')} · ${esc(actions.join(', ')||'İşlem seçilmedi')}${qs('#bulkPromote')?.checked?' · Başarılı olanları havuza ekle':''}</span>`;
 }
 async function runBulkTest(){
   const scopes={candidate:qs('#bulkCandidate').checked,pool:qs('#bulkPool').checked,failed:qs('#bulkFailed').checked};
   const acts={retest:qs('#bulkRetest').checked,country:qs('#bulkCountry').checked,promote:qs('#bulkPromote').checked};
   S.bulkSel={...scopes,...acts};
-  if(!(scopes.candidate||scopes.pool||scopes.failed)){toast('请至少选择一个范围','err');return}
-  if(!(acts.retest||acts.country)){toast('请至少选择一种操作','err');return}
+  if(!(scopes.candidate||scopes.pool||scopes.failed)){toast('En az bir test kapsamı seçin','err');return}
+  if(!(acts.retest||acts.country)){toast('En az bir işlem seçin','err');return}
   const selectedScopes=Object.entries(scopes).filter(([,enabled])=>enabled).map(([scope])=>scope);
   let job;
   try{
-    job=await runAsyncBatchTest({scopes:selectedScopes,retest:acts.retest,country:acts.country,promote_passed:acts.promote,auto_reload:true,label:'批量测试'});
+    job=await runAsyncBatchTest({scopes:selectedScopes,retest:acts.retest,country:acts.country,promote_passed:acts.promote,auto_reload:true,label:'Toplu test'});
   }catch(e){toast(e.message,'err');return}
   const parts=[];
-  if(acts.retest)parts.push(`测速 ${job?.passed||0}/${(job?.passed||0)+(job?.failed||0)} 成功`);
-  if(acts.country)parts.push(`国家 ${job?.country_ok||0} 成功 / ${job?.country_bad||0} 失败`);
-  if(acts.promote)parts.push(`入池 ${job?.promoted||0}`);
-  toast('批量测试完成：'+parts.join(' · '));
+  if(acts.retest)parts.push(`Hız testi: ${(job?.passed||0)}/${(job?.passed||0)+(job?.failed||0)} başarılı`);
+  if(acts.country)parts.push(`Ülke: ${job?.country_ok||0} başarılı / ${job?.country_bad||0} başarısız`);
+  if(acts.promote)parts.push(`Havuza eklenen: ${job?.promoted||0}`);
+  toast('Toplu test tamamlandı: '+parts.join(' · '));
   await refresh();
 }

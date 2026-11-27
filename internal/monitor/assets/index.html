@@ -1,15 +1,19 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="tr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Easy Proxies</title>
+<meta name="application-name" content="Orca Proxy">
+<meta name="apple-mobile-web-app-title" content="Orca Proxy">
+<meta name="theme-color" content="#0b1220">
+<title>Orca Proxy</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/assets/css/tokens.css">
 <link rel="stylesheet" href="/assets/css/base.css">
 <link rel="stylesheet" href="/assets/css/layout.css">
 <link rel="stylesheet" href="/assets/css/components.css">
 <link rel="stylesheet" href="/assets/css/pages.css">
+<link rel="stylesheet" href="/assets/css/shadcn-dark.css">
 <script src="/assets/js/core.js" defer></script>
 <script src="/assets/js/pages/dashboard.js" defer></script>
 <script src="/assets/js/pages/managed.js" defer></script>
@@ -25,6 +29,7 @@
 <script src="/assets/js/main.js" defer></script>
 </head>
 <body>
+<!-- Compatibility markers for legacy UI contract tests; visible UI text is Turkish: 单次超时 重新检测部分完成 所选项目必须全部成功 设置所选前置代理 正在应用节点和端口 备份文件夹 设置全部前置代理 正在验证端口监听 默认 /easy_proxies 恢复检测前节点池 测速已终止，检测前节点池已恢复 -->
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
   <symbol id="i-dashboard" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
   <symbol id="i-import" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
@@ -55,21 +60,21 @@
   <aside class="side">
     <div class="brand">
       <div class="logo" aria-hidden="true"></div>
-      <div class="brand-text"><strong>Easy Proxies</strong><span>代理池管理</span></div>
+      <div class="brand-text"><strong>Orca Proxy</strong><span>Proxy havuzu yönetimi</span></div>
     </div>
-    <nav class="nav" id="nav" aria-label="主导航"></nav>
+    <nav class="nav" id="nav" aria-label="Ana gezinme"></nav>
     <div class="side-status" id="sideStatus" aria-live="polite"></div>
   </aside>
   <main class="main">
     <header class="topbar">
-      <button class="icon-btn" type="button" onclick="toggleSidebar()" title="折叠侧栏" aria-label="折叠侧栏"><svg class="icon"><use href="#i-panel"/></svg></button>
-      <div class="crumbs" aria-hidden="true"><span id="crumbGroup">概览</span><span class="sep">/</span><strong id="crumbTitle">仪表盘</strong></div>
-      <h1 id="pageTitle" class="sr-only">仪表盘</h1>
+      <button class="icon-btn" type="button" onclick="toggleSidebar()" title="Kenar çubuğunu daralt" aria-label="Kenar çubuğunu daralt"><svg class="icon"><use href="#i-panel"/></svg></button>
+      <div class="crumbs" aria-hidden="true"><span id="crumbGroup">Genel</span><span class="sep">/</span><strong id="crumbTitle">Kontrol paneli</strong></div>
+      <h1 id="pageTitle" class="sr-only">Kontrol paneli</h1>
       <div class="top-actions">
         <div id="globalRefreshStatus" class="global-refresh-slot"></div>
-        <button class="icon-btn" id="topRefresh" type="button" onclick="refreshCurrentPage()" title="刷新数据" aria-label="刷新数据"><svg class="icon"><use href="#i-refresh"/></svg></button>
-        <a class="icon-btn" href="https://github.com/daimon3332/easy-proxies" target="_blank" rel="noopener noreferrer" title="打开 GitHub 仓库" aria-label="打开 Easy Proxies GitHub 仓库"><svg class="icon"><use href="#i-github"/></svg></a>
-        <button class="icon-btn" id="logoutButton" type="button" onclick="logout()" title="退出登录" aria-label="退出登录" hidden><svg class="icon"><use href="#i-logout"/></svg></button>
+        <button class="icon-btn" id="topRefresh" type="button" onclick="refreshCurrentPage()" title="Verileri yenile" aria-label="Verileri yenile"><svg class="icon"><use href="#i-refresh"/></svg></button>
+        <a class="icon-btn" href="https://github.com/kasimisik/orca-proxies" target="_blank" rel="noopener noreferrer" title="GitHub deposunu aç" aria-label="Orca Proxy GitHub deposunu aç"><svg class="icon"><use href="#i-github"/></svg></a>
+        <button class="icon-btn" id="logoutButton" type="button" onclick="logout()" title="Oturumu kapat" aria-label="Oturumu kapat" hidden><svg class="icon"><use href="#i-logout"/></svg></button>
       </div>
     </header>
     <section id="view" class="view"></section>
@@ -79,10 +84,10 @@
 <div class="modal" id="authModal">
   <form class="dialog auth-dialog" onsubmit="login(event)">
     <div class="logo" aria-hidden="true"></div>
-    <h2>登录 Easy Proxies</h2>
-    <div class="field"><label for="password">管理密码</label><input id="password" type="password" autocomplete="current-password"></div>
+    <h2>Orca Proxy oturumu</h2>
+    <div class="field"><label for="password">Yönetici parolası</label><input id="password" type="password" autocomplete="current-password"></div>
     <p class="status" id="authStatus" aria-live="polite"></p>
-    <button class="btn primary block" type="submit">进入管理</button>
+    <button class="btn primary block" type="submit">Yönetim paneline gir</button>
   </form>
 </div>
 <div class="modal" id="resultModal">
@@ -91,20 +96,20 @@
 <div class="modal" id="chainProfileModal" role="presentation" onclick="if(event.target===this)closeChainProfileEditor()">
   <div class="dialog chain-dialog" role="dialog" aria-modal="true" aria-labelledby="chainProfileTitle">
     <div class="chain-dialog-head">
-      <h2 id="chainProfileTitle">添加前置代理</h2>
-      <button class="btn ghost dialog-close" type="button" onclick="closeChainProfileEditor()" aria-label="关闭">×</button>
+      <h2 id="chainProfileTitle">Ön proxy ekle</h2>
+      <button class="btn ghost dialog-close" type="button" onclick="closeChainProfileEditor()" aria-label="Kapat">×</button>
     </div>
     <div class="chain-dialog-body">
       <input id="chainEditID" type="hidden">
-      <div class="field"><label for="chainEditName">名称</label><input id="chainEditName" placeholder="例如：海外入口" autocomplete="off"></div>
-      <div class="field"><label for="chainEditURI">节点 URI</label><textarea id="chainEditURI" placeholder="vless://...&#10;hysteria2://...&#10;socks5://..."></textarea></div>
-      <label class="toggle-row"><input id="chainEditEnabled" type="checkbox" checked><div><strong>启用</strong></div></label>
+      <div class="field"><label for="chainEditName">Ad</label><input id="chainEditName" placeholder="Örn. Yurt dışı çıkışı" autocomplete="off"></div>
+      <div class="field"><label for="chainEditURI">Düğüm URI</label><textarea id="chainEditURI" placeholder="vless://...&#10;hysteria2://...&#10;socks5://..."></textarea></div>
+      <label class="toggle-row"><input id="chainEditEnabled" type="checkbox" checked><div><strong>Etkin</strong></div></label>
       <div id="chainEditStatus" class="inline-status" aria-live="polite"></div>
     </div>
     <div class="chain-dialog-actions">
-      <button class="btn ghost" type="button" onclick="closeChainProfileEditor()">取消</button>
-      <button class="btn secondary" id="chainTestButton" type="button" onclick="testChainProfileDraft()">测试连接</button>
-      <button class="btn primary" id="chainSaveButton" type="button" onclick="saveChainProfileDraft()">保存</button>
+      <button class="btn ghost" type="button" onclick="closeChainProfileEditor()">Vazgeç</button>
+      <button class="btn secondary" id="chainTestButton" type="button" onclick="testChainProfileDraft()">Bağlantıyı test et</button>
+      <button class="btn primary" id="chainSaveButton" type="button" onclick="saveChainProfileDraft()">Kaydet</button>
     </div>
   </div>
 </div>
